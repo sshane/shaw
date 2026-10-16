@@ -1,0 +1,411 @@
+import ShawCore
+import SwiftUI
+
+struct InspectorPanel: View {
+    @Environment(Store.self) private var store
+    @State private var dropTarget = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 30)
+        }
+        .background(dropTarget ? Theme.accent.opacity(0.07) : Color.clear)
+        .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
+            onPayload: { payload, _ in
+                switch payload {
+                case .effect(let k):
+                    guard let host = store.currentEffectHost else { return false }
+                    store.addEffect(k, to: host)
+                    return true
+                case .preset(let name):
+                    if case .asset(let id)? = store.inspector { store.edit { $0.updateNotes(id) { $0.instrument = .preset(name) } } }
+                    return true
+                default: return false
+                }
+            },
+            onHover: { dropTarget = $0 != nil }))
+    }
+
+    @ViewBuilder private var content: some View {
+        switch store.inspector ?? .composition(store.activeCompID) {
+        case .composition(let id): CompositionInspector(compID: id)
+        case .track(let cid, let tid): TrackInspector(compID: cid, trackID: tid)
+        case .clip(let cid, let kid): ClipInspector(compID: cid, clipID: kid)
+        case .asset(let id):
+            if let a = store.project.asset(id) {
+                switch a.content {
+                case .notes: InstrumentInspector(assetID: id)
+                case .drums: BeatInspector(assetID: id)
+                case .audio(let f): AudioInspector(asset: a, file: f)
+                case .composition: CompositionInspector(compID: id)
+                }
+            }
+        }
+    }
+}
+
+struct InspectorTitle: View {
+    let icon: String
+    let kind: String
+    let name: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 4, height: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kind.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint)
+                HStack(spacing: 5) {
+                    Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.textDim)
+                    Text(name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+    }
+}
+
+struct PropertyRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(label).font(Theme.small).foregroundStyle(Theme.textDim).frame(width: 96, alignment: .leading)
+            content
+            Spacer(minLength: 0)
+        }
+        .frame(height: 20)
+        .padding(.horizontal, 10)
+    }
+}
+
+// MARK: - Composition
+
+struct CompositionInspector: View {
+    @Environment(Store.self) private var store
+    let compID: AssetID
+
+    var body: some View {
+        if let a = store.project.asset(compID), let comp = store.project.composition(compID) {
+            InspectorTitle(icon: assetIcon(.composition), kind: "Composition", name: a.name, color: Theme.label(a.colorIndex))
+            PropertyRow(label: "Duration") {
+                DragNumber(value: comp.length / Double(store.project.beatsPerBar), range: 1...999, step: 1, sensitivity: 0.1,
+                           format: { "\(Int($0)) bars" },
+                           onChange: { v in store.live { $0.updateComposition(compID) { $0.length = v * Double(store.project.beatsPerBar) } } },
+                           onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Volume") {
+                DragNumber(value: comp.volume, range: -60...12, step: 0.1, sensitivity: 0.2, format: { String(format: "%.1f dB", $0) },
+                           onChange: { v in store.live { $0.updateComposition(compID) { $0.volume = v } } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Used") {
+                let n = store.project.usageCount(of: compID)
+                Text(n == 0 ? "Not placed anywhere" : "\(n) place\(n == 1 ? "" : "s") — all linked")
+                    .font(Theme.small).foregroundStyle(Theme.textDim)
+            }
+            Text("Composition effects run after every track and clip inside it, like an After Effects adjustment on a precomp.")
+                .font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(.horizontal, 10).padding(.top, 4)
+            EffectStack(host: .composition(compID))
+        }
+    }
+}
+
+// MARK: - Track
+
+struct TrackInspector: View {
+    @Environment(Store.self) private var store
+    let compID: AssetID
+    let trackID: UUID
+
+    var body: some View {
+        if let comp = store.project.composition(compID), let i = comp.trackIndex(trackID) {
+            let t = comp.tracks[i]
+            InspectorTitle(icon: "rectangle.split.3x1", kind: "Track", name: t.name, color: Theme.label(t.colorIndex))
+            PropertyRow(label: "Volume") {
+                DragNumber(value: t.volume, range: -60...12, step: 0.1, sensitivity: 0.2, format: { String(format: "%.1f dB", $0) },
+                           onChange: { v in store.updateTrack(trackID, in: compID, live: true) { $0.volume = v } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Pan") {
+                DragNumber(value: t.pan * 50, range: -50...50, step: 1, sensitivity: 0.5,
+                           format: { $0 == 0 ? "C" : ($0 < 0 ? "\(Int(-$0))L" : "\(Int($0))R") },
+                           onChange: { v in store.updateTrack(trackID, in: compID, live: true) { $0.pan = v / 50 } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "State") {
+                ToggleChip(label: "M", on: t.mute, color: Theme.mute) { store.updateTrack(trackID, in: compID) { $0.mute.toggle() } }
+                ToggleChip(label: "S", on: t.solo, color: Theme.solo) { store.updateTrack(trackID, in: compID) { $0.solo.toggle() } }
+            }
+            EffectStack(host: .track(compID, trackID))
+        }
+    }
+}
+
+// MARK: - Clip
+
+struct ClipInspector: View {
+    @Environment(Store.self) private var store
+    let compID: AssetID
+    let clipID: UUID
+
+    var body: some View {
+        if let comp = store.project.composition(compID), let (ti, ci) = comp.locate(clip: clipID) {
+            let c = comp.tracks[ti].clips[ci]
+            let src = store.project.asset(c.assetID)
+            let bpb = Double(store.project.beatsPerBar)
+            InspectorTitle(icon: assetIcon(src?.kind ?? .notes), kind: "Clip of \(src?.kind.label ?? "?")", name: src?.name ?? "Missing",
+                           color: Theme.label(src?.colorIndex ?? 0))
+            HStack(spacing: 6) {
+                Button("Open Source") { store.open(asset: c.assetID) }
+                Button("Make Unique") { store.makeUnique(clipID) }
+                    .help("Give this clip its own copy so edits stop affecting the other uses")
+            }
+            .controlSize(.small).padding(.horizontal, 10).padding(.bottom, 6)
+            PropertyRow(label: "Start") {
+                DragNumber(value: c.start, range: 0...100_000, step: 0.25, sensitivity: 0.05,
+                           format: { formatPosition($0, beatsPerBar: Int(bpb)) }, parse: { Self.parsePos($0, bpb) },
+                           onChange: { v in store.updateClip(clipID, live: true) { $0.start = v } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Length") {
+                DragNumber(value: c.length, range: 0.0625...100_000, step: 0.25, sensitivity: 0.05,
+                           format: { formatLength($0, beatsPerBar: Int(bpb)) }, parse: { Double($0.filter { "0123456789.".contains($0) }).map { $0 * bpb } },
+                           onChange: { v in store.updateClip(clipID, live: true) { $0.length = v } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Source Offset") {
+                DragNumber(value: c.offset, range: 0...100_000, step: 0.25, sensitivity: 0.05, format: { String(format: "%.2f beats", $0) },
+                           onChange: { v in store.updateClip(clipID, live: true) { $0.offset = v } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Gain") {
+                DragNumber(value: c.gain, range: -60...24, step: 0.1, sensitivity: 0.2, format: { String(format: "%.1f dB", $0) },
+                           onChange: { v in store.updateClip(clipID, live: true) { $0.gain = v } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Past End") {
+                Picker("", selection: Binding(get: { c.loops }, set: { v in store.updateClip(clipID) { $0.loops = v } })) {
+                    Text("Silence").tag(false)
+                    Text("Loop").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 130).controlSize(.small)
+            }
+            PropertyRow(label: "Mute") {
+                Toggle("", isOn: Binding(get: { c.mute }, set: { v in store.updateClip(clipID) { $0.mute = v } })).labelsHidden()
+            }
+            Text("Tip: Option-drag a clip's right edge to loop it. Plain drag trims; past the end is silent (hatched).")
+                .font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(.horizontal, 10).padding(.top, 4)
+            EffectStack(host: .clip(compID, clipID))
+            if let src, src.kind == .notes {
+                Divider().padding(.vertical, 8)
+                InstrumentInspector(assetID: src.id)
+            }
+        }
+    }
+
+    static func parsePos(_ s: String, _ bpb: Double) -> Double? {
+        let parts = s.split(separator: ".").compactMap { Double($0) }
+        guard let bar = parts.first else { return nil }
+        let beat = parts.count > 1 ? parts[1] - 1 : 0
+        let six = parts.count > 2 ? (parts[2] - 1) / 4 : 0
+        return (bar - 1) * bpb + beat + six
+    }
+}
+
+// MARK: - Effects
+
+struct EffectStack: View {
+    @Environment(Store.self) private var store
+    let host: EffectHost
+
+    var body: some View {
+        let effects = store.effects(of: host)
+        HStack {
+            Text("EFFECTS").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint)
+            Spacer()
+            Menu {
+                ForEach(EffectRegistry.all) { d in
+                    Button(d.name) { store.addEffect(d.id, to: host) }
+                }
+            } label: {
+                Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        }
+        .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 4)
+        if effects.isEmpty {
+            Text("Drop an effect here, or search the Browser (e.g. \"reverb\") and drag it onto anything.")
+                .font(Theme.tiny).foregroundStyle(Theme.textFaint)
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 6).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])).foregroundStyle(Theme.textFaint.opacity(0.5)))
+                .padding(.horizontal, 10)
+        }
+        ForEach(Array(effects.enumerated()), id: \.element.id) { i, e in
+            EffectCard(host: host, effect: e, index: i, count: effects.count)
+        }
+    }
+}
+
+struct EffectCard: View {
+    @Environment(Store.self) private var store
+    let host: EffectHost
+    let effect: Effect
+    let index: Int
+    let count: Int
+
+    var body: some View {
+        let d = EffectRegistry.descriptor(effect.kind)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button {
+                    store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].expanded.toggle() } }
+                } label: {
+                    Image(systemName: effect.expanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).frame(width: 12)
+                }
+                .buttonStyle(.plain)
+                Toggle("", isOn: Binding(get: { effect.enabled }, set: { v in
+                    store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].enabled = v } }
+                }))
+                .toggleStyle(.checkbox).labelsHidden().controlSize(.small)
+                .help("Enable / bypass")
+                Text(d?.name ?? effect.kind).font(Theme.header).foregroundStyle(effect.enabled ? Theme.text : Theme.textFaint)
+                Spacer()
+                Menu {
+                    Button("Move Up") { move(-1) }.disabled(index == 0)
+                    Button("Move Down") { move(1) }.disabled(index == count - 1)
+                    Button("Duplicate") {
+                        store.updateEffects(host) { fx in var c = effect; c.id = UUID(); fx.insert(c, at: index + 1) }
+                    }
+                    Button("Reset Parameters") {
+                        store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params = d?.params.defaults() ?? [:] } }
+                    }
+                    Divider()
+                    Button("Remove", role: .destructive) { store.updateEffects(host) { $0.removeAll { $0.id == effect.id } } }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 11))
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            }
+            .frame(height: 24)
+            if effect.expanded, let d {
+                ForEach(d.params) { p in
+                    ParamRow(def: p, value: p.clamp(effect.params[p.id] ?? p.defaultValue),
+                             onChange: { v in
+                                 store.updateEffects(host, live: true) { fx in
+                                     if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params[p.id] = v }
+                                 }
+                             },
+                             onEnd: { store.endGesture() })
+                    .padding(.leading, 18)
+                }
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.18)))
+        .padding(.horizontal, 6).padding(.vertical, 2)
+    }
+
+    private func move(_ d: Int) {
+        store.updateEffects(host) { fx in
+            guard let i = fx.firstIndex(where: { $0.id == effect.id }) else { return }
+            let j = max(0, min(fx.count - 1, i + d))
+            fx.swapAt(i, j)
+        }
+    }
+}
+
+// MARK: - Instrument (synth)
+
+struct InstrumentInspector: View {
+    @Environment(Store.self) private var store
+    let assetID: AssetID
+
+    static let groups: [(String, [String])] = [
+        ("Oscillators", ["osc1", "osc2", "semi2", "fine2", "mix", "sub", "noise", "unison", "spread"]),
+        ("Filter", ["cutoff", "resonance", "fenv", "keytrack"]),
+        ("Amp Envelope", ["a", "d", "s", "r"]),
+        ("Filter Envelope", ["fa", "fd", "fs", "fr"]),
+        ("Pitch & Voice", ["penv", "pdecay", "mode", "glide"]),
+        ("Output", ["drive", "volume"]),
+    ]
+
+    var body: some View {
+        if let a = store.project.asset(assetID), case .notes(let p) = a.content {
+            InspectorTitle(icon: "pianokeys", kind: "Pattern · Shaw Synth", name: a.name, color: Theme.label(a.colorIndex))
+            PropertyRow(label: "Preset") {
+                Menu(p.instrument.preset) {
+                    ForEach(SynthPresets.names, id: \.self) { n in
+                        Button(n) {
+                            store.edit { $0.updateNotes(assetID) { $0.instrument = .preset(n) } }
+                            store.engine.previewNoteOn(60, instrument: .preset(n))
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.engine.previewNoteOff(60) }
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+            }
+            PropertyRow(label: "Length") {
+                DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
+                           format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
+                           onChange: { v in store.live { $0.updateNotes(assetID) { $0.length = v * Double(store.project.beatsPerBar) } } },
+                           onEnd: { store.endGesture() })
+            }
+            ForEach(Self.groups, id: \.0) { group in
+                SectionHeader(title: group.0)
+                ForEach(group.1, id: \.self) { pid in
+                    if let def = SynthParams.defs.first(where: { $0.id == pid }) {
+                        ParamRow(def: def, value: def.clamp(p.instrument.params[pid] ?? def.defaultValue),
+                                 onChange: { v in
+                                     store.live { $0.updateNotes(assetID) { pat in
+                                         pat.instrument.params[pid] = v
+                                         if !pat.instrument.preset.hasSuffix("*") { pat.instrument.preset += "*" }
+                                     } }
+                                 },
+                                 onEnd: { store.endGesture() })
+                        .padding(.horizontal, 10)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Beat
+
+struct BeatInspector: View {
+    @Environment(Store.self) private var store
+    let assetID: AssetID
+
+    var body: some View {
+        if let a = store.project.asset(assetID), case .drums(let d) = a.content {
+            InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Beat", name: a.name, color: Theme.label(a.colorIndex))
+            PropertyRow(label: "Kit") {
+                Menu(DrumKits.kitName(d.kit)) {
+                    ForEach(DrumKits.kits) { k in Button(k.name) { store.edit { $0.updateDrums(assetID) { $0.kit = k.id } } } }
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+            }
+            PropertyRow(label: "Steps") {
+                DragNumber(value: Double(d.steps), range: 1...128, step: 1, sensitivity: 0.2, format: { "\(Int($0))" },
+                           onChange: { v in store.live { $0.updateDrums(assetID) { $0.resize(steps: Int(v)) } } }, onEnd: { store.endGesture() })
+            }
+            PropertyRow(label: "Swing") {
+                DragNumber(value: d.swing * 100, range: 0...100, step: 1, sensitivity: 0.5, format: { "\(Int($0))%" },
+                           onChange: { v in store.live { $0.updateDrums(assetID) { $0.swing = v / 100 } } }, onEnd: { store.endGesture() })
+            }
+            Button("Open in Beat Maker") { store.open(asset: assetID) }.controlSize(.small).padding(10)
+        }
+    }
+}
+
+struct AudioInspector: View {
+    let asset: Asset
+    let file: AudioFileRef
+
+    var body: some View {
+        InspectorTitle(icon: "waveform", kind: "Audio File", name: asset.name, color: Theme.label(asset.colorIndex))
+        PropertyRow(label: "Duration") { Text(String(format: "%.2f s", file.duration)).font(Theme.small) }
+        PropertyRow(label: "Format") { Text("\(Int(file.sampleRate)) Hz · \(file.channels) ch").font(Theme.small) }
+        Text(file.path).font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(10).textSelection(.enabled)
+    }
+}
