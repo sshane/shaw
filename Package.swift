@@ -15,5 +15,6 @@ let package = Package(
         ),
         .executableTarget(name: "Shaw", dependencies: ["ShawCore"]),
         .testTarget(name: "ShawCoreTests", dependencies: ["ShawCore"]),
+        .testTarget(name: "ShawTests", dependencies: ["Shaw", "ShawCore"]),
     ]
 )

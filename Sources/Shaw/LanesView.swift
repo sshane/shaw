@@ -207,6 +207,7 @@ struct ClipView: View {
     }
 
     @State private var drag: DragInfo?
+    @State private var pressed = false
     @State private var lastClick = Date.distantPast
     @State private var dropTarget = false
 
@@ -334,7 +335,12 @@ struct ClipView: View {
     private func changed(_ g: DragGesture.Value, mode: Mode) {
         let mods = NSEvent.modifierFlags
         if drag == nil {
-            select()
+            if !pressed {
+                pressed = true
+                select()
+            }
+            // Don't start moving (or Option-duplicating) until the mouse actually moves.
+            if mode == .move && hypot(g.translation.width, g.translation.height) < 3 { return }
             var origin = store.project
             var ids = store.selectedClips.contains(clip.id) ? store.selectedClips : [clip.id]
             if mode != .move { ids = [clip.id] }
@@ -392,6 +398,7 @@ struct ClipView: View {
 
     private func ended() {
         drag = nil
+        pressed = false
         store.endGesture()
     }
 

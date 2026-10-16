@@ -92,17 +92,23 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var canUndo = false
     var canRedo = false
 
-    init() {
-        let p = Store.restoreAutosave() ?? DemoProject.make()
+    /// Set in tests: no alerts, no autosave.
+    @ObservationIgnored var headless = false
+
+    init(project initial: Project? = nil, headless: Bool = false) {
+        let p = initial ?? Store.restoreAutosave() ?? DemoProject.make()
         project = p
         activeCompID = p.mainCompositionID
         openComps = [p.mainCompositionID]
-        engine.start()
+        self.headless = headless
+        if !headless { engine.start() }
         SampleLibrary.shared.onLoad = { [weak self] _ in self?.refreshEngine() }
         refreshEngine()
         syncLoop()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.poll() }
-        RunLoop.main.add(timer!, forMode: .common)
+        if !headless {
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.poll() }
+            RunLoop.main.add(timer!, forMode: .common)
+        }
         if let first = p.assets.first(where: { $0.kind == .notes }) { pianoRollAsset = first.id }
         if let first = p.assets.first(where: { $0.kind == .drums }) { beatAsset = first.id }
     }
@@ -579,19 +585,27 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             let clips = t.clips.filter { sel.contains($0.id) }
             guard !clips.isEmpty else { continue }
             if firstTrack == nil { firstTrack = ti }
+            // Inner tracks inherit the track's mix and effects so the precomp sounds identical.
             var nt = Track(name: t.name, colorIndex: t.colorIndex)
             nt.clips = clips.map { var c = $0; c.start -= s0; return c }
             nt.volume = t.volume
             nt.pan = t.pan
+            nt.mute = t.mute
+            nt.solo = t.solo
+            nt.effects = t.effects.map { var e = $0; e.id = UUID(); return e }
             inner.tracks.append(nt)
         }
         let asset = Asset(name: project.uniqueName("Precomp"), colorIndex: nextColor(), content: .composition(inner))
         let clip = Clip(assetID: asset.id, start: s0, length: inner.length)
+        var holder = Track(name: asset.name, colorIndex: asset.colorIndex)
+        holder.clips = [clip]
+        let insertAt = firstTrack ?? 0
         edit { p in
             p.assets.append(asset)
             p.updateComposition(self.activeCompID) { c in
                 for ti in c.tracks.indices { c.tracks[ti].clips.removeAll { sel.contains($0.id) } }
-                c.tracks[firstTrack ?? 0].clips.append(clip)
+                // A fresh track, so the outer track's effects don't apply twice.
+                c.tracks.insert(holder, at: insertAt)
             }
         }
         selectedClips = [clip.id]
@@ -812,6 +826,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     private func scheduleAutosave() {
+        guard !headless else { return }
         autosaveWork?.cancel()
         let p = project
         let work = DispatchWorkItem {
@@ -826,6 +841,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     // MARK: Alerts
 
     func showAlert(_ title: String, _ message: String) {
+        guard !headless else { return }
         let a = NSAlert()
         a.messageText = title
         a.informativeText = message
@@ -833,6 +849,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     func confirm(_ title: String, _ message: String) -> Bool {
+        guard !headless else { return true }
         let a = NSAlert()
         a.messageText = title
         a.informativeText = message

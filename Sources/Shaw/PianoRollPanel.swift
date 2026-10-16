@@ -316,6 +316,7 @@ struct NoteGrid: View {
         var ids: Set<UUID>
         var anchor: Note?
         var lastPitch: Int
+        var duplicatePending = false
     }
     @State private var drag: DragInfo?
     @State private var marquee: CGRect?
@@ -425,6 +426,13 @@ struct NoteGrid: View {
         switch d.mode {
         case .move:
             guard let a = d.anchor, hypot(g.translation.width, g.translation.height) > 1 else { return }
+            if d.duplicatePending {
+                // Option-drag: leave copies behind, move the originals.
+                let copies = d.origin.filter { d.ids.contains($0.id) }.map { n -> Note in var c = n; c.id = UUID(); return c }
+                d.origin += copies
+                d.duplicatePending = false
+                drag = d
+            }
             let dBeat = snap(a.start + dx) - a.start
             let dPitch = -Int((g.translation.height / keyHeight).rounded())
             let ids = d.ids
@@ -477,17 +485,10 @@ struct NoteGrid: View {
             }
             if !store.selectedNotes.contains(n.id) { store.selectedNotes = [n.id] }
             let resize = rect(of: n).maxX - p.x < 6
-            var origin = pattern.notes
             let ids = store.selectedNotes
-            if mods.contains(.option) && !resize {
-                // Option-drag: leave copies behind, move the originals.
-                let copies = origin.filter { ids.contains($0.id) }.map { n -> Note in var c = n; c.id = UUID(); return c }
-                origin += copies
-                let o = origin
-                store.live { $0.updateNotes(assetID) { $0.notes = o } }
-            }
             store.lastNoteLength = n.length
-            drag = DragInfo(mode: resize ? .resize : .move, origin: origin, ids: ids, anchor: n, lastPitch: n.pitch)
+            drag = DragInfo(mode: resize ? .resize : .move, origin: pattern.notes, ids: ids, anchor: n, lastPitch: n.pitch,
+                            duplicatePending: mods.contains(.option) && !resize)
             preview(n.pitch)
             return
         }

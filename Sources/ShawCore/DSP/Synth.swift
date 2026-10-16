@@ -305,6 +305,19 @@ public final class Synth {
         let vol = Float(dbToGain(p[SynthParams.volume]))
         let srF = Float(sr)
         let uniNorm = 1 / sqrt(Double(uniCount))
+        // Unison detune is constant for the block; precompute instead of calling pow() per sample.
+        var detunes = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        var ratios = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+        withUnsafeMutableBytes(of: &detunes) { d in
+            withUnsafeMutableBytes(of: &ratios) { r in
+                let dp = d.bindMemory(to: Double.self), rp = r.bindMemory(to: Double.self)
+                for u in 0..<uniCount {
+                    dp[u] = uniCount == 1 ? 0 : (Double(u) / Double(uniCount - 1) * 2 - 1)
+                    rp[u] = pow(2, dp[u] * spread * 0.6 / 12)
+                }
+            }
+        }
+        let detunesArr = detunes, ratiosArr = ratios
 
         for vi in voices.indices where voices[vi].isActive {
             var v = voices[vi]
@@ -313,6 +326,7 @@ public final class Synth {
             v.fenv.configure(a: p[SynthParams.fa], d: p[SynthParams.fd], s: p[SynthParams.fs], r: p[SynthParams.fr], sr: sr)
             let velGain = 0.3 + 0.7 * v.velocity
             let base = vi * Synth.maxUnison
+            let detunes = TupleIndex(detunesArr), detuneRatios = TupleIndex(ratiosArr)
             for i in 0..<frames {
                 if glideCoef > 0 { v.freq = v.targetFreq + (v.freq - v.targetFreq) * glideCoef } else { v.freq = v.targetFreq }
                 var f0 = v.freq
@@ -322,8 +336,8 @@ public final class Synth {
                 }
                 var sl = 0.0, sr2 = 0.0
                 for u in 0..<uniCount {
-                    let det = uniCount == 1 ? 0 : (Double(u) / Double(uniCount - 1) * 2 - 1)
-                    let fu = f0 * pow(2, det * spread * 0.6 / 12)
+                    let det = detunes[u]
+                    let fu = f0 * detuneRatios[u]
                     let dt1 = fu / sr, dt2 = fu * ratio2 / sr
                     let k = base + u
                     let o = oscillator(w1, ph1[k], dt1) * (1 - mix) + oscillator(w2, ph2[k], dt2) * mix
@@ -357,6 +371,23 @@ public final class Synth {
                 if v.amp.stage == .idle { break }
             }
             voices[vi] = v
+        }
+    }
+}
+
+/// Allocation-free indexable view over a 7-element tuple.
+struct TupleIndex {
+    let t: (Double, Double, Double, Double, Double, Double, Double)
+    init(_ t: (Double, Double, Double, Double, Double, Double, Double)) { self.t = t }
+    @inline(__always) subscript(i: Int) -> Double {
+        switch i {
+        case 0: return t.0
+        case 1: return t.1
+        case 2: return t.2
+        case 3: return t.3
+        case 4: return t.4
+        case 5: return t.5
+        default: return t.6
         }
     }
 }
