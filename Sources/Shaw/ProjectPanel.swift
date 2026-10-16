@@ -242,6 +242,10 @@ struct AssetRow: View {
                 store.addEffect(k, to: .composition(asset.id))
                 return true
             }
+            if case .effectInstance(let fx) = payload, asset.kind == .composition {
+                store.dropEffect(fx, onto: .composition(asset.id), before: nil)
+                return true
+            }
             if case .preset(let name) = payload, asset.kind == .notes {
                 store.edit { $0.updateNotes(asset.id) { $0.instrument = .preset(name) } }
                 return true

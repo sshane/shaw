@@ -90,6 +90,8 @@ struct LanesView: View {
             store.addClip(asset: id, at: beat, track: track)
         case .effect(let k):
             if let t = track { store.addEffect(k, to: .track(store.activeCompID, t)) } else { store.addEffect(k, to: .composition(store.activeCompID)) }
+        case .effectInstance(let id):
+            store.dropEffect(id, onto: track.map { .track(store.activeCompID, $0) } ?? .composition(store.activeCompID), before: nil)
         case .preset(let name):
             store.addInstrument(.synth(name), at: beat, track: track)
         case .kit(let kit):
@@ -274,6 +276,7 @@ struct ClipView: View {
             onPayload: { payload, loc in
                 switch payload {
                 case .effect(let k): store.addEffect(k, to: .clip(store.activeCompID, clip.id))
+                case .effectInstance(let id): store.dropEffect(id, onto: .clip(store.activeCompID, clip.id), before: nil)
                 case .preset(let name): store.replaceInstrument(ofAsset: clip.assetID, with: .synth(name))
                 case .kit(let k): store.replaceInstrument(ofAsset: clip.assetID, with: .kit(k))
                 case .asset(let id):

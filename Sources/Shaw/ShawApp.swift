@@ -56,6 +56,12 @@ struct ShawCommands: Commands {
             Button("Undo") { store.undo() }.keyboardShortcut("z").disabled(!store.canUndo)
             Button("Redo") { store.redo() }.keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!store.canRedo)
         }
+        CommandGroup(replacing: .pasteboard) {
+            Button("Cut") { KeyRouter.shared.edit(#selector(NSText.cut(_:))) { store.cutSelection() } }.keyboardShortcut("x")
+            Button("Copy") { KeyRouter.shared.edit(#selector(NSText.copy(_:))) { store.copySelection() } }.keyboardShortcut("c")
+            Button("Paste") { KeyRouter.shared.edit(#selector(NSText.paste(_:))) { store.paste() } }.keyboardShortcut("v")
+            Button("Select All") { KeyRouter.shared.selectAll() }.keyboardShortcut("a")
+        }
         CommandGroup(after: .pasteboard) {
             Divider()
             Button("Duplicate") { KeyRouter.shared.duplicate() }.keyboardShortcut("d")
@@ -164,6 +170,9 @@ final class KeyRouter {
         case 51, 117: // delete, forward delete
             switch store.focus {
             case .project: store.deleteAssets(store.selectedAssets)
+            case .inspector:
+                guard !store.selectedEffects.isEmpty else { return false }
+                store.deleteSelectedEffects()
             case .timeline:
                 if !store.selectedClips.isEmpty {
                     store.deleteSelectedClips()
@@ -185,8 +194,44 @@ final class KeyRouter {
         if store.workspace.isVisible(.session) { store.workspace.reveal(.timeline) } else { store.workspace.reveal(.session) }
     }
 
+    /// Edit-menu commands: text fields get the normal behaviour, everything else goes to Shaw.
+    func edit(_ textAction: Selector, _ shaw: () -> Bool) {
+        if NSApp.keyWindow?.firstResponder is NSText {
+            NSApp.sendAction(textAction, to: nil, from: nil)
+            return
+        }
+        if store?.focus == .pianoRoll, let h = pianoRollHandler, let ev = commandEvent(for: textAction), h(ev) { return }
+        if !shaw() { NSSound.beep() }
+    }
+
+    func selectAll() {
+        guard let store else { return }
+        if NSApp.keyWindow?.firstResponder is NSText { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil); return }
+        switch store.focus {
+        case .pianoRoll: if let h = pianoRollHandler, let ev = commandEvent(for: #selector(NSText.selectAll(_:))) { _ = h(ev) }
+        case .inspector: store.selectAllEffects()
+        case .project: store.selectedAssets = Set(store.project.assets.map(\.id))
+        default: store.selectAllClips()
+        }
+    }
+
+    /// The piano roll handles its own ⌘ keys; synthesize the matching key event for menu clicks.
+    private func commandEvent(for action: Selector) -> NSEvent? {
+        let map: [Selector: (String, UInt16)] = [
+            #selector(NSText.cut(_:)): ("x", 7), #selector(NSText.copy(_:)): ("c", 8),
+            #selector(NSText.paste(_:)): ("v", 9), #selector(NSText.selectAll(_:)): ("a", 0),
+        ]
+        guard let (ch, code) = map[action] else { return nil }
+        return NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
+                                context: nil, characters: ch, charactersIgnoringModifiers: ch, isARepeat: false, keyCode: code)
+    }
+
     func duplicate() {
         guard let store else { return }
+        if store.focus == .inspector && !store.selectedEffects.isEmpty {
+            store.duplicateSelectedEffects()
+            return
+        }
         if store.focus == .pianoRoll, let h = pianoRollHandler {
             // Synthesize a Cmd-D for the piano roll.
             if let ev = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
@@ -222,6 +267,11 @@ enum DebugSnapshot {
            let t = comp.tracks.first(where: { !$0.slots.isEmpty }), let scene = t.slots.keys.min() {
             store.updateTrack(t.id) { $0.effects.append(EffectRegistry.descriptor("reverb")!.makeEffect()) }
             store.inspector = .slot(store.activeCompID, t.id, scene)
+            if env["SHAW_SELECT_FX"] != nil, let fx = store.effects(of: .track(store.activeCompID, t.id)).last {
+                store.addEffect("delay", to: .track(store.activeCompID, t.id))
+                store.inspector = .slot(store.activeCompID, t.id, scene)
+                store.selectEffect(fx.id, in: .track(store.activeCompID, t.id), extend: false)
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + (Double(env["SHAW_DELAY"] ?? "") ?? 2.5)) {
             guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }), let v = w.contentView,

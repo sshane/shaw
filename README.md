@@ -61,7 +61,12 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 - Drag the top strip of the ruler to set the loop region; click it to toggle looping.
 - Scroll to pan, ⌘/⌥-scroll or pinch to zoom, ⌘0 to fit.
 
-**Effects** — each effect shows its main knobs; **More** reveals the rest, ✕ deletes it.
+**Effects** (After Effects style) — each effect shows its main knobs; **More** reveals the rest, ✕ deletes it.
+- Click an effect's name to select it (⇧/⌘-click for more), ⌘A for all of that layer's effects.
+- ⌘C, then select one or more clips, a track or a composition and ⌘V to paste them all. Delete removes, ⌘D duplicates.
+- Drag an effect's name to reorder it, or onto another clip, track, tab or list to copy it there.
+
+**Copy & paste clips** — ⌘C / ⌘V on the timeline pastes linked copies at the playhead. Right-click selects before showing the menu.
 
 **Session view** (optional) — an Ableton-style clip launcher, available from any panel's ☰ menu.
 

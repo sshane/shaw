@@ -276,6 +276,8 @@ enum DragPayload {
     case effect(String)
     case preset(String)
     case kit(String)
+    /// An effect already on something (dragged by its title in Effect Controls).
+    case effectInstance(UUID)
 
     var string: String {
         switch self {
@@ -283,6 +285,7 @@ enum DragPayload {
         case .effect(let k): return "shaw-effect:\(k)"
         case .preset(let p): return "shaw-preset:\(p)"
         case .kit(let k): return "shaw-kit:\(k)"
+        case .effectInstance(let id): return "shaw-fx:\(id.uuidString)"
         }
     }
 
@@ -294,6 +297,7 @@ enum DragPayload {
         case "shaw-effect": self = .effect(parts[1])
         case "shaw-preset": self = .preset(parts[1])
         case "shaw-kit": self = .kit(parts[1])
+        case "shaw-fx": guard let id = UUID(uuidString: parts[1]) else { return nil }; self = .effectInstance(id)
         default: return nil
         }
     }

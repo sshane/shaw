@@ -92,3 +92,64 @@ final class WorkflowTests: XCTestCase {
         XCTAssertEqual(s.heldKeys["s"]?.pitch, DrumKits.basePitch + 1, "S plays the second sound (snare)")
     }
 }
+
+final class ClipboardTests: XCTestCase {
+    func store() -> Store { Store(project: DemoProject.empty(), headless: true) }
+
+    func testCopyEffectsOntoSeveralClips() {
+        let s = store()
+        s.addInstrument(.synth("Pluck"))
+        s.addInstrument(.synth("Pad"))
+        s.addInstrument(.kit("house"))
+        let comp = s.activeComp!
+        let a = comp.tracks[0].clips[0], b = comp.tracks[1].clips[0], c = comp.tracks[2].clips[0]
+        let host = EffectHost.clip(s.activeCompID, a.id)
+        s.addEffect("reverb", to: host)
+        s.addEffect("delay", to: host)
+        s.selectEffect(s.effects(of: host)[0].id, in: host, extend: false)
+        s.selectAllEffects()
+        XCTAssertEqual(s.selectedEffects.count, 2, "⌘A selects every effect on the layer")
+        XCTAssertTrue(s.copySelection())
+
+        s.focus = .timeline
+        s.selectedClips = [b.id, c.id]
+        XCTAssertTrue(s.paste())
+        for k in [b, c] {
+            let fx = s.effects(of: .clip(s.activeCompID, k.id))
+            XCTAssertEqual(fx.map(\.kind), ["reverb", "delay"], "pasted in stack order")
+            XCTAssertFalse(fx.contains { e in s.effects(of: host).contains { $0.id == e.id } }, "pasted effects get new ids")
+        }
+        s.undo()
+        XCTAssertTrue(s.effects(of: .clip(s.activeCompID, b.id)).isEmpty, "one paste is one undo step")
+    }
+
+    func testReorderAndCopyByDragging() {
+        let s = store()
+        s.addInstrument(.synth("Pluck"))
+        s.addInstrument(.synth("Pad"))
+        let comp = s.activeComp!
+        let t0 = EffectHost.track(s.activeCompID, comp.tracks[0].id), t1 = EffectHost.track(s.activeCompID, comp.tracks[1].id)
+        s.addEffect("reverb", to: t0)
+        s.addEffect("delay", to: t0)
+        let fx = s.effects(of: t0)
+        s.dropEffect(fx[1].id, onto: t0, before: fx[0].id)
+        XCTAssertEqual(s.effects(of: t0).map(\.kind), ["delay", "reverb"], "dragging within a layer reorders")
+        s.dropEffect(fx[0].id, onto: t1, before: nil)
+        XCTAssertEqual(s.effects(of: t1).map(\.kind), ["reverb"], "dragging to another layer copies")
+        XCTAssertEqual(s.effects(of: t0).count, 2)
+    }
+
+    func testCopyPasteClipsAtPlayhead() {
+        let s = store()
+        s.addInstrument(.synth("Pluck"))
+        let clip = s.activeComp!.tracks[0].clips[0]
+        s.focus = .timeline
+        s.selectedClips = [clip.id]
+        XCTAssertTrue(s.copySelection())
+        s.seek(8)
+        s.paste()
+        let clips = s.activeComp!.tracks[0].clips
+        XCTAssertEqual(clips.count, 2)
+        XCTAssertTrue(clips.contains { $0.start == 8 && $0.assetID == clip.assetID }, "pasted clip is linked, at the playhead")
+    }
+}

@@ -158,6 +158,7 @@ struct SlotCell: View {
                     if let s = track.slots[scene] { store.replaceInstrument(ofAsset: s.assetID, with: .kit(k)) }
                     else { store.setSlot(track: track.id, scene: scene, asset: store.newBeat(kit: k)) }
                 case .effect(let k): store.addEffect(k, to: .track(store.activeCompID, track.id))
+                case .effectInstance(let id): store.dropEffect(id, onto: .track(store.activeCompID, track.id), before: nil)
                 }
                 return true
             },

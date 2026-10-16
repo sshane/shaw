@@ -20,7 +20,7 @@ enum EffectHost: Equatable {
     case clip(AssetID, UUID)
 }
 
-enum FocusArea { case timeline, session, pianoRoll, beatMaker, project, other }
+enum FocusArea { case timeline, session, pianoRoll, beatMaker, project, inspector, other }
 
 enum SnapSetting: String, CaseIterable, Identifiable {
     case auto = "Auto", bar = "1 Bar", beat = "1/4", eighth = "1/8", sixteenth = "1/16", thirtysecond = "1/32", off = "Off"
@@ -78,6 +78,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var selectedNotes: Set<UUID> = []
     /// Drum patterns: show the FL-style step grid instead of the piano roll (same notes either way).
     var drumStepView = false
+    /// Effects selected by clicking their titles (all on one layer: `selectedEffectsHost`).
+    var selectedEffects: Set<UUID> = []
+    var selectedEffectsHost: EffectHost?
+    @ObservationIgnored var clipboard: ShawClipboard?
     var browserTab: BrowserTab = .instruments
     /// Bumped to move keyboard focus into the browser's search field.
     var focusBrowserSearch = 0

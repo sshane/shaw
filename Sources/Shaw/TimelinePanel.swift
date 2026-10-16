@@ -71,6 +71,26 @@ struct TimelinePanel: View {
             scrollY = min(maxY, max(0, scrollY - dy))
         }
         monitor.onMagnify = { m, p in zoom(by: 1 + m, at: p.x - Self.headerWidth - 1) }
+        monitor.onRightClick = { p in
+            // Right-click selects what's under the mouse first (like Finder / After Effects), then the menu opens.
+            guard let comp = store.activeComp else { return false }
+            let y = p.y - Self.rulerHeight
+            guard y >= 0 else { return false }
+            let ti = Int((y + scrollY) / store.trackHeight)
+            guard ti >= 0, ti < comp.tracks.count else { return false }
+            store.focus = .timeline
+            if p.x < Self.headerWidth {
+                store.selectedClips = []
+                store.inspector = .track(store.activeCompID, comp.tracks[ti].id)
+                return false
+            }
+            let beat = Double((p.x - Self.headerWidth - 1 + scrollX) / CGFloat(store.zoom))
+            if let c = comp.tracks[ti].clips.last(where: { beat >= $0.start && beat < $0.end }) {
+                if !store.selectedClips.contains(c.id) { store.selectedClips = [c.id] }
+                store.inspector = .clip(store.activeCompID, c.id)
+            }
+            return false
+        }
         monitor.install()
     }
 
@@ -128,6 +148,7 @@ struct CompTab: View {
         .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
             onPayload: { payload, _ in
                 if case .effect(let k) = payload { store.addEffect(k, to: .composition(id)); return true }
+                if case .effectInstance(let fx) = payload { store.dropEffect(fx, onto: .composition(id), before: nil); return true }
                 return false
             },
             onHover: { target = $0 != nil }))
@@ -272,6 +293,7 @@ struct TrackHeader: View {
             onPayload: { payload, _ in
                 switch payload {
                 case .effect(let k): store.addEffect(k, to: .track(store.activeCompID, track.id))
+                case .effectInstance(let fx): store.dropEffect(fx, onto: .track(store.activeCompID, track.id), before: nil)
                 case .asset(let id): store.addClip(asset: id, at: store.snapBeat(store.transport.position), track: track.id)
                 case .preset, .kit: return false
                 }

@@ -172,6 +172,8 @@ struct TransportBar: View {
                 }
                 .labelsHidden().frame(width: 76).controlSize(.small)
             }
+            .disabled(!store.hasContent)
+            .opacity(store.hasContent ? 1 : 0.35)
             .help("Grid snap. Hold ⌘ while dragging to move freely.")
 
             Spacer()

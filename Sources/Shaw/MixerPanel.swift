@@ -5,7 +5,14 @@ struct MixerPanel: View {
     @Environment(Store.self) private var store
 
     var body: some View {
-        if let comp = store.activeComp {
+        if !store.hasContent {
+            VStack(spacing: 8) {
+                Image(systemName: "slider.vertical.3").font(.system(size: 26)).foregroundStyle(Theme.textFaint)
+                Text("Nothing to mix yet").font(Theme.header).foregroundStyle(Theme.textFaint)
+                Text("Each instrument you add gets a fader here.").font(Theme.small).foregroundStyle(Theme.textFaint)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let comp = store.activeComp {
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 2) {
                     ForEach(comp.tracks) { t in
@@ -103,8 +110,12 @@ struct MixerStrip: View {
         }
         .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
             onPayload: { p, _ in
-                guard case .effect(let k) = p, let host else { return false }
-                store.addEffect(k, to: host)
+                guard let host else { return false }
+                switch p {
+                case .effect(let k): store.addEffect(k, to: host)
+                case .effectInstance(let id): store.dropEffect(id, onto: host, before: nil)
+                default: return false
+                }
                 return true
             },
             onHover: { target = $0 != nil }))

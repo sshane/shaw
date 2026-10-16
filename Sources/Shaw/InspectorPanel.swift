@@ -14,6 +14,11 @@ struct InspectorPanel: View {
             .padding(.bottom, 30)
         }
         .background(dropTarget ? Theme.accent.opacity(0.07) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            store.focus = .inspector
+            store.selectedEffects = []
+        }
         .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
             onPayload: { payload, _ in
                 switch payload {
@@ -23,6 +28,10 @@ struct InspectorPanel: View {
                     return true
                 case .preset(let name):
                     if case .asset(let id)? = store.inspector { store.edit { $0.updateNotes(id) { $0.instrument = .preset(name) } } }
+                    return true
+                case .effectInstance(let id):
+                    guard let host = store.currentEffectHost else { return false }
+                    store.dropEffect(id, onto: host, before: nil)
                     return true
                 default: return false
                 }
@@ -255,6 +264,15 @@ struct EffectStack: View {
             .help("Add an effect")
         }
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 4)
+        .contentShape(Rectangle())
+        .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(onPayload: { payload, _ in
+            switch payload {
+            case .effectInstance(let id): store.dropEffect(id, onto: host, before: nil)
+            case .effect(let k): store.addEffect(k, to: host)
+            default: return false
+            }
+            return true
+        }))
         if effects.isEmpty {
             Text("Drop an effect here, or search the Browser (e.g. \"reverb\") and drag it onto anything.")
                 .font(Theme.tiny).foregroundStyle(Theme.textFaint)
@@ -278,19 +296,36 @@ struct EffectCard: View {
     let count: Int
     @State private var showAdvanced = false
 
+    @State private var dropTarget = false
+
     var body: some View {
         let d = EffectRegistry.descriptor(effect.kind)
+        let selected = store.selectedEffects.contains(effect.id) && store.selectedEffectsHost == host
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
+                Button { update { $0.expanded.toggle() } } label: {
+                    Image(systemName: effect.expanded ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                        .frame(width: 12, height: 18).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                .help(effect.expanded ? "Collapse" : "Expand")
                 Toggle("", isOn: Binding(get: { effect.enabled }, set: { v in
                     update { $0.enabled = v }
                 }))
                 .toggleStyle(.checkbox).labelsHidden().controlSize(.small)
                 .help("On / off")
+                // Like After Effects: click the name to select (⇧/⌘ for more), ⌘C / ⌘V to copy onto other things,
+                // drag the name to reorder or onto another layer to copy it there.
                 Text(d?.name ?? effect.kind).font(Theme.header).foregroundStyle(effect.enabled ? Theme.text : Theme.textFaint)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(selected ? Theme.accent.opacity(0.35) : Color.clear))
                     .contentShape(Rectangle())
-                    .onTapGesture { update { $0.expanded.toggle() } }
-                    .help("Click to collapse")
+                    .onTapGesture {
+                        let extend = NSEvent.modifierFlags.contains(.shift) || NSEvent.modifierFlags.contains(.command)
+                        store.selectEffect(effect.id, in: host, extend: extend)
+                    }
+                    .shawDraggable(.effectInstance(effect.id), preview: d?.name ?? effect.kind)
+                    .help("Click to select · ⌘C copy · ⌘V paste onto a selected clip or track · drag to reorder or copy")
                 Spacer()
                 Menu {
                     Button("Move Up") { move(-1) }.disabled(index == 0)
@@ -328,8 +363,23 @@ struct EffectCard: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.18)))
+        .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.accent.opacity(0.1) : Color.black.opacity(0.18)))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(selected ? Theme.accent.opacity(0.8) : Color.clear, lineWidth: 1))
+        .overlay(alignment: .top) { if dropTarget { Rectangle().fill(Theme.accent).frame(height: 2).offset(y: -3) } }
         .padding(.horizontal, 6).padding(.vertical, 2)
+        .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
+            onPayload: { payload, _ in
+                switch payload {
+                case .effectInstance(let id): store.dropEffect(id, onto: host, before: effect.id)
+                case .effect(let k):
+                    guard let d = EffectRegistry.descriptor(k) else { return false }
+                    let e = d.makeEffect()
+                    store.updateEffects(host) { fx in fx.insert(e, at: fx.firstIndex { $0.id == effect.id } ?? fx.count) }
+                default: return false
+                }
+                return true
+            },
+            onHover: { dropTarget = $0 != nil }))
     }
 
     private func row(_ p: ParamDef) -> some View {
