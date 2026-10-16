@@ -539,13 +539,13 @@ final class NoteSourceNode: SourceNode {
             if e.beat >= w1 { break }
             let ef = min(frames - 1, max(0, Int(((e.beat - beat) / bps).rounded(.down))))
             if ef > f {
-                synth.render(l + f, r + f, frames: ef - f, params: params)
+                synth.render(l + f, r + f, frames: ef - f, params: params, bpm: ctx.bpm)
                 f = ef
             }
             if e.on { synth.noteOn(e.pitch, velocity: e.velocity, params: params) } else { synth.noteOff(e.pitch, params: params) }
             idx += 1
         }
-        if f < frames { synth.render(l + f, r + f, frames: frames - f, params: params) }
+        if f < frames { synth.render(l + f, r + f, frames: frames - f, params: params, bpm: ctx.bpm) }
     }
 
     func renderTail(frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>, ctx: RenderContext, songBeat: Double) {
@@ -553,7 +553,7 @@ final class NoteSourceNode: SourceNode {
             state.synth.allNotesOff()
             state.expected = -1
         }
-        state.synth.render(l, r, frames: frames, params: params)
+        state.synth.render(l, r, frames: frames, params: params, bpm: ctx.bpm)
     }
 
     func stop() {

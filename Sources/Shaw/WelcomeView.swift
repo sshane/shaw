@@ -10,6 +10,16 @@ struct WelcomeView: View {
     private struct Page { let icon: String; let title: String; let subtitle: String; let points: [Point] }
 
     private let pages: [Page] = [
+        Page(icon: "square.stack.3d.up", title: "The building blocks",
+             subtitle: "Everything in Shaw is made of three things: clips, layers, and compositions.",
+             points: [
+                Point(icon: "rectangle.fill", title: "Clip",
+                      text: "A clip is a block on the timeline that holds notes, drums, or audio. Double-click it to edit its notes in the piano roll. When you duplicate a clip, every copy shares the same notes, so editing one changes them all. Make Unique (⇧⌘U) splits one off."),
+                Point(icon: "line.3.horizontal", title: "Layer",
+                      text: "A layer is a row on the timeline. Layers play at the same time, so drums can go on one, bass on another, and chords on a third. Each layer has its own volume, mute, solo, and effects."),
+                Point(icon: "square.stack.3d.up", title: "Composition",
+                      text: "A composition is a group of layers. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects. Pre-compose (⇧⌘C) turns the clips you select into one."),
+             ]),
         Page(icon: "rectangle.split.3x1", title: "Everything happens on one timeline",
              subtitle: "There's no separate session view. Looping lives at the top of the timeline.",
              points: [
@@ -20,21 +30,11 @@ struct WelcomeView: View {
                 Point(icon: "keyboard", title: "Your keyboard is a piano",
                       text: "A S D F and the rest of that row play the current instrument, and W E T Y U O P are the black keys. Z and X change the octave, and C and V change how hard you hit. On drums, A is the kick and S is the snare."),
              ]),
-        Page(icon: "link", title: "Clips are linked, like After Effects",
-             subtitle: "Every copy of a clip shares the same notes.",
-             points: [
-                Point(icon: "link", title: "Edit one, change them all",
-                      text: "Duplicate a clip with ⌘D or by Option-dragging it, and every copy shares its notes. Make Unique (⇧⌘U) gives one copy its own notes. Merge (⌘J) joins clips on a layer into one."),
-                Point(icon: "square.stack.3d.up", title: "Compositions inside compositions",
-                      text: "Pre-compose (⇧⌘C) puts clips into a composition you can drop anywhere like a single clip. An effect on the composition covers everything inside it, everywhere you use it. Try reverb on a whole drop or a filter sweep over the intro."),
-                Point(icon: "pianokeys", title: "One editor for everything",
-                      text: "Melodies and drums both use the piano roll, and drums can switch to a step grid. Double-click to add a note. Double-click a note to delete it."),
-             ]),
         Page(icon: "slider.horizontal.3", title: "Effects on anything, with keyframes",
              subtitle: "Search the Browser for something like \"reverb\" and drag it where you want it.",
              points: [
                 Point(icon: "square.3.layers.3d", title: "Clip, layer, or composition",
-                      text: "An effect on a clip only changes that clip. On a layer, it changes everything on the layer. On a composition, it runs after everything inside it, like an adjustment layer."),
+                      text: "An effect on a clip only changes that clip. On a layer, it changes everything on the layer. On a composition, it runs after everything inside it, so one reverb or filter sweep can cover a whole drop everywhere you use it."),
                 Point(icon: "doc.on.doc", title: "Select, copy, paste",
                       text: "Click an effect's name to select it, or press ⌘A to grab them all. Press ⌘C, select other clips or layers, then press ⌘V. Drag an effect's name to reorder it."),
                 Point(icon: "stopwatch", title: "Keyframes",

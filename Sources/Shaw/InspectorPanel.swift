@@ -455,6 +455,7 @@ struct InstrumentInspector: View {
         ("Amp Envelope", ["a", "d", "s", "r"]),
         ("Filter Envelope", ["fa", "fd", "fs", "fr"]),
         ("Pitch & Voice", ["penv", "pdecay", "mode", "glide"]),
+        ("LFO", ["lfosync", "lforate", "lfocut", "lfopitch", "lfoamp"]),
         ("Output", ["drive", "volume"]),
     ]
 

@@ -365,7 +365,7 @@ public final class AudioEngine {
                 idleFrames += n
             }
         }
-        previewSynth.render(master.l, master.r, frames: n, params: previewParams)
+        previewSynth.render(master.l, master.r, frames: n, params: previewParams, bpm: bpm)
         previewDrums.render(master.l, master.r, frames: n)
         if clickFrames > 0 && !metronomeOn { clickFrames = 0 }
         master.scale(n, masterGain)

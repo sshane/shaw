@@ -4,6 +4,12 @@ Shaw is a music app for the Mac that works like After Effects. I came from After
 
 ![Shaw playing the demo song](docs/images/demo-song.png)
 
+## The building blocks
+
+- **Clip.** A block on the timeline that holds notes, drums, or audio. Double-click it to edit it. When you duplicate a clip, every copy shares the same notes.
+- **Layer.** A row on the timeline. Layers play at the same time, and each one has its own volume, mute, solo, and effects.
+- **Composition.** A group of layers. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects.
+
 ## What's different
 
 - **One timeline.** There's no separate session view. The orange loop bar at the top loops any part of the song, and opening a clip loops it.
@@ -35,7 +41,7 @@ swift test                # runs the tests
 
 New projects start empty with one button: **Add an instrument**. Pick drums or a synth in the Browser on the left. Click one to hear it, and double-click it to add it. Shaw makes a layer with a one-bar pattern, opens it in the piano roll, and loops it. Press Space and start adding notes.
 
-To hear what a full song looks like, open **File → Open Demo Project**. The demo, "First Light", is a 72-bar house track built out of linked Intro, Build, Drop, and Breakdown compositions.
+To hear what a full song looks like, open **File → Open Demo Song**. "Neon Drive" is an 80-bar track in F minor that uses keyframes everywhere: the intro's filter sweeps open while the strings fade in, the drop's lead gets delay throws at the end of each phrase, the breakdown's reverb blooms as the beat gets crunchier, and Drop 2 puts the whole Drop inside it with a wobble bass that gets dirtier as it goes. "First Light", a simpler house track, is in the same menu.
 
 ![Starting a new project](docs/images/start.png)
 
@@ -87,8 +93,8 @@ The first time you open Shaw, a short three-page guide walks through what's diff
 
 ## What's inside
 
-- **Shaw Synth**, a polyphonic synth with two oscillators, a sub, noise, unison, a resonant filter, envelopes, glide, and drive. It comes with 12 presets, including Supersaw, Reese Bass, 808 Bass, Acid, Pluck, and Pad.
-- **Five drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi, and Techno. Shaw generates every sound in code, so there are no samples to download or license.
+- **Shaw Synth**, a polyphonic synth with two oscillators, a sub, noise, unison, a resonant filter, envelopes, a tempo-synced LFO, glide, and drive. It comes with 35 presets across bass, keys, plucks, leads, pads, strings and brass, chiptune, and FX, like Wobble Bass, Electric Piano, Vibrato Lead, Strings, Chip Arp, and Impact Boom.
+- **Seven drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi, Techno, Electro, and Drill. Shaw generates every sound in code, so there are no samples to download or license.
 - **14 effects**: Reverb, Delay, Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter, Saturator, Bitcrusher, Volume, and Utility.
 - Audio import (drag files in from Finder), WAV export, autosave, and projects saved as `.shaw` files.
 

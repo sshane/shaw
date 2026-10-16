@@ -48,7 +48,7 @@ enum InstrumentChoice: Equatable, Identifiable {
     }
 
     /// Display order of categories in the Instruments tab.
-    static let categoryOrder = ["Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "FX", "Synth"]
+    static let categoryOrder = ["Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Chiptune", "FX", "Synth"]
 }
 
 extension Store {

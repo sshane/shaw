@@ -110,7 +110,7 @@ final class EngineTests: XCTestCase {
             s.noteOn(48, velocity: 0.9, params: params)
             var energy: Float = 0
             // Slow-attack presets (the riser fades in over seconds) get longer to speak.
-            let blocks = name == "Noise Riser" ? 900 : 60
+            let blocks = 900 // ~10 s, so slow pads and risers have time to speak
             for _ in 0..<blocks {
                 l.initialize(repeating: 0, count: 512); r.initialize(repeating: 0, count: 512)
                 s.render(l, r, frames: 512, params: params)

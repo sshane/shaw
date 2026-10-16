@@ -32,7 +32,16 @@ public enum SynthParams {
         ParamDef("drive", "Drive", 0, 1, 0, .percent),
         ParamDef("volume", "Volume", -36, 6, -8, .db),
         ParamDef("osclevel", "Osc Level", 0, 1, 1, .percent),
+        // LFO: wobble the filter, add vibrato, or tremolo. Synced to the tempo unless set to Free.
+        ParamDef("lforate", "LFO Rate", 0.05, 20, 5, .hz, .log),
+        .choice("lfosync", "LFO Sync", ["Free", "1/16", "1/8", "1/8T", "1/4", "1/2", "1 bar"], 0),
+        ParamDef("lfocut", "LFO → Filter", 0, 1, 0, .percent),
+        ParamDef("lfopitch", "Vibrato", 0, 1, 0, .percent),
+        ParamDef("lfoamp", "Tremolo", 0, 1, 0, .percent),
     ]
+
+    /// Beats per LFO cycle for each `lfosync` choice (0 = free running in Hz).
+    static let lfoSyncBeats: [Double] = [0, 0.25, 0.5, 1.0 / 3, 1, 2, 4]
 
     /// The handful of synth controls shown by default.
     public static let basic = ["cutoff", "resonance", "a", "r", "volume"]
@@ -43,31 +52,86 @@ public enum SynthParams {
     static let osc1 = 0, osc2 = 1, semi2 = 2, fine2 = 3, mix = 4, sub = 5, noise = 6, unison = 7, spread = 8
     static let cutoff = 9, res = 10, fenv = 11, keytrack = 12, a = 13, d = 14, s = 15, r = 16
     static let fa = 17, fd = 18, fs = 19, fr = 20, penv = 21, pdecay = 22, mode = 23, glide = 24, drive = 25, volume = 26, oscLevel = 27
+    static let lfoRate = 28, lfoSync = 29, lfoCut = 30, lfoPitch = 31, lfoAmp = 32
 }
 
 public enum SynthPresets {
-    public static let names = ["Init", "Supersaw", "Pluck", "Pad", "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Keys", "Lead", "Bell", "Noise Riser"]
-
-    public static let categories: [String: String] = [
-        "Init": "Synth", "Supersaw": "Lead", "Pluck": "Pluck", "Pad": "Pad", "Reese Bass": "Bass",
-        "Sub Bass": "Bass", "808 Bass": "Bass", "Acid": "Bass", "Keys": "Keys", "Lead": "Lead", "Bell": "Keys", "Noise Riser": "FX",
+    public static let names = [
+        "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass",
+        "Keys", "Electric Piano", "Organ", "Bell", "Music Box",
+        "Pluck", "Marimba", "Kalimba", "Stab",
+        "Lead", "Supersaw", "Vibrato Lead", "Whistle",
+        "Pad", "Warm Pad", "Dark Pad", "Glass Pad",
+        "Strings", "Brass", "Pizzicato",
+        "Chip Lead", "Chip Bass", "Chip Arp",
+        "Noise Riser", "Downlifter", "Laser Zap", "Impact Boom",
+        "Init",
     ]
 
+    public static let categories: [String: String] = {
+        var c: [String: String] = [:]
+        for n in ["Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass"] { c[n] = "Bass" }
+        for n in ["Keys", "Electric Piano", "Organ", "Bell", "Music Box"] { c[n] = "Keys" }
+        for n in ["Pluck", "Marimba", "Kalimba", "Stab"] { c[n] = "Pluck" }
+        for n in ["Lead", "Supersaw", "Vibrato Lead", "Whistle"] { c[n] = "Lead" }
+        for n in ["Pad", "Warm Pad", "Dark Pad", "Glass Pad"] { c[n] = "Pad" }
+        for n in ["Strings", "Brass", "Pizzicato"] { c[n] = "Strings & Brass" }
+        for n in ["Chip Lead", "Chip Bass", "Chip Arp"] { c[n] = "Chiptune" }
+        for n in ["Noise Riser", "Downlifter", "Laser Zap", "Impact Boom"] { c[n] = "FX" }
+        c["Init"] = "Synth"
+        return c
+    }()
+
+    // Waves: 0 sine, 1 triangle, 2 saw, 3 square. Unison: 0 off, 1 = 3 voices, 2 = 5, 3 = 7.
+    // LFO sync: 0 free, 1 = 1/16, 2 = 1/8, 3 = 1/8T, 4 = 1/4, 5 = 1/2, 6 = 1 bar.
     static let overrides: [String: [String: Double]] = [
         "Init": [:],
-        "Supersaw": ["unison": 3, "spread": 0.45, "fine2": 12, "cutoff": 9000, "fenv": 0.1, "a": 0.01, "s": 0.85, "r": 0.4, "volume": -12],
-        "Pluck": ["osc2": 3, "semi2": 12, "mix": 0.35, "cutoff": 900, "resonance": 0.25, "fenv": 0.7, "fd": 0.18, "fs": 0, "d": 0.4, "s": 0, "r": 0.3, "keytrack": 0.6, "volume": -8],
-        "Pad": ["unison": 2, "spread": 0.5, "a": 0.9, "d": 1.5, "s": 0.8, "r": 2.2, "cutoff": 2500, "fenv": 0.25, "fa": 1.2, "fd": 2, "fs": 0.4, "volume": -14],
+        // Bass
         "Reese Bass": ["osc1": 2, "osc2": 2, "fine2": 25, "unison": 1, "spread": 0.2, "cutoff": 700, "resonance": 0.2, "fenv": 0.1, "mode": 1, "glide": 0.04, "sub": 0.4, "drive": 0.3, "s": 1, "r": 0.15, "volume": -8],
         "Sub Bass": ["osc1": 0, "osc2": 0, "mix": 0, "sub": 0, "cutoff": 400, "fenv": 0, "mode": 1, "glide": 0.03, "s": 1, "r": 0.12, "drive": 0.15, "volume": -4],
         "808 Bass": ["osc1": 0, "osc2": 0, "mix": 0, "cutoff": 2000, "fenv": 0, "penv": 12, "pdecay": 0.04, "a": 0.002, "d": 2.2, "s": 0.0, "r": 0.4, "mode": 2, "glide": 0.06, "drive": 0.45, "volume": -4],
         "Acid": ["osc1": 2, "mix": 0, "cutoff": 400, "resonance": 0.85, "fenv": 0.75, "fd": 0.22, "fs": 0.05, "mode": 2, "glide": 0.06, "s": 0.9, "r": 0.08, "drive": 0.4, "keytrack": 0.5, "volume": -10],
+        "Wobble Bass": ["osc1": 2, "osc2": 3, "fine2": 0, "mix": 0.4, "sub": 0.5, "cutoff": 280, "resonance": 0.55, "fenv": 0, "keytrack": 0.2, "mode": 1, "glide": 0.02, "s": 1, "r": 0.1, "drive": 0.5, "lfosync": 2, "lfocut": 0.75, "volume": -8],
+        "Pluck Bass": ["osc1": 3, "osc2": 2, "mix": 0.3, "sub": 0.3, "cutoff": 500, "resonance": 0.3, "fenv": 0.6, "fd": 0.15, "fs": 0, "d": 0.35, "s": 0.2, "r": 0.08, "mode": 1, "volume": -6],
+        "Deep Bass": ["osc1": 0, "osc2": 1, "semi2": 12, "mix": 0.25, "cutoff": 900, "fenv": 0.1, "s": 0.9, "r": 0.15, "mode": 1, "glide": 0.02, "drive": 0.2, "volume": -5],
+        // Keys
         "Keys": ["osc1": 1, "osc2": 0, "semi2": 12, "mix": 0.3, "cutoff": 3000, "fenv": 0.3, "fd": 0.6, "d": 1.4, "s": 0.35, "r": 0.5, "volume": -8],
+        "Electric Piano": ["osc1": 0, "osc2": 1, "semi2": 12, "mix": 0.25, "cutoff": 4000, "fenv": 0.2, "fd": 0.4, "keytrack": 0.5, "d": 1.6, "s": 0.25, "r": 0.4, "lforate": 4.5, "lfoamp": 0.25, "volume": -7],
+        "Organ": ["osc1": 0, "osc2": 3, "semi2": 12, "mix": 0.35, "sub": 0.4, "cutoff": 3500, "fenv": 0, "a": 0.005, "d": 0.1, "s": 1, "r": 0.08, "lforate": 6, "lfopitch": 0.08, "volume": -12],
+        "Bell": ["osc1": 0, "osc2": 1, "semi2": 19, "fine2": 0, "mix": 0.45, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 2.5, "s": 0, "r": 2, "volume": -10],
+        "Music Box": ["osc1": 0, "osc2": 0, "semi2": 24, "fine2": 0, "mix": 0.3, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 1.2, "s": 0, "r": 0.8, "volume": -8],
+        // Pluck
+        "Pluck": ["osc2": 3, "semi2": 12, "mix": 0.35, "cutoff": 900, "resonance": 0.25, "fenv": 0.7, "fd": 0.18, "fs": 0, "d": 0.4, "s": 0, "r": 0.3, "keytrack": 0.6, "volume": -8],
+        "Marimba": ["osc1": 0, "osc2": 1, "semi2": 24, "fine2": 0, "mix": 0.15, "cutoff": 5000, "fenv": 0, "a": 0.001, "d": 0.35, "s": 0, "r": 0.2, "volume": -6],
+        "Kalimba": ["osc1": 1, "osc2": 0, "semi2": 12, "fine2": 0, "mix": 0.3, "cutoff": 3500, "fenv": 0.3, "fd": 0.1, "fs": 0, "d": 0.5, "s": 0, "r": 0.3, "volume": -7],
+        "Stab": ["osc1": 2, "osc2": 2, "fine2": 15, "unison": 1, "spread": 0.4, "cutoff": 2500, "resonance": 0.2, "fenv": 0.5, "fd": 0.12, "fs": 0, "d": 0.18, "s": 0, "r": 0.12, "volume": -10],
+        // Lead
         "Lead": ["osc1": 3, "osc2": 2, "fine2": 9, "cutoff": 4500, "resonance": 0.3, "fenv": 0.2, "mode": 2, "glide": 0.05, "s": 0.9, "r": 0.2, "drive": 0.2, "volume": -10],
+        "Supersaw": ["unison": 3, "spread": 0.45, "fine2": 12, "cutoff": 9000, "fenv": 0.1, "a": 0.01, "s": 0.85, "r": 0.4, "volume": -12],
+        "Vibrato Lead": ["osc1": 2, "osc2": 3, "fine2": 6, "cutoff": 5000, "resonance": 0.2, "fenv": 0.15, "a": 0.02, "s": 0.9, "r": 0.25, "mode": 2, "glide": 0.04, "lforate": 5.5, "lfopitch": 0.35, "volume": -10],
+        "Whistle": ["osc1": 0, "osc2": 0, "mix": 0, "noise": 0.05, "cutoff": 6000, "fenv": 0, "a": 0.06, "s": 1, "r": 0.2, "mode": 2, "glide": 0.08, "lforate": 5, "lfopitch": 0.25, "volume": -9],
+        // Pad
+        "Pad": ["unison": 2, "spread": 0.5, "a": 0.9, "d": 1.5, "s": 0.8, "r": 2.2, "cutoff": 2500, "fenv": 0.25, "fa": 1.2, "fd": 2, "fs": 0.4, "volume": -14],
+        "Warm Pad": ["osc1": 2, "osc2": 1, "fine2": 9, "unison": 1, "spread": 0.3, "cutoff": 1200, "resonance": 0.1, "fenv": 0.15, "a": 1.2, "d": 2, "s": 0.85, "r": 2.5, "fa": 1.5, "fd": 3, "fs": 0.5, "lforate": 0.3, "lfocut": 0.1, "volume": -14],
+        "Dark Pad": ["osc1": 2, "osc2": 2, "unison": 2, "spread": 0.5, "cutoff": 600, "resonance": 0.25, "fenv": 0.3, "a": 1.5, "s": 0.9, "r": 3, "fa": 3, "fd": 4, "fs": 0.3, "volume": -15],
+        "Glass Pad": ["osc1": 1, "osc2": 0, "semi2": 12, "fine2": 0, "mix": 0.4, "cutoff": 5000, "fenv": 0, "a": 0.8, "d": 2, "s": 0.7, "r": 2.5, "lforate": 3, "lfoamp": 0.15, "volume": -14],
+        // Strings & Brass
+        "Strings": ["osc1": 2, "osc2": 2, "fine2": 8, "unison": 2, "spread": 0.25, "cutoff": 3500, "fenv": 0.1, "a": 0.45, "d": 1, "s": 0.9, "r": 0.9, "lforate": 5, "lfopitch": 0.1, "volume": -14],
+        "Brass": ["osc1": 2, "osc2": 2, "fine2": 5, "cutoff": 1200, "resonance": 0.15, "fenv": 0.55, "fa": 0.08, "fd": 0.4, "fs": 0.5, "a": 0.04, "d": 0.3, "s": 0.85, "r": 0.2, "keytrack": 0.5, "volume": -10],
+        "Pizzicato": ["osc1": 2, "osc2": 1, "mix": 0.3, "cutoff": 2500, "fenv": 0.4, "fd": 0.08, "fs": 0, "a": 0.001, "d": 0.25, "s": 0, "r": 0.15, "volume": -8],
+        // Chiptune
+        "Chip Lead": ["osc1": 3, "osc2": 3, "semi2": 12, "fine2": 0, "mix": 0.2, "cutoff": 20000, "resonance": 0, "fenv": 0, "keytrack": 0, "a": 0.001, "d": 0.1, "s": 0.8, "r": 0.05, "mode": 2, "glide": 0.03, "lforate": 7, "lfopitch": 0.2, "volume": -14],
+        "Chip Bass": ["osc1": 1, "osc2": 1, "fine2": 0, "mix": 0, "cutoff": 20000, "resonance": 0, "fenv": 0, "keytrack": 0, "a": 0.001, "s": 1, "r": 0.03, "mode": 1, "volume": -6],
+        "Chip Arp": ["osc1": 3, "osc2": 3, "fine2": 0, "mix": 0, "cutoff": 20000, "resonance": 0, "fenv": 0, "keytrack": 0, "a": 0.001, "d": 0.12, "s": 0.3, "r": 0.05, "volume": -14],
+        // FX
         // White noise whose filter opens over ~8 seconds: hold one long note for a build-up.
         "Noise Riser": ["osclevel": 0, "noise": 1, "cutoff": 220, "resonance": 0.35, "fenv": 0.78, "keytrack": 0,
                         "fa": 7.5, "fd": 2, "fs": 1, "fr": 0.8, "a": 6, "d": 1, "s": 1, "r": 0.6, "volume": -16],
-        "Bell": ["osc1": 0, "osc2": 1, "semi2": 19, "fine2": 0, "mix": 0.45, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 2.5, "s": 0, "r": 2, "volume": -10],
+        // The reverse: bright noise that sweeps down and fades, for the moment after a drop.
+        "Downlifter": ["osclevel": 0, "noise": 1, "cutoff": 12000, "resonance": 0.3, "fenv": -0.8, "keytrack": 0,
+                       "fa": 4, "fd": 1, "fs": 1, "fr": 0.5, "a": 0.01, "d": 3, "s": 0, "r": 0.5, "volume": -16],
+        "Laser Zap": ["osc1": 3, "osc2": 2, "mix": 0.3, "cutoff": 8000, "fenv": 0, "penv": 36, "pdecay": 0.12, "a": 0.001, "d": 0.25, "s": 0, "r": 0.1, "volume": -14],
+        "Impact Boom": ["osc1": 0, "osc2": 0, "mix": 0, "noise": 0.15, "cutoff": 1500, "fenv": 0.3, "fd": 0.2, "fs": 0, "keytrack": 0, "penv": 24, "pdecay": 0.25, "a": 0.001, "d": 2.5, "s": 0, "r": 1, "drive": 0.4, "volume": -6],
     ]
 
     public static func params(for name: String) -> [String: Double] {
@@ -161,6 +225,7 @@ public final class Synth {
     var noiseSeed: UInt32 = 22222
     var lastNote = -1
     var heldStack: [Int] = []
+    var lfoPhase = 0.0
     let sr: Double
     /// Oscillator phases live outside the voice structs so copying a voice never allocates.
     let ph1: UnsafeMutablePointer<Double>
@@ -295,7 +360,7 @@ public final class Synth {
     }
 
     /// Adds output into the given pointers.
-    public func render(_ outL: UnsafeMutablePointer<Float>, _ outR: UnsafeMutablePointer<Float>, frames: Int, params p: [Double]) {
+    public func render(_ outL: UnsafeMutablePointer<Float>, _ outR: UnsafeMutablePointer<Float>, frames: Int, params p: [Double], bpm: Double = 120) {
         if isSilent { return }
         let w1 = Int(p[SynthParams.osc1]), w2 = Int(p[SynthParams.osc2])
         let ratio2 = pow(2, (p[SynthParams.semi2] + p[SynthParams.fine2] / 100) / 12)
@@ -311,6 +376,13 @@ public final class Synth {
         let driveGain = Float(1 + drive * 8), driveComp = 1 / Float(1 + drive * 2.5)
         let vol = Float(dbToGain(p[SynthParams.volume]))
         let srF = Float(sr)
+        // One LFO shared by every voice, so chords wobble together.
+        let syncBeats = SynthParams.lfoSyncBeats[min(SynthParams.lfoSyncBeats.count - 1, max(0, Int(p[SynthParams.lfoSync])))]
+        let lfoHz = syncBeats > 0 ? bpm / 60 / syncBeats : p[SynthParams.lfoRate]
+        let lfoInc = lfoHz / sr
+        let lfoCut = p[SynthParams.lfoCut], lfoPitch = p[SynthParams.lfoPitch], lfoAmp = Float(p[SynthParams.lfoAmp])
+        let lfoStart = lfoPhase
+        defer { lfoPhase = (lfoPhase + Double(frames) * lfoInc).truncatingRemainder(dividingBy: 1) }
         let uniNorm = 1 / sqrt(Double(uniCount)) * p[SynthParams.oscLevel]
         // Unison detune is constant for the block; precompute instead of calling pow() per sample.
         var detunes = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -337,6 +409,8 @@ public final class Synth {
             for i in 0..<frames {
                 if glideCoef > 0 { v.freq = v.targetFreq + (v.freq - v.targetFreq) * glideCoef } else { v.freq = v.targetFreq }
                 var f0 = v.freq
+                let lfo = (lfoCut > 0 || lfoPitch > 0 || lfoAmp > 0) ? sin(2 * .pi * (lfoStart + Double(i) * lfoInc)) : 0
+                if lfoPitch > 0 { f0 *= pow(2, lfo * lfoPitch * 0.5 / 12) }
                 if penv > 0 {
                     f0 *= pow(2, Double(v.pitchEnv) * penv / 12)
                     v.pitchEnv *= pdec
@@ -365,14 +439,15 @@ public final class Synth {
                 let fe = Double(v.fenv.next())
                 if i & 7 == 0 {
                     let kt = pow(f0 / 261.6, keytrack)
-                    let c = min(cutoff * kt * pow(2, fenvAmt * fe * 7), sr * 0.45)
+                    let c = min(cutoff * kt * pow(2, fenvAmt * fe * 7 + lfo * lfoCut * 4), sr * 0.45)
                     v.fL.set(cutoff: Float(c), resonance: res, sampleRate: srF)
                     v.fR.g = v.fL.g; v.fR.k = v.fL.k; v.fR.a1 = v.fL.a1; v.fR.a2 = v.fL.a2; v.fR.a3 = v.fL.a3
                 }
                 var l = v.fL.process(Float(sl)).0
                 var r = v.fR.process(Float(sr2)).0
                 if drive > 0 { l = tanhf(l * driveGain) * driveComp * 1.5; r = tanhf(r * driveGain) * driveComp * 1.5 }
-                let a = v.amp.next() * velGain * vol
+                var a = v.amp.next() * velGain * vol
+                if lfoAmp > 0 { a *= 1 - lfoAmp * Float(0.5 - 0.5 * lfo) }
                 outL[i] += l * a
                 outR[i] += r * a
                 if v.amp.stage == .idle { break }

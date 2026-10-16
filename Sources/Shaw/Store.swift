@@ -826,6 +826,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         load(DemoProject.make(), url: nil)
     }
 
+    func openFirstLightDemo() {
+        guard confirmDiscard() else { return }
+        load(DemoProject.firstLight(), url: nil)
+    }
+
     func openDialog() {
         guard confirmDiscard() else { return }
         let panel = NSOpenPanel()

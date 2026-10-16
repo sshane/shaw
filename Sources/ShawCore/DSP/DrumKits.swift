@@ -66,6 +66,8 @@ public enum DrumKits {
         DrumKitInfo(id: "boombap", name: "Boom Bap", summary: "Dusty, round hip-hop drums"),
         DrumKitInfo(id: "lofi", name: "Lo-Fi", summary: "Crunchy, filtered, and bit-reduced"),
         DrumKitInfo(id: "techno", name: "Techno", summary: "Hard, distorted industrial kit"),
+        DrumKitInfo(id: "electro", name: "Electro", summary: "Dry, snappy drum machine with a tight kick"),
+        DrumKitInfo(id: "drill", name: "Drill", summary: "Deep sliding 808 kick, sharp snare, and crisp hats"),
     ]
 
     /// Lowest pitch of a kit in the piano roll: C1 is the kick, then one sound per semitone.
@@ -145,6 +147,16 @@ public enum DrumKits {
             hat = HatSpec(closed: 0.035, open: 0.3, hp: 8000, metal: 0.9)
             clapTail = 0.25
             crashDecay = 2.2
+        case "electro":
+            kick = KickSpec(start: 210, end: 50, pitchDecay: 0.025, ampDecay: 0.42, click: 0.55, drive: 1.8, length: 0.6)
+            snare = SnareSpec(tone: 220, toneDecay: 0.04, noiseDecay: 0.11, noiseLevel: 0.95, hp: 2500, length: 0.3)
+            hat = HatSpec(closed: 0.04, open: 0.25, hp: 8000, metal: 0.85)
+            clapTail = 0.14
+        case "drill":
+            kick = KickSpec(start: 120, end: 40, pitchDecay: 0.08, ampDecay: 1.4, click: 0.3, drive: 1.6, length: 1.9)
+            snare = SnareSpec(tone: 230, toneDecay: 0.04, noiseDecay: 0.12, noiseLevel: 0.9, hp: 2600, length: 0.3)
+            hat = HatSpec(closed: 0.03, open: 0.3, hp: 9000, metal: 0.7)
+            clapTail = 0.16
         default: // trap
             kick = KickSpec(start: 150, end: 44, pitchDecay: 0.06, ampDecay: 1.1, click: 0.35, drive: 1.4, length: 1.6)
             snare = SnareSpec(tone: 200, toneDecay: 0.05, noiseDecay: 0.17, noiseLevel: 0.85, hp: 1800, length: 0.4)

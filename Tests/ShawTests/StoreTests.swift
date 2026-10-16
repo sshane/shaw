@@ -4,7 +4,7 @@ import ShawCore
 @testable import Shaw
 
 final class StoreTests: XCTestCase {
-    func makeStore() -> Store { Store(project: DemoProject.make(), headless: true) }
+    func makeStore() -> Store { Store(project: DemoProject.firstLight(), headless: true) }
 
     func rms(_ x: [Float]) -> Float { sqrt(x.reduce(0) { $0 + $1 * $1 } / Float(max(1, x.count))) }
 
@@ -158,7 +158,7 @@ final class StoreTests: XCTestCase {
 
 final class ExportTests: XCTestCase {
     func testExportDemoSongToWav() throws {
-        let p = DemoProject.make()
+        let p = DemoProject.firstLight()
         let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] ?? NSTemporaryDirectory()
         let url = URL(fileURLWithPath: dir).appendingPathComponent("First Light.wav")
         try? FileManager.default.removeItem(at: url)
@@ -167,5 +167,36 @@ final class ExportTests: XCTestCase {
         let seconds = Double(file.length) / file.fileFormat.sampleRate
         XCTAssertEqual(seconds, 288 * 60 / p.bpm + 2, accuracy: 0.05)
         XCTAssertEqual(file.fileFormat.channelCount, 2)
+    }
+}
+
+final class NeonDriveTests: XCTestCase {
+    /// Set SHAW_EXPORT_DIR to write the demo to a WAV you can listen to.
+    func testExportNeonDrive() throws {
+        guard let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] else { return }
+        let p = DemoProject.neonDrive()
+        try OfflineRenderer.export(project: p, composition: p.mainCompositionID,
+                                   to: URL(fileURLWithPath: dir).appendingPathComponent("Neon Drive.wav"))
+    }
+
+    func rms(_ x: ArraySlice<Float>) -> Double { sqrt(Double(x.reduce(0) { $0 + $1 * $1 }) / Double(max(1, x.count))) }
+
+    func testNeonDriveMix() {
+        let p = DemoProject.neonDrive()
+        let (l, r) = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: 320)
+        let fpb = 48000.0 * 60 / p.bpm
+        var levels: [String: Double] = [:]
+        for (name, b0, b1) in [("Intro", 0.0, 32.0), ("Build", 32, 64), ("Drop", 64, 128), ("Breakdown", 128, 160),
+                               ("Build 2", 160, 192), ("Drop 2", 192, 256), ("Last Drop", 256, 288), ("Outro", 288, 320)] {
+            let a = Int(b0 * fpb), b = Int(b1 * fpb)
+            let level = 20 * log10(max(rms(l[a..<b]), 1e-9))
+            let peak = max(l[a..<b].map(abs).max() ?? 0, r[a..<b].map(abs).max() ?? 0)
+            levels[name] = level
+            print(String(format: "NEON %-10@ rms %6.1f dBFS  peak %.2f", name as NSString, level, peak))
+            XCTAssertGreaterThan(level, -40, "\(name) is nearly silent")
+            XCTAssertLessThan(peak, 1.0, "\(name) clips")
+        }
+        XCTAssertGreaterThan(levels["Drop"]!, levels["Intro"]! + 6, "the drop should hit harder than the intro")
+        XCTAssertGreaterThan(levels["Drop 2"]!, levels["Breakdown"]! + 3, "drop 2 should hit harder than the breakdown")
     }
 }
