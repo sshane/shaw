@@ -60,11 +60,12 @@ struct ShawCommands: Commands {
             Divider()
             Button("Duplicate") { KeyRouter.shared.duplicate() }.keyboardShortcut("d")
             Button("Split at Playhead") { store.splitSelectedClips(at: store.transport.position) }.keyboardShortcut("e")
+            Button("Save Variation") { store.saveVariation() }.keyboardShortcut("d", modifiers: [.command, .shift])
         }
         CommandMenu("Composition") {
             Button("New Composition") { store.openComposition(store.newComposition()) }.keyboardShortcut("n")
             Button("New Pattern") { store.open(asset: store.newPattern()) }.keyboardShortcut("p", modifiers: [.command, .shift])
-            Button("New Beat") { store.open(asset: store.newBeat()) }.keyboardShortcut("b", modifiers: [.command, .shift])
+            Button("New Drum Pattern") { store.open(asset: store.newBeat()) }.keyboardShortcut("b", modifiers: [.command, .shift])
             Button("New Track") { store.addTrack() }.keyboardShortcut("t")
             Divider()
             Button("Pre-compose Selection") { store.precomposeSelection() }.keyboardShortcut("c", modifiers: [.command, .shift])
@@ -84,10 +85,13 @@ struct ShawCommands: Commands {
             Button(store.loopEnabled ? "Turn Loop Off" : "Turn Loop On") { store.loopEnabled.toggle() }.keyboardShortcut("l")
             Button(store.metronome ? "Metronome Off" : "Metronome On") { store.metronome.toggle() }.keyboardShortcut("k")
             Divider()
+            Button(store.keyboardEnabled ? "Turn Off Computer Keyboard Playing" : "Play Instruments with Computer Keyboard") {
+                store.keyboardEnabled.toggle()
+            }
+            Divider()
             Button("Stop All Session Clips") { store.engine.stopAllSession() }
         }
         CommandGroup(before: .toolbar) {
-            Button("Switch Timeline / Session") { KeyRouter.shared.toggleMainView() }
             Button("Zoom In") { store.zoom = min(400, store.zoom * 1.25) }.keyboardShortcut("=")
             Button("Zoom Out") { store.zoom = max(2, store.zoom / 1.25) }.keyboardShortcut("-")
             Button("Zoom to Fit") { store.fitRequest += 1 }.keyboardShortcut("0")
@@ -96,7 +100,7 @@ struct ShawCommands: Commands {
             Button(store.workspace.showBottom ? "Hide Bottom Panel" : "Show Bottom Panel") { store.workspace.showBottom.toggle() }
             Button(store.workspace.showRight ? "Hide Right Panel" : "Show Right Panel") { store.workspace.showRight.toggle() }
             Menu("Show Panel") {
-                ForEach(PanelKind.allCases) { k in
+                ForEach(PanelKind.available) { k in
                     Button(k.title) { store.workspace.reveal(k) }
                 }
             }
@@ -114,7 +118,6 @@ final class KeyRouter {
     weak var store: Store?
     /// Set by the piano roll so arrow keys / delete act on notes when it has focus.
     var pianoRollHandler: ((NSEvent) -> Bool)?
-    var beatMakerHandler: ((NSEvent) -> Bool)?
 
     func install(_ store: Store) {
         self.store = store
@@ -132,9 +135,13 @@ final class KeyRouter {
             return e
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.keyWindow?.makeFirstResponder(nil) }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] e in
             guard let self, let store = self.store else { return e }
             if NSApp.keyWindow?.firstResponder is NSText { return e }
+            if e.type == .keyUp {
+                let plain = e.modifierFlags.intersection([.command, .option, .control]).isEmpty
+                return plain && store.keyboardKey(e.charactersIgnoringModifiers ?? "", down: false, isRepeat: false) ? nil : e
+            }
             return self.handle(e, store) ? nil : e
         }
     }
@@ -142,8 +149,14 @@ final class KeyRouter {
     private func handle(_ e: NSEvent, _ store: Store) -> Bool {
         let mods = e.modifierFlags.intersection([.command, .option, .control])
         if store.focus == .pianoRoll, let h = pianoRollHandler, h(e) { return true }
-        if store.focus == .beatMaker, let h = beatMakerHandler, h(e) { return true }
         guard mods.isEmpty else { return false }
+        let chars = (e.charactersIgnoringModifiers ?? "").lowercased()
+        if chars == "b" && store.focus == .pianoRoll {
+            store.drawMode.toggle() // Ableton's draw-mode key
+            return true
+        }
+        // The computer keyboard plays the current instrument (A–' = notes, Z/X octave, C/V velocity).
+        if !e.modifierFlags.contains(.shift), store.keyboardKey(chars, down: true, isRepeat: e.isARepeat) { return true }
         switch e.keyCode {
         case 49: // space
             store.togglePlay()
@@ -154,9 +167,6 @@ final class KeyRouter {
             case .timeline: store.deleteSelectedClips()
             default: return false // never delete hidden timeline clips from another panel
             }
-            return true
-        case 48: // tab
-            toggleMainView()
             return true
         default:
             return false
@@ -194,6 +204,11 @@ enum DebugSnapshot {
         guard let path = env["SHAW_SNAPSHOT"] else { return }
         for name in (env["SHAW_PANELS"] ?? "").split(separator: ",") {
             if let k = PanelKind(rawValue: String(name)) { store.workspace.reveal(k) }
+        }
+        if let add = env["SHAW_ADD"] {
+            for item in add.split(separator: ",") {
+                if let c = InstrumentChoice.all.first(where: { $0.id == item }) { store.addInstrument(c) }
+            }
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,

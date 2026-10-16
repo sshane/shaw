@@ -6,9 +6,10 @@ import ShawCore
 enum DemoProject {
     static func empty() -> Project {
         var p = Project(name: "Untitled", bpm: 124)
+        // No tracks: adding an instrument creates its track, so there's nothing to figure out first.
         p.updateComposition(p.mainCompositionID) { c in
-            c.length = 64
-            c.tracks = (1...4).map { Track(name: "Track \($0)", colorIndex: $0 - 1) }
+            c.length = 32
+            c.tracks = []
         }
         return p
     }
@@ -233,6 +234,7 @@ enum DemoProject {
         p.assets += [intro, build, drop, breakdown].map { put($0, comps) }
         p.assets += [chords, bass, arp, stabs, lead, riser].map { put($0, pats) }
         p.assets += [houseBeat, hats, snareRoll, crash, trap].map { put($0, beats) }
+        p.migrateDrumPatterns() // beats are authored as step grids, played as drum-kit patterns
         return p
     }
 }

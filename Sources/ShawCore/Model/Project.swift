@@ -337,18 +337,29 @@ public struct NotePattern: Codable, Equatable {
     }
 }
 
+/// What a pattern sounds like: the Shaw Synth with a preset, or a drum kit.
+/// With a kit, each note pitch is a drum sound (see `DrumKits.pitch(of:)`), like Ableton's Drum Rack.
 public struct Instrument: Codable, Equatable {
     public var preset: String
     public var params: [String: Double]
+    /// Drum kit id; nil means the synth.
+    public var kit: String?
 
-    public init(preset: String = "Init", params: [String: Double] = [:]) {
+    public init(preset: String = "Init", params: [String: Double] = [:], kit: String? = nil) {
         self.preset = preset
         self.params = params
+        self.kit = kit
     }
 
     public static func preset(_ name: String) -> Instrument {
         Instrument(preset: name, params: SynthPresets.params(for: name))
     }
+
+    public static func kit(_ id: String) -> Instrument {
+        Instrument(preset: DrumKits.kitName(id), params: [:], kit: id)
+    }
+
+    public var isDrumKit: Bool { kit != nil }
 }
 
 // MARK: - Drum patterns (beat maker)
@@ -399,6 +410,35 @@ public struct DrumRow: Codable, Equatable, Identifiable {
     public init(sound: String, steps: Int) {
         self.sound = sound
         self.steps = Array(repeating: 0, count: steps)
+    }
+}
+
+// MARK: - Migration
+
+extension DrumPattern {
+    /// The same beat as a piano-roll pattern played by a drum kit.
+    public func asNotePattern() -> NotePattern {
+        let stepLen = 1.0 / Double(stepsPerBeat)
+        var notes: [Note] = []
+        for row in rows where !row.mute {
+            let pitch = DrumKits.pitch(of: row.sound)
+            let gain = dbToGain(row.volume)
+            for (s, v) in row.steps.prefix(steps).enumerated() where v > 0 {
+                let swingOffset = s % 2 == 1 ? swing * stepLen * 0.5 : 0
+                notes.append(Note(pitch: pitch, start: Double(s) * stepLen + swingOffset, length: stepLen * 0.9,
+                                  velocity: min(1, v * gain)))
+            }
+        }
+        return NotePattern(length: length, notes: notes, instrument: .kit(kit))
+    }
+}
+
+extension Project {
+    /// Turn every step-sequencer beat into a drum-kit piano-roll pattern (same ids, same clips).
+    public mutating func migrateDrumPatterns() {
+        for i in assets.indices {
+            if case .drums(let d) = assets[i].content { assets[i].content = .notes(d.asNotePattern()) }
+        }
     }
 }
 

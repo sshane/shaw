@@ -53,12 +53,9 @@ struct LanesView: View {
                     .offset(x: m.minX, y: m.minY)
                     .allowsHitTesting(false)
             }
-            if comp.tracks.isEmpty || comp.tracks.allSatisfy({ $0.clips.isEmpty }) {
-                Text("Drag compositions, patterns, beats, audio files or instruments here.\nDouble-click an empty lane to draw a new pattern.")
-                    .multilineTextAlignment(.center)
-                    .font(Theme.small).foregroundStyle(Theme.textFaint)
+            if comp.tracks.allSatisfy({ $0.clips.isEmpty }) {
+                EmptyTimelineCard(firstEver: !store.hasContent)
                     .frame(width: size.width, height: size.height)
-                    .allowsHitTesting(false)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -94,13 +91,9 @@ struct LanesView: View {
         case .effect(let k):
             if let t = track { store.addEffect(k, to: .track(store.activeCompID, t)) } else { store.addEffect(k, to: .composition(store.activeCompID)) }
         case .preset(let name):
-            let id = store.newPattern(preset: name)
-            store.addClip(asset: id, at: beat, track: track)
-            store.open(asset: id)
+            store.addInstrument(.synth(name), at: beat, track: track)
         case .kit(let kit):
-            let id = store.newBeat(kit: kit)
-            store.addClip(asset: id, at: beat, track: track)
-            store.open(asset: id)
+            store.addInstrument(.kit(kit), at: beat, track: track)
         }
         return true
     }
@@ -162,8 +155,8 @@ struct LaneBackground: View {
                 ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: th)), with: .color(i % 2 == 0 ? Theme.lane : Theme.laneAlt))
                 ctx.fill(Path(CGRect(x: 0, y: y + th - 1, width: size.width, height: 1)), with: .color(Theme.border))
             }
-            // Loop region tint.
-            if store.loopEnabled {
+            // Loop region tint (hidden until there's something to loop).
+            if store.loopEnabled && !comp.tracks.allSatisfy({ $0.clips.isEmpty }) {
                 let x0 = CGFloat(store.loopStart) * zoom - scrollX, x1 = CGFloat(store.loopEnd) * zoom - scrollX
                 ctx.fill(Path(CGRect(x: x0, y: 0, width: x1 - x0, height: size.height)), with: .color(Theme.loopRegion.opacity(0.05)))
             }
@@ -281,8 +274,8 @@ struct ClipView: View {
             onPayload: { payload, loc in
                 switch payload {
                 case .effect(let k): store.addEffect(k, to: .clip(store.activeCompID, clip.id))
-                case .preset(let name): store.edit { $0.updateNotes(clip.assetID) { $0.instrument = .preset(name) } }
-                case .kit(let k): store.edit { $0.updateDrums(clip.assetID) { $0.kit = k } }
+                case .preset(let name): store.replaceInstrument(ofAsset: clip.assetID, with: .synth(name))
+                case .kit(let k): store.replaceInstrument(ofAsset: clip.assetID, with: .kit(k))
                 case .asset(let id):
                     let beat = store.snapBeat(clip.start + Double(loc.x) / store.zoom)
                     let track = store.activeComp?.tracks[safe: trackIndex]?.id
@@ -313,7 +306,7 @@ struct ClipView: View {
                 if wasClick {
                     let now = Date()
                     if now.timeIntervalSince(lastClick) < 0.35 {
-                        store.open(asset: clip.assetID)
+                        store.open(asset: clip.assetID, clip: clip.id)
                         lastClick = .distantPast
                     } else {
                         lastClick = now
@@ -424,4 +417,36 @@ struct ClipView: View {
 
 extension Array {
     subscript(safe i: Int) -> Element? { i >= 0 && i < count ? self[i] : nil }
+}
+
+/// The single obvious next step when a composition is empty.
+struct EmptyTimelineCard: View {
+    @Environment(Store.self) private var store
+    let firstEver: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Button {
+                store.workspace.reveal(.browser)
+                store.browserTab = .instruments
+                store.focusBrowserSearch += 1
+            } label: {
+                Label("Add an instrument", systemImage: "plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .padding(.horizontal, 18).padding(.vertical, 9)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .controlSize(.large)
+            Text("Pick drums or a synth in the Browser on the left — click to hear it, double-click to add.")
+                .font(Theme.small).foregroundStyle(Theme.textDim)
+            if firstEver {
+                Button("Or open the demo song") { store.openDemo() }
+                    .buttonStyle(.link)
+                    .font(Theme.small)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(30)
+    }
 }

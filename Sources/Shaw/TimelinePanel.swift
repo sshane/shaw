@@ -142,11 +142,16 @@ struct CornerView: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if comp.tracks.isEmpty {
+                // Nothing to arrange yet; the empty timeline card is the one thing to do.
+                Text(store.activeAsset?.name ?? "").font(Theme.small).foregroundStyle(Theme.textFaint)
+                Spacer()
+            } else {
             Button { store.addTrack() } label: {
                 Label("Track", systemImage: "plus").font(Theme.tiny)
             }
             .buttonStyle(.borderless)
-            .help("New track (⌘T)")
+            .help("New empty track (⌘T)")
             Spacer()
             Text("Length").font(Theme.tiny).foregroundStyle(Theme.textFaint)
             DragNumber(value: comp.length / Double(store.project.beatsPerBar), range: 1...999, step: 1, sensitivity: 0.1,
@@ -156,6 +161,7 @@ struct CornerView: View {
                            store.live { $0.updateComposition(id) { $0.length = v * Double(store.project.beatsPerBar) } }
                        },
                        onEnd: { store.endGesture() })
+            }
         }
         .padding(.horizontal, 8)
         .frame(maxHeight: .infinity)
@@ -265,7 +271,7 @@ struct TrackHeader: View {
                 switch payload {
                 case .effect(let k): store.addEffect(k, to: .track(store.activeCompID, track.id))
                 case .asset(let id): store.addClip(asset: id, at: store.snapBeat(store.transport.position), track: track.id)
-                default: return false
+                case .preset, .kit: return false
                 }
                 return true
             },
@@ -315,10 +321,13 @@ struct RulerView: View {
                                  with: .color(Color.black.opacity(0.35)))
                     }
                     // Loop brace.
+                    let hasClips = comp.tracks.contains { !$0.clips.isEmpty }
                     let lx0 = CGFloat(store.loopStart) * zoom - scrollX, lx1 = CGFloat(store.loopEnd) * zoom - scrollX
                     let braceColor = store.loopEnabled ? Theme.loopRegion : Theme.textFaint
-                    ctx.fill(Path(roundedRect: CGRect(x: lx0, y: 2, width: max(2, lx1 - lx0), height: 9), cornerRadius: 2),
-                             with: .color(braceColor.opacity(store.loopEnabled ? 0.75 : 0.3)))
+                    if hasClips {
+                        ctx.fill(Path(roundedRect: CGRect(x: lx0, y: 2, width: max(2, lx1 - lx0), height: 9), cornerRadius: 2),
+                                 with: .color(braceColor.opacity(store.loopEnabled ? 0.75 : 0.3)))
+                    }
                     // Bar numbers and ticks.
                     var barStep = 1.0
                     while barStep * bpb * Double(zoom) < 46 { barStep *= 2 }

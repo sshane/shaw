@@ -670,6 +670,52 @@ final class DrumSourceNode: SourceNode {
     func stop() { player.reset() }
 }
 
+// MARK: - Drum kit played from notes (piano roll drums)
+
+final class KitNoteSourceNode: SourceNode {
+    let hits: [DrumHit]
+    let rows: [DrumRowInfo]
+    let player: DrumPlayer
+
+    init(pattern: NotePattern, kit: String, sampleRate: Double, player: DrumPlayer) {
+        rows = DrumKits.voices.map { v in
+            DrumRowInfo(sample: DrumKits.sample(kit: kit, voice: v.id, sampleRate: sampleRate), gainL: 1, gainR: 1, rate: 1, choke: v.choke)
+        }
+        hits = pattern.notes
+            .filter { $0.start < pattern.length && DrumKits.voice(atPitch: $0.pitch) != nil }
+            .map { DrumHit(beat: $0.start, row: $0.pitch - DrumKits.basePitch, velocity: Float($0.velocity)) }
+            .sorted { $0.beat < $1.beat }
+        self.player = player
+    }
+
+    var hasTail: Bool { true }
+    var isAudio: Bool { false }
+
+    func render(beat: Double, frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>,
+                ctx: RenderContext, songBeat: Double) {
+        let bps = ctx.beatsPerSample
+        let w0 = beat - bps, w1 = beat + Double(frames) * bps - bps
+        var lo = 0, hi = hits.count
+        while lo < hi { let m = (lo + hi) / 2; if hits[m].beat < w0 { lo = m + 1 } else { hi = m } }
+        var idx = lo, f = 0
+        while idx < hits.count {
+            let h = hits[idx]
+            if h.beat >= w1 { break }
+            let hf = min(frames - 1, max(0, Int(((h.beat - beat) / bps).rounded(.down))))
+            if hf > f { player.render(l + f, r + f, frames: hf - f); f = hf }
+            player.trigger(rows[h.row], velocity: h.velocity, outputRate: ctx.sampleRate)
+            idx += 1
+        }
+        if f < frames { player.render(l + f, r + f, frames: frames - f) }
+    }
+
+    func renderTail(frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>, ctx: RenderContext, songBeat: Double) {
+        player.render(l, r, frames: frames)
+    }
+
+    func stop() { player.reset() }
+}
+
 // MARK: - Silent placeholder
 
 final class SilentSource: SourceNode {

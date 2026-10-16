@@ -31,6 +31,21 @@ struct InspectorPanel: View {
     }
 
     @ViewBuilder private var content: some View {
+        if !store.hasContent {
+            VStack(spacing: 8) {
+                Image(systemName: "slider.horizontal.3").font(.system(size: 22)).foregroundStyle(Theme.textFaint)
+                Text("Nothing to adjust yet").font(Theme.header).foregroundStyle(Theme.textFaint)
+                Text("Add an instrument and its sound and effects show up here.")
+                    .font(Theme.small).foregroundStyle(Theme.textFaint).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 60).padding(.horizontal, 20)
+        } else {
+            details
+        }
+    }
+
+    @ViewBuilder private var details: some View {
         switch store.inspector ?? .composition(store.activeCompID) {
         case .composition(let id): CompositionInspector(compID: id)
         case .track(let cid, let tid): TrackInspector(compID: cid, trackID: tid)
@@ -39,7 +54,7 @@ struct InspectorPanel: View {
             if let a = store.project.asset(id) {
                 switch a.content {
                 case .notes: InstrumentInspector(assetID: id)
-                case .drums: BeatInspector(assetID: id)
+                case .drums: EmptyView()
                 case .audio(let f): AudioInspector(asset: a, file: f)
                 case .composition: CompositionInspector(compID: id)
                 }
@@ -152,6 +167,7 @@ struct ClipInspector: View {
     @Environment(Store.self) private var store
     let compID: AssetID
     let clipID: UUID
+    @State private var showMore = false
 
     var body: some View {
         if let comp = store.project.composition(compID), let (ti, ci) = comp.locate(clip: clipID) {
@@ -176,6 +192,7 @@ struct ClipInspector: View {
                            format: { formatLength($0, beatsPerBar: Int(bpb)) }, parse: { Double($0.filter { "0123456789.".contains($0) }).map { $0 * bpb } },
                            onChange: { v in store.updateClip(clipID, live: true) { $0.length = v } }, onEnd: { store.endGesture() })
             }
+            if showMore {
             PropertyRow(label: "Source Offset") {
                 DragNumber(value: c.offset, range: 0...100_000, step: 0.25, sensitivity: 0.05, format: { String(format: "%.2f beats", $0) },
                            onChange: { v in store.updateClip(clipID, live: true) { $0.offset = v } }, onEnd: { store.endGesture() })
@@ -196,6 +213,10 @@ struct ClipInspector: View {
             }
             Text("Tip: Option-drag a clip's right edge to loop it. Plain drag trims; past the end is silent (hatched).")
                 .font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(.horizontal, 10).padding(.top, 4)
+            }
+            Button(showMore ? "Fewer clip settings" : "More clip settings") { showMore.toggle() }
+                .buttonStyle(.plain).font(Theme.tiny).foregroundStyle(Theme.accent)
+                .padding(.horizontal, 10).padding(.vertical, 4)
             SourceSoundSection(assetID: c.assetID)
             EffectStack(host: .clip(compID, clipID), title: "Clip Effects")
             EffectStack(host: .track(compID, comp.tracks[ti].id), title: "Track Effects · \(comp.tracks[ti].name)")
@@ -345,7 +366,6 @@ struct SourceSoundSection: View {
     var body: some View {
         switch store.project.asset(assetID)?.kind {
         case .notes?: InstrumentInspector(assetID: assetID, compact: true)
-        case .drums?: BeatInspector(assetID: assetID, compact: true)
         default: EmptyView()
         }
     }
@@ -395,7 +415,23 @@ struct InstrumentInspector: View {
     ]
 
     var body: some View {
-        if let a = store.project.asset(assetID), case .notes(let p) = a.content {
+        if let a = store.project.asset(assetID), case .notes(let p) = a.content, let kit = p.instrument.kit {
+            // Drum kit: nothing to tweak but which kit.
+            if compact { SectionHeader(title: "Sound · Drum Kit") } else {
+                InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Drum Pattern", name: a.name, color: Theme.label(a.colorIndex))
+            }
+            PropertyRow(label: "Kit") {
+                Menu(DrumKits.kitName(kit)) {
+                    ForEach(DrumKits.kits) { k in
+                        Button(k.name) {
+                            store.replaceInstrument(ofAsset: assetID, with: .kit(k.id))
+                            if !store.transport.playing { store.previewInstrument(.kit(k.id)) }
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+            }
+        } else if let a = store.project.asset(assetID), case .notes(let p) = a.content {
             if compact {
                 SectionHeader(title: "Sound · Shaw Synth")
             } else {
@@ -451,39 +487,6 @@ struct InstrumentInspector: View {
                      },
                      onEnd: { store.endGesture() })
             .padding(.horizontal, 10)
-        }
-    }
-}
-
-// MARK: - Beat
-
-struct BeatInspector: View {
-    @Environment(Store.self) private var store
-    let assetID: AssetID
-    var compact = false
-
-    var body: some View {
-        if let a = store.project.asset(assetID), case .drums(let d) = a.content {
-            if compact {
-                SectionHeader(title: "Sound · Drum Kit")
-            } else {
-                InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Beat", name: a.name, color: Theme.label(a.colorIndex))
-            }
-            PropertyRow(label: "Kit") {
-                Menu(DrumKits.kitName(d.kit)) {
-                    ForEach(DrumKits.kits) { k in Button(k.name) { store.edit { $0.updateDrums(assetID) { $0.kit = k.id } } } }
-                }
-                .menuStyle(.borderlessButton).fixedSize()
-            }
-            PropertyRow(label: "Steps") {
-                DragNumber(value: Double(d.steps), range: 1...128, step: 1, sensitivity: 0.2, format: { "\(Int($0))" },
-                           onChange: { v in store.live { $0.updateDrums(assetID) { $0.resize(steps: Int(v)) } } }, onEnd: { store.endGesture() })
-            }
-            PropertyRow(label: "Swing") {
-                DragNumber(value: d.swing * 100, range: 0...100, step: 1, sensitivity: 0.5, format: { "\(Int($0))%" },
-                           onChange: { v in store.live { $0.updateDrums(assetID) { $0.swing = v / 100 } } }, onEnd: { store.endGesture() })
-            }
-            if !compact { Button("Open in Beat Maker") { store.open(asset: assetID) }.controlSize(.small).padding(10) }
         }
     }
 }

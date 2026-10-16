@@ -11,7 +11,7 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
         case .browser: return "Browser"
         case .inspector: return "Effect Controls"
         case .timeline: return "Timeline"
-        case .session: return "Session"
+        case .session: return "Session (clip launcher)"
         case .pianoRoll: return "Piano Roll"
         case .beatMaker: return "Beat Maker"
         case .mixer: return "Mixer"
@@ -30,6 +30,9 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
         case .mixer: return "slider.vertical.3"
         }
     }
+
+    /// Panels offered in menus (the old Beat Maker is retired: drums live in the piano roll).
+    static var available: [PanelKind] { allCases.filter { $0 != .beatMaker } }
 
     /// Where a panel goes if it isn't open anywhere yet.
     var defaultSlot: SlotID {
@@ -73,17 +76,18 @@ struct Workspace: Codable, Equatable {
     static let standard = Workspace(slots: [
         .leftTop: PanelSlot(tabs: [.project], active: .project),
         .leftBottom: PanelSlot(tabs: [.browser], active: .browser),
-        .center: PanelSlot(tabs: [.timeline, .session], active: .timeline),
-        .bottom: PanelSlot(tabs: [.pianoRoll, .beatMaker, .mixer], active: .pianoRoll),
+        .center: PanelSlot(tabs: [.timeline], active: .timeline),
+        .bottom: PanelSlot(tabs: [.pianoRoll, .mixer], active: .pianoRoll),
         .right: PanelSlot(tabs: [.inspector], active: .inspector),
     ])
 
-    static let key = "ShawWorkspace.v1"
+    static let key = "ShawWorkspace.v2"
 
     static func load() -> Workspace {
-        guard let d = UserDefaults.standard.data(forKey: key), let w = try? JSONDecoder().decode(Workspace.self, from: d) else {
+        guard let d = UserDefaults.standard.data(forKey: key), var w = try? JSONDecoder().decode(Workspace.self, from: d) else {
             return .standard
         }
+        w.close(.beatMaker)
         return w
     }
 

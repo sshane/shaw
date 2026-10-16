@@ -280,6 +280,10 @@ public final class AudioEngine {
     // MARK: Preview
 
     public func previewNoteOn(_ pitch: Int, velocity: Double = 0.8, instrument: Instrument) {
+        if let kit = instrument.kit {
+            if let v = DrumKits.voice(atPitch: pitch) { previewDrum(kit: kit, sound: v.id, velocity: velocity) }
+            return
+        }
         let p = SynthParams.defs.resolve(instrument.params)
         locked {
             previewParams = p

@@ -143,3 +143,31 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(p, back)
     }
 }
+
+final class DrumKitPatternTests: XCTestCase {
+    func testKitPatternPlaysAndMatchesConvertedBeat() {
+        var d = DrumPattern(kit: "house", steps: 16)
+        d.rows[0].steps[0] = 1; d.rows[0].steps[8] = 1 // kicks
+        d.rows[1].steps[4] = 0.8                        // snare
+        let notes = d.asNotePattern()
+        XCTAssertEqual(notes.instrument.kit, "house")
+        XCTAssertEqual(Set(notes.notes.map(\.pitch)), [36, 37])
+        XCTAssertEqual(notes.notes.count, 3)
+
+        var p = Project()
+        let a = Asset(name: "B", colorIndex: 0, content: .drums(d))
+        p.assets.append(a)
+        p.updateComposition(p.mainCompositionID) { c in
+            var t = Track(name: "D", colorIndex: 0)
+            t.clips = [Clip(assetID: a.id, start: 0, length: 4)]
+            c.tracks = [t]
+        }
+        let (before, _) = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: 4)
+        p.migrateDrumPatterns()
+        guard case .notes? = p.asset(a.id)?.content else { return XCTFail("should be a note pattern now") }
+        let (after, _) = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: 4)
+        var diff: Float = 0
+        for i in 0..<before.count { diff = max(diff, abs(before[i] - after[i])) }
+        XCTAssertLessThan(diff, 0.001, "converted beat should sound identical")
+    }
+}

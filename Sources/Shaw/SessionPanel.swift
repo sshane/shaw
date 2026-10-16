@@ -151,8 +151,12 @@ struct SlotCell: View {
             onPayload: { payload, _ in
                 switch payload {
                 case .asset(let id): store.setSlot(track: track.id, scene: scene, asset: id)
-                case .preset(let name): store.setSlot(track: track.id, scene: scene, asset: store.newPattern(preset: name, bars: 1))
-                case .kit(let k): store.setSlot(track: track.id, scene: scene, asset: store.newBeat(kit: k))
+                case .preset(let name):
+                    if let s = track.slots[scene] { store.replaceInstrument(ofAsset: s.assetID, with: .synth(name)) }
+                    else { store.setSlot(track: track.id, scene: scene, asset: store.newPattern(preset: name, bars: 1)) }
+                case .kit(let k):
+                    if let s = track.slots[scene] { store.replaceInstrument(ofAsset: s.assetID, with: .kit(k)) }
+                    else { store.setSlot(track: track.id, scene: scene, asset: store.newBeat(kit: k)) }
                 case .effect(let k): store.addEffect(k, to: .track(store.activeCompID, track.id))
                 }
                 return true

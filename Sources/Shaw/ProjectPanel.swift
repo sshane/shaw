@@ -15,7 +15,7 @@ struct ProjectPanel: View {
                 Menu {
                     Button { store.openComposition(store.newComposition()) } label: { Label("New Composition", systemImage: assetIcon(.composition)) }
                     Button { store.open(asset: store.newPattern()) } label: { Label("New Pattern", systemImage: assetIcon(.notes)) }
-                    Button { store.open(asset: store.newBeat()) } label: { Label("New Beat", systemImage: assetIcon(.drums)) }
+                    Button { store.open(asset: store.newBeat()) } label: { Label("New Drum Pattern", systemImage: assetIcon(.drums)) }
                     Divider()
                     Button { store.importAudioDialog() } label: { Label("Import Audio…", systemImage: "square.and.arrow.down") }
                     Button { store.newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }

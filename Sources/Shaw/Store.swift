@@ -64,11 +64,33 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var inspector: InspectorTarget?
     var selectedAssets: Set<AssetID> = []
     var pianoRollAsset: AssetID?
-    var beatAsset: AssetID?
     var focus: FocusArea = .timeline
     var workspace = Workspace.load() { didSet { if workspace != oldValue && !isolated { workspace.save() } } }
     var renamingAsset: AssetID?
     var selectedNotes: Set<UUID> = []
+    /// Drum patterns: show the FL-style step grid instead of the piano roll (same notes either way).
+    var drumStepView = false
+    var browserTab: BrowserTab = .instruments
+    /// Bumped to move keyboard focus into the browser's search field.
+    var focusBrowserSearch = 0
+    /// The timeline clip whose pattern is open in an editor (drives looping and variations).
+    var editingClip: UUID?
+    /// The instrument the computer keyboard plays when no editor has focus.
+    var lastInstrumentAsset: AssetID?
+    // Computer keyboard as a piano (Ableton style).
+    var keyboardEnabled = true
+    var keyboardOctave = 3        // the A key plays C of this octave (C3 = MIDI 48)
+    var keyboardVelocity = 0.8
+    /// Editors: false = Ableton style (double-click to add/delete), true = click to draw/paint.
+    var drawMode = false
+    /// Play notes and hits while clicking them in the editors (never while the song plays).
+    var auditionNotes = UserDefaults.standard.bool(forKey: "ShawAuditionNotes") {
+        didSet { if !isolated { UserDefaults.standard.set(auditionNotes, forKey: "ShawAuditionNotes") } }
+    }
+    /// Copied piano-roll notes (⌘C / ⌘X) and where ⌘V pastes them (last click in the grid).
+    @ObservationIgnored var noteClipboard: [Note] = []
+    @ObservationIgnored var rollInsertBeat: Double?
+    @ObservationIgnored var heldKeys: [String: (pitch: Int, isDrum: Bool)] = [:]
     var rollSnap: Double = 0.25
     var rollZoom: Double = 60 // pixels per beat in the piano roll
     var lastNoteLength: Double = 0.25
@@ -83,7 +105,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     @ObservationIgnored var scrubbing = false
 
     // Transport settings (mirrored into the engine)
-    var loopEnabled = false { didSet { syncLoop() } }
+    var loopEnabled = true { didSet { syncLoop() } }
     var loopStart = 0.0 { didSet { syncLoop() } }
     var loopEnd = 16.0 { didSet { syncLoop() } }
     var metronome = false { didSet { engine.setMetronome(metronome) } }
@@ -109,7 +131,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     init(project initial: Project? = nil, headless: Bool = false, isolated: Bool = Store.isIsolatedLaunch) {
         self.isolated = isolated || headless
-        let p = initial ?? (self.isolated ? nil : Store.restoreAutosave()) ?? DemoProject.make()
+        // A brand-new user starts with an empty project that guides them; the demo is one click away.
+        let snapshotDemo = self.isolated && ProcessInfo.processInfo.environment["SHAW_EMPTY"] == nil
+        var p = initial ?? (self.isolated ? nil : Store.restoreAutosave()) ?? (snapshotDemo ? DemoProject.make() : DemoProject.empty())
+        p.migrateDrumPatterns() // old step-sequencer beats become drum-kit piano-roll patterns
         project = p
         activeCompID = p.mainCompositionID
         openComps = [p.mainCompositionID]
@@ -124,7 +149,6 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         }
         if isolated { workspace = .standard }
         if let first = p.assets.first(where: { $0.kind == .notes }) { pianoRollAsset = first.id }
-        if let first = p.assets.first(where: { $0.kind == .drums }) { beatAsset = first.id }
     }
 
     private func poll() {
@@ -211,7 +235,6 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         if project.composition(activeCompID) == nil { activeCompID = project.mainCompositionID }
         if openComps.isEmpty { openComps = [activeCompID] }
         if let p = pianoRollAsset, project.asset(p) == nil { pianoRollAsset = nil }
-        if let b = beatAsset, project.asset(b) == nil { beatAsset = nil }
         if let comp = activeComp {
             let ids = Set(comp.tracks.flatMap(\.clips).map(\.id))
             selectedClips = selectedClips.intersection(ids)
@@ -248,6 +271,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         }
         inspector = .composition(id)
         workspace.reveal(.timeline)
+        loopWholeComposition()
     }
 
     func closeComposition(_ id: AssetID) {
@@ -257,20 +281,23 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     /// Double-click behaviour: compositions open as tabs, patterns open their editor.
-    func open(asset id: AssetID) {
+    /// - Parameter clip: the timeline clip it was opened from; editing it loops that clip.
+    func open(asset id: AssetID, clip: UUID? = nil) {
         guard let a = project.asset(id) else { return }
         switch a.kind {
         case .composition: openComposition(id)
         case .notes:
             pianoRollAsset = id
-            inspector = .asset(id)
+            lastInstrumentAsset = id
+            inspector = clip.map { .clip(activeCompID, $0) } ?? .asset(id)
             workspace.reveal(.pianoRoll)
-        case .drums:
-            beatAsset = id
+            focus = .pianoRoll
+        case .drums, .audio:
             inspector = .asset(id)
-            workspace.reveal(.beatMaker)
-        case .audio:
-            inspector = .asset(id)
+        }
+        if a.kind == .notes {
+            editingClip = clip ?? contextClip(for: id)?.id
+            if let c = editingClip { loop(aroundClip: c) }
         }
     }
 
@@ -310,8 +337,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     @discardableResult
     func newBeat(kit: String = DrumKits.defaultKit, name: String? = nil) -> AssetID {
-        let p = DrumPattern(kit: kit)
-        let a = Asset(name: project.uniqueName(name ?? "\(DrumKits.kitName(kit)) Beat"), colorIndex: nextColor(), content: .drums(p))
+        // Drums are an ordinary piano-roll pattern played by a kit.
+        let p = NotePattern(length: Double(project.beatsPerBar), instrument: .kit(kit))
+        let a = Asset(name: project.uniqueName(name ?? "\(DrumKits.kitName(kit)) Beat"), colorIndex: nextColor(), content: .notes(p))
         edit { $0.assets.append(a) }
         return a.id
     }
@@ -644,8 +672,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         case .drums: id = newBeat()
         default: id = newPattern()
         }
-        addClip(asset: id, at: start, track: track)
-        open(asset: id)
+        if let c = addClip(asset: id, at: start, track: track) { open(asset: id, clip: c) }
     }
 
     // MARK: - Effects
@@ -775,6 +802,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     private func load(_ p: Project, url: URL?) {
         engine.stop()
+        var p = p
+        p.migrateDrumPatterns()
         project = p
         fileURL = url
         dirty = false
@@ -787,7 +816,6 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         selectedClips = []
         inspector = nil
         pianoRollAsset = p.assets.first { $0.kind == .notes }?.id
-        beatAsset = p.assets.first { $0.kind == .drums }?.id
         engine.seek(0)
         refreshEngine()
         scheduleAutosave()

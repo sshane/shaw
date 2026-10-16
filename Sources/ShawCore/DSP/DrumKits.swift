@@ -68,6 +68,18 @@ public enum DrumKits {
         DrumKitInfo(id: "techno", name: "Techno", summary: "Hard, distorted industrial kit"),
     ]
 
+    /// Lowest pitch of a kit in the piano roll: C1 is the kick, then one sound per semitone.
+    public static let basePitch = 36
+
+    public static func pitch(of voice: String) -> Int {
+        basePitch + (voices.firstIndex { $0.id == voice } ?? 0)
+    }
+
+    public static func voice(atPitch pitch: Int) -> DrumVoiceInfo? {
+        let i = pitch - basePitch
+        return i >= 0 && i < voices.count ? voices[i] : nil
+    }
+
     public static func voiceName(_ id: String) -> String { voices.first { $0.id == id }?.name ?? id }
     public static func kitName(_ id: String) -> String { kits.first { $0.id == id }?.name ?? id }
     public static func choke(_ id: String) -> Int { voices.first { $0.id == id }?.choke ?? 0 }

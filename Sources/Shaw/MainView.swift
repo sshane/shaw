@@ -50,7 +50,7 @@ struct PanelSlotView: View {
                 Spacer(minLength: 0)
                 Menu {
                     Section("Add Panel Here") {
-                        ForEach(PanelKind.allCases) { k in
+                        ForEach(PanelKind.available) { k in
                             Button {
                                 store.workspace.move(k, to: slot)
                             } label: {
@@ -93,7 +93,7 @@ struct PanelSlotView: View {
         case .timeline: TimelinePanel()
         case .session: SessionPanel()
         case .pianoRoll: PianoRollPanel()
-        case .beatMaker: BeatMakerPanel()
+        case .beatMaker: PianoRollPanel()
         case .mixer: MixerPanel()
         }
     }
@@ -143,6 +143,9 @@ struct TransportBar: View {
                 IconButton(systemName: "repeat", active: store.loopEnabled, help: "Loop (⌘L)") { store.loopEnabled.toggle() }
                 IconButton(systemName: "metronome", active: store.metronome, help: "Metronome (⌘K)") { store.metronome.toggle() }
             }
+            // Nothing to play yet: keep the transport visible but clearly inactive.
+            .disabled(!store.hasContent)
+            .opacity(store.hasContent ? 1 : 0.35)
             PositionDisplay()
             HStack(spacing: 4) {
                 DragNumber(value: store.project.bpm, range: 40...300, step: 0.1, sensitivity: 0.2,
@@ -173,14 +176,7 @@ struct TransportBar: View {
 
             Spacer()
 
-            Picker("", selection: Binding(
-                get: { store.workspace.isVisible(.session) ? PanelKind.session : PanelKind.timeline },
-                set: { store.workspace.reveal($0) })) {
-                Label("Timeline", systemImage: "rectangle.split.3x1").tag(PanelKind.timeline)
-                Label("Session", systemImage: "square.grid.3x3").tag(PanelKind.session)
-            }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 190)
-            .help("Switch between Timeline and Session (Tab)")
+            KeyboardIndicator()
 
             Spacer()
 
@@ -194,6 +190,26 @@ struct TransportBar: View {
         .padding(.horizontal, 10)
         .frame(height: 36)
         .background(Theme.panelHeader)
+    }
+}
+
+/// Shows what the computer keyboard plays; click to turn it on or off.
+struct KeyboardIndicator: View {
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        let hasTarget = store.keyboardTarget != nil
+        Button { store.keyboardEnabled.toggle() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "keyboard").font(.system(size: 12))
+                Text(store.keyboardEnabled ? store.keyboardLabel : "Keyboard off").font(Theme.small).lineLimit(1)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 3)
+            .foregroundStyle(store.keyboardEnabled && hasTarget ? Theme.text : Theme.textFaint)
+            .background(RoundedRectangle(cornerRadius: 5).fill(store.keyboardEnabled && hasTarget ? Theme.accent.opacity(0.18) : Color.black.opacity(0.25)))
+        }
+        .buttonStyle(.plain)
+        .help("Play the current instrument with your keyboard: A S D F G H J K L = white keys, W E T Y U O P = black keys, Z / X = octave down / up, C / V = softer / harder. Click to turn off.")
     }
 }
 

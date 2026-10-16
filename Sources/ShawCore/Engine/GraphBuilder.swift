@@ -111,7 +111,11 @@ struct GraphBuilder {
         case .audio(let ref):
             source = AudioSourceNode(data: samples.data(for: ref.path), state: state(sp) { AudioState() })
         case .notes(let p):
-            source = NoteSourceNode(pattern: p, state: state("\(sp):notes") { NoteState(sampleRate: sr) })
+            if let kit = p.instrument.kit {
+                source = KitNoteSourceNode(pattern: p, kit: kit, sampleRate: sr, player: state("\(sp):kit") { DrumPlayer() })
+            } else {
+                source = NoteSourceNode(pattern: p, state: state("\(sp):notes") { NoteState(sampleRate: sr) })
+            }
         case .drums(let p):
             source = DrumSourceNode(pattern: p, sampleRate: sr, player: state("\(sp):drums") { DrumPlayer() })
         }

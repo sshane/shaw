@@ -14,7 +14,7 @@ swift test                    # engine + editing tests
 
 ## Demo song
 
-Shaw opens with **"First Light"**, a 72-bar A-minor house track at 124 BPM (File → Open Demo Project brings it back). It's arranged from linked sections: **Intro** (also the outro), **Build** (twice), **Drop** (four times), and **Breakdown**. Open any section and change it, and every copy changes. It also shows effects at every level: a filter sweeping the whole Intro composition, sidechain pump inside the Drop, delay and reverb on the lead, and EQ + limiter on Main as a master bus. Press Tab for the Session view to jam with the same patterns.
+Shaw opens with **"First Light"**, a 72-bar A-minor house track at 124 BPM (File → Open Demo Project brings it back). It's arranged from linked sections: **Intro** (also the outro), **Build** (twice), **Drop** (four times), and **Breakdown**. Open any section and change it, and every copy changes. It also shows effects at every level: a filter sweeping the whole Intro composition, sidechain pump inside the Drop, delay and reverb on the lead, and EQ + limiter on Main as a master bus. Session slots are filled too, if you open the optional Session view from a ☰ menu.
 
 ## The idea
 
@@ -33,36 +33,48 @@ Shaw opens with **"First Light"**, a 72-bar A-minor house track at 124 BPM (File
 
 **Effects stack the way you'd expect.** Clip effects run first, then track effects, then composition effects. A composition's effects apply after everything inside it, exactly like an effect on a precomp layer. Each placement of a composition renders with its own effect state, so two copies of a comp with reverb each ring out independently.
 
+## Getting started
+
+A new project is empty on purpose. Click **Add an instrument** (or pick one in the Browser's **Instruments** tab: click to hear it, double-click to add). Shaw makes a track with a one-bar pattern, opens it in the piano roll and loops it. Press Space and start adding notes.
+
 ## Editing
+
+**Piano roll** (synths *and* drums: a drum kit shows one row per sound)
+- Double-click to add a note, double-click a note to delete it. Drag empty space to select.
+- Drag notes to move, drag the right edge to resize (⌥← / ⌥→ too), ⌥-drag to copy.
+- ⌘C / ⌘X / ⌘V / ⌘D, arrows to move, ↑/↓ to transpose. **B** toggles draw mode (click to draw).
+- Drum patterns have a **Steps** view: the same notes as an FL Studio-style step grid.
+- Clicking notes is silent by default (and always while playing); the headphones button turns previews on.
+
+**Play with your keyboard** — A S D F G H J K L ; ' are white keys, W E T Y U O P black keys, Z / X octave, C / V velocity. Drum kits: A = kick, S = snare, and so on.
+
+**Variations without recording** — while a pattern loops, tweak it, then press **Save Variation** (⇧⌘D). The current version stays put and a copy appears right after it, now looping, ready for the next idea. **Loop All** plays every version in a row.
+
+**Swap an instrument** — drag an instrument onto a clip or into the open piano roll: the notes stay, the sound changes.
 
 **Timeline**
 - Drag a clip to move it (across tracks too). ⌘ while dragging disables snapping.
 - Drag an edge to trim. Past the end of the content is silence (hatched).
 - **Option-drag the right edge to loop** the content past its end. Repeats show notches.
 - Option-drag a clip body to duplicate it. ⌘D duplicates the selection right after itself.
-- Double-click a clip to open it (compositions open as tabs, patterns open the piano roll, beats open the beat maker).
-- Double-click an empty lane to draw a new pattern there.
-- Drag on empty space for a selection box. Click the ruler to move the playhead.
+- Double-click a clip to open it (and loop it). Double-click an empty lane to draw a new pattern there.
 - Drag the top strip of the ruler to set the loop region; click it to toggle looping.
-- Scroll to pan, ⌘/⌥-scroll or pinch to zoom.
+- Scroll to pan, ⌘/⌥-scroll or pinch to zoom, ⌘0 to fit.
 
-**Piano roll** — click to draw (drag to set length), drag to move, drag an edge to resize, ⌥-drag to copy, right-click to delete, ⌘-drag to box-select, ↑/↓ to transpose (⇧ for octaves), ⌘D to duplicate, velocity lane at the bottom, click the keyboard to audition.
+**Effects** — each effect shows its main knobs; **More** reveals the rest, ✕ deletes it.
 
-**Beat maker** — click or drag to paint steps, right-click a step for velocity and fill options, per-row volume/pitch/mute, swing, 8–64 steps at 1/8, 1/16, 1/32 or triplet resolution.
-
-**Session** — drop anything into a slot; clips launch on the next bar and loop. Scene buttons launch a whole row. Double-click an empty slot to draw a new pattern.
-
-**Panels** — every panel lives in a tabbed slot. Right-click a tab to move it to another slot, use ☰ to add panels, and View → Reset Workspace to go back.
+**Session view** (optional) — an Ableton-style clip launcher, available from any panel's ☰ menu.
 
 ## Shortcuts
 
 | Key | Action |
 | --- | --- |
 | Space | Play / stop (returns to where you started) |
-| Tab | Switch Timeline / Session |
+| ⇧⌘D | Save variation |
+| A–' · Z/X · C/V | Play notes · octave · velocity |
 | ⌘L / ⌘K | Loop / metronome |
 | ⌘N / ⌘T | New composition / new track |
-| ⇧⌘P / ⇧⌘B | New pattern / new beat |
+| ⇧⌘P / ⇧⌘B | New pattern / new drum pattern |
 | ⌘D / ⌘E | Duplicate / split at playhead |
 | ⇧⌘C / ⇧⌘U | Pre-compose / make unique |
 | ⇧⌘L | Toggle loop on selected clips |
