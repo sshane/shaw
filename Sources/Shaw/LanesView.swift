@@ -225,6 +225,7 @@ struct ClipView: View {
     @State private var pressed = false
     @State private var lastClick = Date.distantPast
     @State private var dropTarget = false
+    @State private var hoverZone: Mode?
 
     var body: some View {
         let asset = store.project.asset(clip.assetID)
@@ -286,20 +287,31 @@ struct ClipView: View {
                                                               lineWidth: selected || dropTarget ? 1.5 : 1))
             .opacity(clip.mute ? 0.45 : 1)
             .overlay {
-                // Hovering any copy of a pattern outlines all of its linked copies.
-                if store.hoveredAsset == clip.assetID && uses > 1 {
-                    RoundedRectangle(cornerRadius: 3)
-                        .stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                // Only at an edge: a small grip showing it can be dragged to resize.
+                if let z = hoverZone, z != .move {
+                    RoundedRectangle(cornerRadius: 1.5).fill(Color.white.opacity(0.85))
+                        .frame(width: 3).padding(.vertical, 3).padding(.horizontal, 1)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: z == .trimLeft ? .leading : .trailing)
                         .allowsHitTesting(false)
                 }
             }
-            .onHover { inside in
-                if inside { store.hoveredAsset = clip.assetID } else if store.hoveredAsset == clip.assetID { store.hoveredAsset = nil }
-            }
             .contentShape(Rectangle())
             .gesture(bodyGesture())
-            .overlay(alignment: .leading) { edgeHandle(.trimLeft) }
-            .overlay(alignment: .trailing) { edgeHandle(.trimRight) }
+            .overlay(alignment: .leading) { edgeHandle(.trimLeft, width: edgeWidth(w)) }
+            .overlay(alignment: .trailing) { edgeHandle(.trimRight, width: edgeWidth(w)) }
+            // One hover area over the whole clip, edges included, so crossing an edge isn't "leaving" the clip.
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let p):
+                    let e = edgeWidth(w)
+                    let zone: Mode = p.x <= e ? .trimLeft : (p.x >= w - e ? .trimRight : .move)
+                    if zone != hoverZone { hoverZone = zone }
+                    (zone == .move ? NSCursor.arrow : NSCursor.resizeLeftRight).set()
+                case .ended:
+                    hoverZone = nil
+                    NSCursor.arrow.set()
+                }
+            }
         }
         .contextMenu { menu(asset: asset) }
         .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(
@@ -320,11 +332,13 @@ struct ClipView: View {
         .help(clip.loops ? "Looping clip. Option-drag the right edge to extend." : "Drag to move, drag edges to trim, Option-drag right edge to loop, double-click to open")
     }
 
-    private func edgeHandle(_ mode: Mode) -> some View {
+    /// Edge grab zones shrink on narrow (zoomed-out) clips so the middle stays draggable.
+    private func edgeWidth(_ w: CGFloat) -> CGFloat { max(3, min(8, w * 0.25)) }
+
+    private func edgeHandle(_ mode: Mode, width: CGFloat) -> some View {
         Rectangle()
             .fill(Color.white.opacity(0.001))
-            .frame(width: 7)
-            .onHover { NSCursor.set(.resizeLeftRight, when: $0) }
+            .frame(width: width)
             .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { g in changed(g, mode: mode) }
                 .onEnded { _ in ended() })
@@ -495,3 +509,4 @@ struct EmptyTimelineCard: View {
         .padding(30)
     }
 }
+

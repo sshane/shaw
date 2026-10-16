@@ -217,9 +217,6 @@ struct AssetRow: View {
             store.inspector = asset.kind == .composition ? .composition(asset.id) : .asset(asset.id)
         })
         .shawDraggable(.asset(asset.id), preview: asset.name)
-        .onHover { inside in
-            if inside { store.hoveredAsset = asset.id } else if store.hoveredAsset == asset.id { store.hoveredAsset = nil }
-        }
         .contextMenu {
             Button("Open") { store.open(asset: asset.id) }
             Button("Rename") { store.renamingAsset = asset.id }

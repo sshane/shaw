@@ -55,7 +55,7 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 
 **Timeline**
 - Drag a clip to move it (across tracks too). ⌘ while dragging disables snapping.
-- Drag an edge to trim. Past the end of the content is silence (hatched).
+- Drag an edge to trim (the cursor and a small grip show when you're on an edge). Past the end of the content is silence (hatched).
 - **Option-drag the right edge to loop** the content past its end. Repeats show notches.
 - Option-drag a clip body to duplicate it. ⌘D duplicates the selection right after itself.
 - Double-click a clip to open it (and loop it). Double-click an empty lane to draw a new pattern there.
@@ -75,8 +75,6 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 **Loop bar** — the orange bar on top of the ruler. Click it to turn looping on/off, drag its ends to resize, drag the middle to move it, click any empty bar in that strip to loop that bar.
 
 **Merge clips** — select clips on one layer, right-click → **Merge into One Clip** (⌘J). You get one linked clip with every note where it was; the originals go away. It's strict: grayed out (with the reason) for different instruments, compositions or audio, different layers, effects, gain, or keyframes.
-
-**Linked copies** — hover a clip (or a pattern in the Project panel) and every linked copy is outlined.
 
 **Copy & paste clips** — ⌘C / ⌘V on the timeline pastes linked copies at the playhead. Right-click selects before showing the menu.
 

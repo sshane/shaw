@@ -102,8 +102,6 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var auditionNotes = (UserDefaults.standard.object(forKey: "ShawAuditionNotes.v2") as? Bool) ?? true {
         didSet { if !isolated { UserDefaults.standard.set(auditionNotes, forKey: "ShawAuditionNotes.v2") } }
     }
-    /// The pattern under the mouse; every clip using it lights up so you can see its linked copies.
-    var hoveredAsset: AssetID?
     /// Copied piano-roll notes (⌘C / ⌘X) and where ⌘V pastes them (last click in the grid).
     @ObservationIgnored var noteClipboard: [Note] = []
     @ObservationIgnored var rollInsertBeat: Double?
