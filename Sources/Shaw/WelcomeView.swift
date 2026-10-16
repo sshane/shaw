@@ -18,7 +18,7 @@ struct WelcomeView: View {
                 Point(icon: "line.3.horizontal", title: "Layer",
                       text: "A layer is a row on the timeline. Layers play at the same time, so drums can go on one, bass on another, and chords on a third. Each layer has its own volume, mute, solo, and effects."),
                 Point(icon: "square.stack.3d.up", title: "Composition",
-                      text: "A composition is a group of layers. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects. Pre-compose (⇧⌘C) turns the clips you select into one."),
+                      text: "A composition is a group of layers and the clips on them. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects. Pre-compose (⇧⌘C) turns the clips you select into one."),
              ]),
         Page(icon: "rectangle.split.3x1", title: "Everything happens on one timeline",
              subtitle: "There's no separate session view. Looping lives at the top of the timeline.",

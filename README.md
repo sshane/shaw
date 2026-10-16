@@ -8,7 +8,7 @@ Shaw is a music app for the Mac that works like After Effects. I came from After
 
 - **Clip.** A block on the timeline that holds notes, drums, or audio. Double-click it to edit it. When you duplicate a clip, every copy shares the same notes.
 - **Layer.** A row on the timeline. Layers play at the same time, and each one has its own volume, mute, solo, and effects.
-- **Composition.** A group of layers. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects.
+- **Composition.** A group of layers and the clips on them. Your song is a composition, and you can put compositions inside each other, like a precomp in After Effects.
 
 ## What's different
 
