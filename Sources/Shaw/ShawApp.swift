@@ -164,7 +164,14 @@ final class KeyRouter {
         case 51, 117: // delete, forward delete
             switch store.focus {
             case .project: store.deleteAssets(store.selectedAssets)
-            case .timeline: store.deleteSelectedClips()
+            case .timeline:
+                if !store.selectedClips.isEmpty {
+                    store.deleteSelectedClips()
+                } else if case .track(let cid, let tid)? = store.inspector, cid == store.activeCompID {
+                    store.deleteTrack(tid) // a selected layer (click its header) — ⌘Z brings it back
+                } else {
+                    return false
+                }
             default: return false // never delete hidden timeline clips from another panel
             }
             return true

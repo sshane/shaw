@@ -250,6 +250,8 @@ struct TrackHeader: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
         .contentShape(Rectangle())
         .onTapGesture {
+            // Selecting a layer deselects clips, so Delete removes the layer itself.
+            store.selectedClips = []
             store.inspector = .track(store.activeCompID, track.id)
             store.focus = .timeline
         }

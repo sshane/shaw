@@ -54,7 +54,15 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
 @Observable final class Store {
     var project: Project
-    var fileURL: URL?
+    /// Where the project was last saved. Remembered across launches (with the autosave) so
+    /// ⌘S keeps saving to the same file instead of asking for a name again.
+    var fileURL: URL? {
+        didSet {
+            guard !isolated else { return }
+            UserDefaults.standard.set(fileURL?.path, forKey: Store.fileURLKey)
+        }
+    }
+    static let fileURLKey = "ShawProjectFile"
     var dirty = false
 
     // Navigation
@@ -90,6 +98,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     /// Copied piano-roll notes (⌘C / ⌘X) and where ⌘V pastes them (last click in the grid).
     @ObservationIgnored var noteClipboard: [Note] = []
     @ObservationIgnored var rollInsertBeat: Double?
+    /// Pitches currently held on the computer keyboard (lit up in the piano roll).
+    var playingPitches: Set<Int> = []
     @ObservationIgnored var heldKeys: [String: (pitch: Int, isDrum: Bool)] = [:]
     var rollSnap: Double = 0.25
     var rollZoom: Double = 60 // pixels per beat in the piano roll
@@ -133,12 +143,22 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         self.isolated = isolated || headless
         // A brand-new user starts with an empty project that guides them; the demo is one click away.
         let snapshotDemo = self.isolated && ProcessInfo.processInfo.environment["SHAW_EMPTY"] == nil
-        var p = initial ?? (self.isolated ? nil : Store.restoreAutosave()) ?? (snapshotDemo ? DemoProject.make() : DemoProject.empty())
+        let restored = (initial == nil && !self.isolated) ? Store.restoreAutosave() : nil
+        var p = initial ?? restored ?? (snapshotDemo ? DemoProject.make() : DemoProject.empty())
         p.migrateDrumPatterns() // old step-sequencer beats become drum-kit piano-roll patterns
         project = p
         activeCompID = p.mainCompositionID
         openComps = [p.mainCompositionID]
         self.headless = headless
+        if restored != nil, let path = UserDefaults.standard.string(forKey: Store.fileURLKey),
+           FileManager.default.fileExists(atPath: path) {
+            // The autosave belongs to this file: keep saving there, and only flag it edited if it differs.
+            let url = URL(fileURLWithPath: path)
+            fileURL = url
+            var saved = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Project.self, from: $0) }
+            saved?.migrateDrumPatterns()
+            dirty = saved != p
+        }
         if !headless { engine.start() }
         SampleLibrary.shared.onLoad = { [weak self] _ in self?.refreshEngine() }
         refreshEngine()

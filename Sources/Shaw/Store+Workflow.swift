@@ -221,8 +221,8 @@ extension Store {
         let k = chars.lowercased()
         if down {
             switch k {
-            case "z": keyboardOctave = max(-1, keyboardOctave - 1); return true
-            case "x": keyboardOctave = min(8, keyboardOctave + 1); return true
+            case "z": releaseKeyboard(); keyboardOctave = max(-1, keyboardOctave - 1); return true
+            case "x": releaseKeyboard(); keyboardOctave = min(8, keyboardOctave + 1); return true
             case "c": keyboardVelocity = max(0.1, keyboardVelocity - 0.15); return true
             case "v": keyboardVelocity = min(1, keyboardVelocity + 0.15); return true
             default: break
@@ -234,6 +234,7 @@ extension Store {
         if !down {
             guard let held = heldKeys.removeValue(forKey: k) else { return Store.pianoKeys[k] != nil }
             if !held.isDrum { engine.previewNoteOff(held.pitch) }
+            if !heldKeys.values.contains(where: { $0.pitch == held.pitch }) { playingPitches.remove(held.pitch) }
             return true
         }
         if isRepeat { return Store.pianoKeys[k] != nil }
@@ -243,19 +244,31 @@ extension Store {
             guard let i = Store.drumKeys.firstIndex(of: k) else { return Store.pianoKeys[k] != nil }
             guard i < DrumKits.voices.count else { return true }
             heldKeys[k] = (DrumKits.basePitch + i, true)
+            playingPitches.insert(DrumKits.basePitch + i)
             engine.previewNoteOn(DrumKits.basePitch + i, velocity: keyboardVelocity, instrument: p.instrument)
             return true
         case .notes(let p):
             guard let off = Store.pianoKeys[k] else { return false }
             let pitch = min(127, max(0, (keyboardOctave + 1) * 12 + off))
-            if let old = heldKeys[k], !old.isDrum { engine.previewNoteOff(old.pitch) }
+            if let old = heldKeys[k], !old.isDrum { engine.previewNoteOff(old.pitch); playingPitches.remove(old.pitch) }
             heldKeys[k] = (pitch, false)
+            playingPitches.insert(pitch)
             engine.previewNoteOn(pitch, velocity: keyboardVelocity, instrument: p.instrument)
             return true
         default:
             return false
         }
     }
+
+    /// Let go of everything held (e.g. when changing octave mid-chord).
+    func releaseKeyboard() {
+        for (_, h) in heldKeys where !h.isDrum { engine.previewNoteOff(h.pitch) }
+        heldKeys.removeAll()
+        playingPitches.removeAll()
+    }
+
+    /// Lowest pitch the A key plays.
+    var keyboardBasePitch: Int { (keyboardOctave + 1) * 12 }
 
     /// Label for the keyboard indicator, e.g. "Pluck · C3".
     var keyboardLabel: String {

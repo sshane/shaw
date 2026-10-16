@@ -81,6 +81,10 @@ struct PianoRollPanel: View {
                 guard case .preset(let name) = payload else { NSSound.beep(); return false }
                 return store.replaceInstrument(ofAsset: id, with: .synth(name))
             }))
+            .onChange(of: store.playingPitches) { _, pitches in reveal(pitches, layout: layout, rowH: rowH) }
+            .onChange(of: store.keyboardOctave) { _, _ in
+                if layout == .piano { reveal([store.keyboardBasePitch, store.keyboardBasePitch + 17], layout: layout, rowH: rowH) }
+            }
             .onChange(of: store.pianoRollAsset) { _, new in
                 scrollY = -1
                 scrollX = 0
@@ -95,6 +99,18 @@ struct PianoRollPanel: View {
                     .font(Theme.small).foregroundStyle(Theme.textFaint)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// Scroll so the given pitches are on screen (used while playing the computer keyboard).
+    private func reveal(_ pitches: Set<Int>, layout: RowLayout, rowH: CGFloat) {
+        guard let lo = pitches.min(), let hi = pitches.max(), gridSize.height > 20 else { return }
+        let top = CGFloat(layout.row(of: hi)) * rowH, bottom = CGFloat(layout.row(of: lo) + 1) * rowH
+        if top < scrollY || bottom > scrollY + gridSize.height {
+            let mid = (top + bottom) / 2
+            withAnimation(.easeOut(duration: 0.15)) {
+                scrollY = max(0, min(CGFloat(layout.count) * rowH - gridSize.height, mid - gridSize.height / 2))
+            }
         }
     }
 
@@ -311,19 +327,26 @@ struct Keyboard: View {
                     let pitch = layout.pitch(atRow: row)
                     let y = CGFloat(row) * keyHeight - scrollY
                     let r = CGRect(x: 2, y: y + 1, width: size.width - 4, height: keyHeight - 2)
-                    ctx.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(pitch == held ? Theme.accent : Color(white: 0.26)))
+                    let lit = pitch == held || store.playingPitches.contains(pitch)
+                    ctx.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(lit ? Theme.accent : Color(white: 0.26)))
                     let name = DrumKits.voice(atPitch: pitch)?.name ?? ""
                     ctx.draw(Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.text),
                              at: CGPoint(x: 8, y: y + keyHeight / 2), anchor: .leading)
                 }
                 return
             }
+            let base = store.keyboardBasePitch
             for row in first...last {
                 let pitch = layout.pitch(atRow: row)
                 let y = CGFloat(row) * keyHeight - scrollY
                 let black = RollGrid.isBlack(pitch)
                 let r = CGRect(x: 0, y: y, width: black ? size.width * 0.62 : size.width, height: keyHeight)
-                ctx.fill(Path(r), with: .color(pitch == held ? Theme.accent : (black ? Color(white: 0.12) : Color(white: 0.88))))
+                let lit = pitch == held || store.playingPitches.contains(pitch)
+                ctx.fill(Path(r), with: .color(lit ? Theme.accent : (black ? Color(white: 0.12) : Color(white: 0.88))))
+                // Accent stripe on the keys your computer keyboard can reach (A … ').
+                if store.keyboardEnabled && pitch >= base && pitch <= base + 17 {
+                    ctx.fill(Path(CGRect(x: size.width - 4, y: y, width: 4, height: keyHeight)), with: .color(Theme.accent.opacity(0.75)))
+                }
                 ctx.fill(Path(CGRect(x: 0, y: y + keyHeight - 0.5, width: size.width, height: 0.5)), with: .color(.black.opacity(0.25)))
                 if pitch % 12 == 0 {
                     ctx.draw(Text(RollGrid.name(pitch)).font(.system(size: 9, weight: .semibold)).foregroundStyle(.black.opacity(0.6)),
