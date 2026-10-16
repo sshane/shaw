@@ -43,37 +43,16 @@ struct WelcomeView: View {
     ]
 
     var body: some View {
-        let p = pages[page]
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.18)).frame(width: 46, height: 46)
-                    Image(systemName: p.icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.accent)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(p.title).font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.text)
-                    Text(p.subtitle).font(.system(size: 12.5)).foregroundStyle(Theme.textDim)
-                        .fixedSize(horizontal: false, vertical: true)
+            // Every page is laid out, only the current one is visible: the window fits the
+            // longest page and stays the same size while you click through, with no dead space.
+            ZStack(alignment: .topLeading) {
+                ForEach(pages.indices, id: \.self) { i in
+                    pageContent(pages[i])
+                        .opacity(i == page ? 1 : 0)
+                        .accessibilityHidden(i != page)
                 }
             }
-            .padding(.bottom, 20)
-
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(p.points, id: \.title) { pt in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: pt.icon)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
-                            .frame(width: 24, height: 20)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(pt.title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.text)
-                            Text(pt.text).font(.system(size: 12.5)).foregroundStyle(Theme.textDim)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .top)
 
             HStack {
                 Button("Back") { withAnimation(.easeOut(duration: 0.15)) { page -= 1 } }
@@ -106,8 +85,40 @@ struct WelcomeView: View {
             .padding(.top, 18)
         }
         .padding(26)
-        .frame(width: 600, height: 450)
+        .frame(width: 600)
         .background(Theme.panel)
         .preferredColorScheme(.dark)
+    }
+
+    private func pageContent(_ p: Page) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.18)).frame(width: 46, height: 46)
+                    Image(systemName: p.icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.accent)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(p.title).font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.text)
+                    Text(p.subtitle).font(.system(size: 12.5)).foregroundStyle(Theme.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.bottom, 20)
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(p.points, id: \.title) { pt in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: pt.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 24, height: 20)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(pt.title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.text)
+                            Text(pt.text).font(.system(size: 12.5)).foregroundStyle(Theme.textDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
