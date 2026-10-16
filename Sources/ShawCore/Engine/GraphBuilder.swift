@@ -58,7 +58,14 @@ struct GraphBuilder {
             guard let d = EffectRegistry.descriptor(e.kind) else { continue }
             let sr = sampleRate
             let proc: EffectProcessor = state("\(path)/fx:\(e.id):\(e.kind)") { EffectBox(d.make(sr)) }.processor
-            slots.append(EffectSlot(processor: proc, params: d.params.resolve(e.params)))
+            var animated: [AnimatedParam] = []
+            for (pid, keys) in e.keyframes where !keys.isEmpty {
+                guard let i = d.params.firstIndex(where: { $0.id == pid }) else { continue }
+                let def = d.params[i]
+                animated.append(AnimatedParam(index: i, keys: keys.map { var k = $0; k.value = def.clamp(k.value); return k },
+                                              hold: def.choices != nil))
+            }
+            slots.append(EffectSlot(processor: proc, params: d.params.resolve(e.params), animated: animated))
         }
         return EffectChain(slots)
     }

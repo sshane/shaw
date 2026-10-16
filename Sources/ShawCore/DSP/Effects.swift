@@ -80,6 +80,10 @@ public enum EffectRegistry {
                          summary: "Lo-fi bit and sample-rate reduction",
                          keywords: ["redux", "lofi", "lo-fi", "crush", "decimate"],
                          params: BitcrusherFX.params, make: { _ in BitcrusherFX() }),
+        EffectDescriptor(id: "volume", name: "Volume", category: "Utility",
+                         summary: "Turn it up or down — keyframe it for fades",
+                         keywords: ["gain", "level", "fade", "loudness", "quiet"],
+                         params: VolumeFX.params, make: { _ in VolumeFX() }),
         EffectDescriptor(id: "utility", name: "Utility", category: "Utility",
                          summary: "Gain, pan, stereo width and mono",
                          keywords: ["gain", "volume", "pan", "width", "mono", "stereo"],
@@ -100,6 +104,7 @@ public enum EffectRegistry {
         "saturator": ["drive", "mix"],
         "bitcrusher": ["bits", "downsample"],
         "utility": ["gain", "pan", "width"],
+        "volume": ["volume"],
     ]
 
     static let byID: [String: EffectDescriptor] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
@@ -670,6 +675,27 @@ final class BitcrusherFX: EffectProcessor {
     }
 
     func reset() { holdL = 0; holdR = 0; counter = 0 }
+}
+
+// MARK: - Volume
+
+final class VolumeFX: EffectProcessor {
+    static let params = [ParamDef("volume", "Volume", -60, 12, 0, .db)]
+    var g = Smoother(1)
+    var primed = false
+
+    func process(_ buf: StereoBuffer, frames: Int, params p: [Double], ctx: RenderContext, beat: Double) {
+        // -60 dB is the bottom of the range and means silence, so fades can start from nothing.
+        let target: Float = p[0] <= -59.9 ? 0 : Float(dbToGain(p[0]))
+        if primed { g.set(target, frames: max(64, frames)) } else { g.snap(target); primed = true }
+        for i in 0..<frames {
+            let v = g.next()
+            buf.l[i] *= v
+            buf.r[i] *= v
+        }
+    }
+
+    func reset() { primed = false }
 }
 
 // MARK: - Utility

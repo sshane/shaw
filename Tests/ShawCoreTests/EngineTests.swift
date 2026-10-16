@@ -171,3 +171,53 @@ final class DrumKitPatternTests: XCTestCase {
         XCTAssertLessThan(diff, 0.001, "converted beat should sound identical")
     }
 }
+
+final class KeyframeTests: XCTestCase {
+    func rms(_ x: ArraySlice<Float>) -> Float { sqrt(x.reduce(0) { $0 + $1 * $1 } / Float(max(1, x.count))) }
+
+    func testInterpolation() {
+        let keys = [Keyframe(time: 0, value: -60), Keyframe(time: 4, value: 0)]
+        XCTAssertEqual(Keyframe.interpolate(keys, at: -1, hold: false), -60)
+        XCTAssertEqual(Keyframe.interpolate(keys, at: 2, hold: false), -30)
+        XCTAssertEqual(Keyframe.interpolate(keys, at: 9, hold: false), 0)
+        XCTAssertEqual(Keyframe.interpolate(keys, at: 3.9, hold: true), -60)
+    }
+
+    func testVolumeFadeInFollowsTheClip() {
+        func render(clipStart: Double) -> [Float] {
+            var p = Project(bpm: 120)
+            var n = NotePattern(length: 8, instrument: .preset("Sub Bass"))
+            n.notes = [Note(pitch: 40, start: 0, length: 8)]
+            let a = Asset(name: "Bass", colorIndex: 0, content: .notes(n))
+            p.assets.append(a)
+            var fade = EffectRegistry.descriptor("volume")!.makeEffect()
+            fade.keyframes["volume"] = [Keyframe(time: 0, value: -60), Keyframe(time: 4, value: 0)]
+            var clip = Clip(assetID: a.id, start: clipStart, length: 8)
+            clip.effects = [fade]
+            p.updateComposition(p.mainCompositionID) { c in
+                var t = Track(name: "Bass", colorIndex: 0)
+                t.clips = [clip]
+                c.tracks = [t]
+            }
+            return OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: clipStart + 8).0
+        }
+        let fpb = 24000 // 120 BPM at 48 kHz
+        let out = render(clipStart: 0)
+        let q1 = rms(out[0..<fpb]), q2 = rms(out[fpb * 2..<fpb * 3]), q3 = rms(out[fpb * 5..<fpb * 6])
+        XCTAssertLessThan(q1, q2, "fade rises")
+        XCTAssertLessThan(q2, q3, "fade keeps rising until full")
+        XCTAssertLessThan(q1, q3 * 0.1)
+
+        // Keyframes are in clip time: move the clip and the fade moves with it.
+        let moved = render(clipStart: 4)
+        let m1 = rms(moved[fpb * 4..<fpb * 5]), m3 = rms(moved[fpb * 9..<fpb * 10])
+        XCTAssertLessThan(m1, m3 * 0.1)
+    }
+
+    func testOldProjectsWithoutKeyframesStillLoad() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","kind":"reverb","enabled":true,"params":{"mix":0.3},"expanded":true}"#
+        let e = try JSONDecoder().decode(Effect.self, from: Data(json.utf8))
+        XCTAssertTrue(e.keyframes.isEmpty)
+        XCTAssertEqual(e.params["mix"], 0.3)
+    }
+}

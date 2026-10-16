@@ -77,8 +77,9 @@ struct ParamRow: View {
             Text(def.name)
                 .font(Theme.small)
                 .foregroundStyle(Theme.textDim)
-                .frame(width: 96, alignment: .leading)
+                .frame(width: 80, alignment: .leading)
                 .lineLimit(1)
+                .truncationMode(.tail)
                 .onTapGesture(count: 2) { onChange(def.defaultValue); onEnd() }
                 .help("Double-click to reset")
             if let choices = def.choices {
@@ -104,7 +105,7 @@ struct ParamRow: View {
                                return d
                            },
                            onChange: onChange, onEnd: onEnd)
-                    .frame(width: 70, alignment: .trailing)
+                    .frame(width: 62, alignment: .trailing)
             }
         }
         .frame(height: 20)

@@ -66,7 +66,7 @@ struct TimelinePanel: View {
                 return
             }
             let maxX = max(0, contentWidth(comp) - lanesSize.width)
-            let maxY = max(0, CGFloat(comp.tracks.count) * store.trackHeight + 160 - lanesSize.height)
+            let maxY = max(0, store.trackLayout(for: comp).total + 160 - lanesSize.height)
             if p.x > Self.headerWidth { scrollX = min(maxX, max(0, scrollX - dx)) }
             scrollY = min(maxY, max(0, scrollY - dy))
         }
@@ -76,8 +76,7 @@ struct TimelinePanel: View {
             guard let comp = store.activeComp else { return false }
             let y = p.y - Self.rulerHeight
             guard y >= 0 else { return false }
-            let ti = Int((y + scrollY) / store.trackHeight)
-            guard ti >= 0, ti < comp.tracks.count else { return false }
+            guard let ti = store.trackLayout(for: comp).index(atY: y + scrollY) else { return false }
             store.focus = .timeline
             if p.x < Self.headerWidth {
                 store.selectedClips = []
@@ -201,10 +200,15 @@ struct TrackHeaderColumn: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
+            let layout = store.trackLayout(for: comp)
             VStack(spacing: 0) {
                 ForEach(Array(comp.tracks.enumerated()), id: \.element.id) { i, t in
                     TrackHeader(track: t, index: i)
                         .frame(height: store.trackHeight)
+                    ForEach(layout.props[safe: i] ?? []) { prop in
+                        KeyframeRowHeader(prop: prop)
+                            .frame(height: TrackLayout.propRowHeight)
+                    }
                 }
             }
             .offset(y: -scrollY)
@@ -228,6 +232,17 @@ struct TrackHeader: View {
             Rectangle().fill(Theme.label(track.colorIndex)).frame(width: 4)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 4) {
+                    if store.hasAnimation(track) {
+                        let open = store.expandedTracks.contains(track.id)
+                        Button {
+                            if open { store.expandedTracks.remove(track.id) } else { store.expandedTracks.insert(track.id) }
+                        } label: {
+                            Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
+                                .frame(width: 12, height: 14).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                        .help(open ? "Hide keyframes" : "Show keyframes")
+                    }
                     if renaming {
                         TextField("", text: $text).textFieldStyle(.plain).font(Theme.small)
                             .focused($nameFocused)
@@ -347,10 +362,16 @@ struct RulerView: View {
                     // Loop brace.
                     let hasClips = comp.tracks.contains { !$0.clips.isEmpty }
                     let lx0 = CGFloat(store.loopStart) * zoom - scrollX, lx1 = CGFloat(store.loopEnd) * zoom - scrollX
-                    let braceColor = store.loopEnabled ? Theme.loopRegion : Theme.textFaint
                     if hasClips {
-                        ctx.fill(Path(roundedRect: CGRect(x: lx0, y: 2, width: max(2, lx1 - lx0), height: 9), cornerRadius: 2),
-                                 with: .color(braceColor.opacity(store.loopEnabled ? 0.75 : 0.3)))
+                        // The loop bar: orange when looping, gray outline when off. Handles at both ends resize it.
+                        let r = CGRect(x: lx0, y: 1, width: max(6, lx1 - lx0), height: Self.loopStrip - 2)
+                        let on = store.loopEnabled
+                        ctx.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(on ? Theme.loopRegion.opacity(0.8) : Color.white.opacity(0.1)))
+                        ctx.stroke(Path(roundedRect: r, cornerRadius: 3), with: .color(on ? Theme.loopRegion : Theme.textFaint), lineWidth: 1)
+                        for hx in [r.minX + 3, r.maxX - 5] {
+                            ctx.fill(Path(roundedRect: CGRect(x: hx, y: r.minY + 2, width: 2, height: r.height - 4), cornerRadius: 1),
+                                     with: .color(on ? Color.black.opacity(0.45) : Theme.textDim))
+                        }
                     }
                     // Bar numbers and ticks.
                     var barStep = 1.0
@@ -398,12 +419,21 @@ struct RulerView: View {
                     .help("Composition end — drag to change duration")
             }
             .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                guard case .active(let p) = phase, p.y < Self.loopStrip else { NSCursor.arrow.set(); return }
+                let lx0 = CGFloat(store.loopStart) * zoom - scrollX, lx1 = CGFloat(store.loopEnd) * zoom - scrollX
+                if abs(p.x - lx0) < 8 || abs(p.x - lx1) < 8 { NSCursor.resizeLeftRight.set() }
+                else if p.x > lx0 && p.x < lx1 { NSCursor.openHand.set() }
+                else { NSCursor.pointingHand.set() }
+            }
             .gesture(rulerGesture(zoom: zoom, height: geo.size.height))
+            .help("Top strip: click the loop bar to turn looping on/off, drag its ends to resize, drag the middle to move, click an empty bar to loop it. Below: click to move the playhead.")
         }
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     static let handleHeight: CGFloat = 14
+    static let loopStrip: CGFloat = 14
 
     /// Top strip edits the loop brace; the rest scrubs the playhead.
     private func rulerGesture(zoom: CGFloat, height: CGFloat) -> some Gesture {
@@ -411,10 +441,10 @@ struct RulerView: View {
             .onChanged { g in
                 let beat = Double((g.location.x + scrollX) / zoom)
                 let startBeat = Double((g.startLocation.x + scrollX) / zoom)
-                if g.startLocation.y < 12 {
+                if g.startLocation.y < Self.loopStrip {
                     let snap = { (b: Double) in store.snapBeat(b, disable: NSEvent.modifierFlags.contains(.command)) }
                     if loopDrag == nil {
-                        let edge = 6 / Double(zoom)
+                        let edge = 8 / Double(zoom)
                         if abs(startBeat - store.loopStart) < edge { loopDrag = (1, store.loopStart, store.loopEnd, startBeat) }
                         else if abs(startBeat - store.loopEnd) < edge { loopDrag = (2, store.loopStart, store.loopEnd, startBeat) }
                         else if startBeat > store.loopStart && startBeat < store.loopEnd { loopDrag = (3, store.loopStart, store.loopEnd, startBeat) }
@@ -445,8 +475,17 @@ struct RulerView: View {
             }
             .onEnded { g in
                 store.scrubbing = false
-                if g.startLocation.y < 12, let d = loopDrag, d.mode != 0, abs(g.translation.width) < 2 {
-                    store.loopEnabled.toggle() // click the brace to toggle looping
+                if g.startLocation.y < Self.loopStrip, let d = loopDrag, abs(g.translation.width) < 2 {
+                    if d.mode == 0 {
+                        // Click an empty spot in the strip: loop that bar.
+                        let bar = Double(store.project.beatsPerBar)
+                        let b = (Double((g.startLocation.x + scrollX) / zoom) / bar).rounded(.down) * bar
+                        store.loopStart = max(0, b)
+                        store.loopEnd = max(0, b) + bar
+                        store.loopEnabled = true
+                    } else {
+                        store.loopEnabled.toggle() // click the loop bar to turn looping on/off
+                    }
                 }
                 loopDrag = nil
             }

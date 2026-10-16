@@ -109,8 +109,8 @@ public struct Project: Codable, Equatable {
     }
 
     /// Next unused name such as "Pattern 3".
-    public func uniqueName(_ base: String) -> String {
-        let names = Set(assets.map(\.name))
+    public func uniqueName(_ base: String, excluding: AssetID? = nil) -> String {
+        let names = Set(assets.filter { $0.id != excluding }.map(\.name))
         if !names.contains(base) { return base }
         var i = 2
         while names.contains("\(base) \(i)") { i += 1 }
@@ -279,10 +279,75 @@ public struct Effect: Codable, Equatable, Identifiable {
     public var enabled = true
     public var params: [String: Double]
     public var expanded = true
+    /// Keyframes per parameter id, sorted by time. A parameter with keyframes is animated
+    /// (like a property with its stopwatch on in After Effects) and ignores `params`.
+    /// Times are beats: clip time for clip effects, composition time for track/composition effects.
+    public var keyframes: [String: [Keyframe]] = [:]
 
     public init(kind: String, params: [String: Double] = [:]) {
         self.kind = kind
         self.params = params
+    }
+
+    enum CodingKeys: String, CodingKey { case id, kind, enabled, params, expanded, keyframes }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        kind = try c.decode(String.self, forKey: .kind)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        params = try c.decodeIfPresent([String: Double].self, forKey: .params) ?? [:]
+        expanded = try c.decodeIfPresent(Bool.self, forKey: .expanded) ?? true
+        keyframes = try c.decodeIfPresent([String: [Keyframe]].self, forKey: .keyframes) ?? [:]
+    }
+
+    public func isAnimated(_ param: String) -> Bool { !(keyframes[param] ?? []).isEmpty }
+
+    /// The parameter's value at a moment (its keyframed value if animated).
+    public func value(of def: ParamDef, at time: Double) -> Double {
+        if let keys = keyframes[def.id], !keys.isEmpty {
+            return def.clamp(Keyframe.interpolate(keys, at: time, hold: def.choices != nil))
+        }
+        return def.clamp(params[def.id] ?? def.defaultValue)
+    }
+
+    /// Set a value at a time on an animated parameter: updates the keyframe there, or adds one.
+    public mutating func setKeyframe(_ param: String, time: Double, value: Double, tolerance: Double = 1.0 / 128) {
+        var keys = keyframes[param] ?? []
+        if let i = keys.firstIndex(where: { abs($0.time - time) <= tolerance }) {
+            keys[i].value = value
+        } else {
+            keys.append(Keyframe(time: max(0, time), value: value))
+            keys.sort { $0.time < $1.time }
+        }
+        keyframes[param] = keys
+    }
+}
+
+/// One After Effects-style keyframe (a ◆ on the timeline).
+public struct Keyframe: Codable, Equatable, Identifiable {
+    public var id = UUID()
+    public var time: Double  // beats
+    public var value: Double
+
+    public init(time: Double, value: Double) {
+        self.time = time
+        self.value = value
+    }
+
+    /// Linear between keyframes, held before the first and after the last. `hold` steps instead (for choices).
+    public static func interpolate(_ keys: [Keyframe], at t: Double, hold: Bool) -> Double {
+        guard let first = keys.first else { return 0 }
+        if t <= first.time { return first.value }
+        var lo = 0, hi = keys.count - 1
+        if t >= keys[hi].time { return keys[hi].value }
+        while hi - lo > 1 {
+            let mid = (lo + hi) / 2
+            if keys[mid].time <= t { lo = mid } else { hi = mid }
+        }
+        let a = keys[lo], b = keys[hi]
+        if hold || b.time <= a.time { return a.value }
+        return a.value + (b.value - a.value) * (t - a.time) / (b.time - a.time)
     }
 }
 

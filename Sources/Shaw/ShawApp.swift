@@ -174,7 +174,9 @@ final class KeyRouter {
                 guard !store.selectedEffects.isEmpty else { return false }
                 store.deleteSelectedEffects()
             case .timeline:
-                if !store.selectedClips.isEmpty {
+                if !store.selectedKeyframes.isEmpty {
+                    store.deleteSelectedKeyframes()
+                } else if !store.selectedClips.isEmpty {
                     store.deleteSelectedClips()
                 } else if case .track(let cid, let tid)? = store.inspector, cid == store.activeCompID {
                     store.deleteTrack(tid) // a selected layer (click its header) — ⌘Z brings it back
@@ -261,6 +263,12 @@ enum DebugSnapshot {
             for item in add.split(separator: ",") {
                 if let c = InstrumentChoice.all.first(where: { $0.id == item }) { store.addInstrument(c) }
             }
+        }
+        if env["SHAW_FADE"] != nil, let c = store.activeComp?.tracks.first?.clips.first {
+            store.updateClip(c.id) { $0.length = 16; $0.loops = true }
+            store.addFade(clip: c.id, fadeIn: true)
+            store.addFade(clip: c.id, fadeIn: false)
+            store.seek(2)
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,

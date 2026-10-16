@@ -66,6 +66,13 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 - ⌘C, then select one or more clips, a track or a composition and ⌘V to paste them all. Delete removes, ⌘D duplicates.
 - Drag an effect's name to reorder it, or onto another clip, track, tab or list to copy it there.
 
+**Keyframes** (After Effects style) — click the stopwatch next to any effect setting to keyframe it. From then on, changing the value at the playhead adds or updates a ◆. ◀ ◆ ▶ steps between keyframes or adds/removes one at the playhead.
+- Keyframed settings get rows under their layer in the timeline (twirl the ▸ in the layer header). Drag a ◆ sideways to move it in time (snaps to the grid, ⌘ for free) or up/down to change its value. Double-click a ◆ to type a value, double-click the row to add one, Delete removes selected ◆s.
+- Clip keyframes live in clip time, so they move with the clip. Track keyframes live in composition time.
+- Right-click a clip → **Fade In** / **Fade Out** adds a Volume effect with the keyframes already set.
+
+**Loop bar** — the orange bar on top of the ruler. Click it to turn looping on/off, drag its ends to resize, drag the middle to move it, click any empty bar in that strip to loop that bar.
+
 **Copy & paste clips** — ⌘C / ⌘V on the timeline pastes linked copies at the playhead. Right-click selects before showing the menu.
 
 **Session view** (optional) — an Ableton-style clip launcher, available from any panel's ☰ menu.
@@ -91,7 +98,7 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 
 - **Shaw Synth** — polyphonic subtractive synth: 2 oscillators, sub, noise, up to 7-voice unison, resonant filter with envelope and key tracking, pitch envelope, mono/legato glide, drive. Presets: Init, Supersaw, Pluck, Pad, Reese Bass, Sub Bass, 808 Bass, Acid, Keys, Lead, Bell, Noise Riser.
 - **Drum kits** (synthesized, no samples to license): Trap 808, House 909, Boom Bap, Lo-Fi, Techno — kick, snare, clap, closed/open hat (choked), toms, rim, perc, crash.
-- **Effects**: Reverb, Delay (tempo-synced, ping-pong), Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter (with synced LFO), Saturator, Bitcrusher, Utility.
+- **Effects**: Reverb, Delay (tempo-synced, ping-pong), Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter (with synced LFO), Saturator, Bitcrusher, Volume, Utility.
 - Audio import (WAV, AIFF, MP3, M4A…) by dragging from Finder or ⌘I. WAV export of the current composition.
 - Autosave to `~/Library/Application Support/Shaw/`, projects save as `.shaw` (JSON).
 
@@ -112,4 +119,4 @@ The project is plain value types, so undo is a snapshot and the audio thread get
 
 ## Roadmap ideas
 
-Automation keyframes (After Effects style), time-stretch / warping for audio, Audio Unit plugins, MIDI keyboard input, recording, sidechain routing, sample instruments, recording session clips into the timeline, and per-clip fades.
+Keyframes on synth settings and composition effects in the timeline, time-stretch / warping for audio, Audio Unit plugins, MIDI keyboard input, recording, sidechain routing, sample instruments, recording session clips into the timeline, and per-clip fades.

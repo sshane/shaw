@@ -82,6 +82,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var selectedEffects: Set<UUID> = []
     var selectedEffectsHost: EffectHost?
     @ObservationIgnored var clipboard: ShawClipboard?
+    /// Layers whose keyframe rows are twirled open in the timeline, and the selected ◆s.
+    var expandedTracks: Set<UUID> = []
+    var selectedKeyframes: Set<UUID> = []
     var browserTab: BrowserTab = .instruments
     /// Bumped to move keyboard focus into the browser's search field.
     var focusBrowserSearch = 0

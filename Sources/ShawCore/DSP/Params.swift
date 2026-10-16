@@ -61,7 +61,7 @@ public struct ParamDef: Identifiable, Equatable {
     public func format(_ v: Double) -> String {
         switch unit {
         case .choice(let c): return c[Swift.max(0, Swift.min(c.count - 1, Int(v.rounded())))]
-        case .db: return v <= -96 ? "-inf dB" : String(format: "%.1f dB", v)
+        case .db: return v <= -96 || (id == "volume" && v <= -59.9) ? "-inf dB" : String(format: "%.1f dB", v)
         case .hz: return v >= 1000 ? String(format: "%.2f kHz", v / 1000) : String(format: "%.0f Hz", v)
         case .ms: return String(format: "%.0f ms", v)
         case .seconds: return String(format: "%.2f s", v)

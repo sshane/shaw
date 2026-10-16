@@ -34,6 +34,8 @@ enum InstrumentChoice: Equatable, Identifiable {
         }
     }
 
+    var isKit: Bool { if case .kit = self { return true } else { return false } }
+
     var payload: DragPayload {
         switch self {
         case .synth(let p): return .preset(p)
@@ -295,10 +297,28 @@ extension Store {
     @discardableResult
     func replaceInstrument(ofAsset id: AssetID, with choice: InstrumentChoice) -> Bool {
         // Any pattern can take any instrument: drums and synths are both piano-roll patterns.
-        guard project.asset(id)?.kind == .notes else { NSSound.beep(); return false }
-        switch choice {
-        case .synth(let preset): edit { $0.updateNotes(id) { $0.instrument = .preset(preset) } }
-        case .kit(let kit): edit { $0.updateNotes(id) { $0.instrument = .kit(kit) } }
+        guard let asset = project.asset(id), case .notes(let pat) = asset.content else { NSSound.beep(); return false }
+        // Names that still follow the instrument ("Pluck", "Pluck 2", "Trap 808 Beat") follow the new one;
+        // names you typed yourself are left alone.
+        let oldSound = pat.instrument.kit.map { DrumKits.kitName($0) } ?? pat.instrument.preset.replacingOccurrences(of: "*", with: "")
+        let oldAssetBase = pat.instrument.isDrumKit ? "\(oldSound) Beat" : oldSound
+        let newAssetBase = choice.isKit ? "\(choice.name) Beat" : choice.name
+        let renameAsset = Store.baseName(asset.name) == oldAssetBase
+        let newAssetName = renameAsset ? project.uniqueName(newAssetBase, excluding: id) : asset.name
+        let cid = activeCompID
+        edit { p in
+            switch choice {
+            case .synth(let preset): p.updateNotes(id) { $0.instrument = .preset(preset) }
+            case .kit(let kit): p.updateNotes(id) { $0.instrument = .kit(kit) }
+            }
+            p.updateAsset(id) { $0.name = newAssetName }
+            // Layers named after the old sound follow too.
+            p.updateComposition(cid) { c in
+                for ti in c.tracks.indices where c.tracks[ti].clips.contains(where: { $0.assetID == id })
+                    && (c.tracks[ti].name == oldSound || c.tracks[ti].name == oldAssetBase) {
+                    c.tracks[ti].name = choice.name
+                }
+            }
         }
         return true
     }

@@ -153,3 +153,59 @@ final class ClipboardTests: XCTestCase {
         XCTAssertTrue(clips.contains { $0.start == 8 && $0.assetID == clip.assetID }, "pasted clip is linked, at the playhead")
     }
 }
+
+final class KeyframeWorkflowTests: XCTestCase {
+    func store() -> Store { Store(project: DemoProject.empty(), headless: true) }
+
+    func testStopwatchThenChangeValueAddsKeyframes() {
+        let s = store()
+        s.addInstrument(.synth("Sub Bass"))
+        let clip = s.activeComp!.tracks[0].clips[0]
+        let host = EffectHost.clip(s.activeCompID, clip.id)
+        s.addEffect("volume", to: host)
+        let fx = s.effects(of: host)[0]
+        s.seek(0)
+        s.toggleAnimation(host, effect: fx.id, param: "volume")
+        s.setParam(host, effect: fx.id, param: "volume", value: -60, live: false)
+        s.seek(2)
+        s.setParam(host, effect: fx.id, param: "volume", value: 0, live: false)
+        let keys = s.effect(fx.id, in: host)!.keyframes["volume"]!
+        XCTAssertEqual(keys.map(\.time), [0, 2])
+        XCTAssertEqual(keys.map(\.value), [-60, 0])
+        XCTAssertTrue(s.expandedTracks.contains(s.activeComp!.tracks[0].id), "keyframe rows open automatically")
+        XCTAssertEqual(s.trackLayout(for: s.activeComp!).heights[0], s.trackHeight + TrackLayout.propRowHeight)
+
+        s.selectedKeyframes = [keys[0].id, keys[1].id]
+        s.deleteSelectedKeyframes()
+        let e = s.effect(fx.id, in: host)!
+        XCTAssertFalse(e.isAnimated("volume"))
+        XCTAssertEqual(e.params["volume"], 0, "deleting the last keyframes keeps the last value")
+    }
+
+    func testFadeInFromClipMenu() {
+        let s = store()
+        s.addInstrument(.synth("Sub Bass"))
+        let clip = s.activeComp!.tracks[0].clips[0]
+        s.addFade(clip: clip.id, fadeIn: true)
+        s.addFade(clip: clip.id, fadeIn: false)
+        let fx = s.effects(of: .clip(s.activeCompID, clip.id))
+        XCTAssertEqual(fx.count, 1, "fade in and out share one Volume effect")
+        XCTAssertEqual(fx[0].keyframes["volume"]?.count, 4)
+        XCTAssertEqual(fx[0].keyframes["volume"]?.first?.value, -60)
+    }
+
+    func testSwapInstrumentRenamesAutoNamedPatternAndLayer() {
+        let s = store()
+        s.addInstrument(.synth("Pluck"))
+        let clip = s.activeComp!.tracks[0].clips[0]
+        s.replaceInstrument(ofAsset: clip.assetID, with: .synth("Pad"))
+        XCTAssertEqual(s.project.asset(clip.assetID)?.name, "Pad")
+        XCTAssertEqual(s.activeComp!.tracks[0].name, "Pad")
+        s.replaceInstrument(ofAsset: clip.assetID, with: .kit("trap"))
+        XCTAssertEqual(s.project.asset(clip.assetID)?.name, "Trap 808 Beat")
+
+        s.renameAsset(clip.assetID, to: "My Groove")
+        s.replaceInstrument(ofAsset: clip.assetID, with: .synth("Keys"))
+        XCTAssertEqual(s.project.asset(clip.assetID)?.name, "My Groove", "names you chose are kept")
+    }
+}

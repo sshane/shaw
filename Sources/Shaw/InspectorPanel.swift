@@ -11,6 +11,7 @@ struct InspectorPanel: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
             .padding(.bottom, 30)
         }
         .background(dropTarget ? Theme.accent.opacity(0.07) : Color.clear)
@@ -383,14 +384,7 @@ struct EffectCard: View {
     }
 
     private func row(_ p: ParamDef) -> some View {
-        ParamRow(def: p, value: p.clamp(effect.params[p.id] ?? p.defaultValue),
-                 onChange: { v in
-                     store.updateEffects(host, live: true) { fx in
-                         if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params[p.id] = v }
-                     }
-                 },
-                 onEnd: { store.endGesture() })
-            .padding(.leading, 4)
+        EffectParamRow(host: host, effect: effect, def: p)
     }
 
     private func update(_ f: @escaping (inout Effect) -> Void) {

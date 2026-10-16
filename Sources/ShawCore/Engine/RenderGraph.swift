@@ -33,12 +33,24 @@ protocol SourceNode: AnyObject {
 
 // MARK: - Effects
 
+struct AnimatedParam {
+    let index: Int
+    let keys: [Keyframe]
+    let hold: Bool
+}
+
 final class EffectSlot {
     let processor: EffectProcessor
     let params: [Double]
-    init(processor: EffectProcessor, params: [Double]) {
+    let animated: [AnimatedParam]
+    /// Scratch copy of `params` with keyframed values filled in each block (owned, so no allocation).
+    var live: [Double]
+
+    init(processor: EffectProcessor, params: [Double], animated: [AnimatedParam] = []) {
         self.processor = processor
         self.params = params
+        self.animated = animated
+        self.live = params
     }
 }
 
@@ -47,8 +59,18 @@ final class EffectChain {
     init(_ slots: [EffectSlot]) { self.slots = slots }
     var isEmpty: Bool { slots.isEmpty }
 
-    @inline(__always) func process(_ buf: StereoBuffer, frames: Int, ctx: RenderContext, beat: Double) {
-        for s in slots { s.processor.process(buf, frames: frames, params: s.params, ctx: ctx, beat: beat) }
+    /// - Parameters:
+    ///   - beat: song position (for tempo-synced effects)
+    ///   - time: the host's own time, where its keyframes live (clip time or composition time)
+    @inline(__always) func process(_ buf: StereoBuffer, frames: Int, ctx: RenderContext, beat: Double, time: Double) {
+        for s in slots {
+            if s.animated.isEmpty {
+                s.processor.process(buf, frames: frames, params: s.params, ctx: ctx, beat: beat)
+            } else {
+                for a in s.animated { s.live[a.index] = Keyframe.interpolate(a.keys, at: time, hold: a.hold) }
+                s.processor.process(buf, frames: frames, params: s.live, ctx: ctx, beat: beat)
+            }
+        }
     }
 
     func reset() { for s in slots { s.processor.reset() } }
@@ -128,7 +150,7 @@ final class ClipNode {
             if !source.hasTail && chain.isEmpty { deactivate(); return }
             buf.clear(frames)
             source.renderTail(frames: frames, l: buf.l, r: buf.r, ctx: ctx, songBeat: songBeat)
-            chain.process(buf, frames: frames, ctx: ctx, beat: songBeat)
+            chain.process(buf, frames: frames, ctx: ctx, beat: songBeat, time: b0 - start)
             trackTail(frames, ctx)
             buf.mix(into: out, frames, gainL: gain, gainR: gain)
             return
@@ -172,7 +194,7 @@ final class ClipNode {
             f += n
         }
         if source.isAudio { declickEnd(b0: b0, frames: frames, bps: bps) }
-        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat)
+        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat, time: b0 - start)
         buf.mix(into: out, frames, gainL: gain, gainR: gain)
     }
 
@@ -275,7 +297,7 @@ final class TrackNode {
                 c.render(b0: 0, frames: frames, ctx: ctx, songBeat: songBeat, into: buf, tail: true)
             }
         }
-        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat)
+        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat, time: b0)
         meter?.update(buf, frames)
         buf.mix(into: out, frames, gainL: gainL, gainR: gainR)
     }
@@ -364,7 +386,7 @@ final class CompNode: SourceNode {
             t.render(b0: beat, frames: frames, ctx: ctx, songBeat: songBeat, into: buf, tail: tail)
         }
         // Composition effects run after everything inside it, like an adjustment on a precomp.
-        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat)
+        chain.process(buf, frames: frames, ctx: ctx, beat: songBeat, time: beat)
         meter?.update(buf, frames)
         return buf
     }

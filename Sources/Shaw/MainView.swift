@@ -25,7 +25,7 @@ struct MainView: View {
                 .frame(minWidth: 480)
                 .layoutPriority(1)
                 if store.workspace.showRight {
-                    PanelSlotView(slot: .right).frame(minWidth: 240, idealWidth: 290, maxWidth: 480)
+                    PanelSlotView(slot: .right).frame(minWidth: 280, idealWidth: 310, maxWidth: 480)
                 }
             }
         }

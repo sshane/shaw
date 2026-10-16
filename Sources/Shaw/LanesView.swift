@@ -21,6 +21,7 @@ struct LanesView: View {
     var body: some View {
         let zoom = CGFloat(store.zoom)
         let th = store.trackHeight
+        let layout = store.trackLayout(for: comp)
         let visible0 = Double(scrollX / zoom), visible1 = Double((scrollX + size.width) / zoom)
         // Flattened so a clip keeps its identity (and drag state) while moving between tracks.
         let placed = comp.tracks.enumerated().flatMap { ti, t in t.clips.map { PlacedClip(clip: $0, trackIndex: ti) } }
@@ -28,22 +29,33 @@ struct LanesView: View {
             .filter { ($0.clip.end >= visible0 && $0.clip.start <= visible1) || store.selectedClips.contains($0.clip.id) }
 
         ZStack(alignment: .topLeading) {
-            LaneBackground(comp: comp, scrollX: scrollX, scrollY: scrollY)
-                .gesture(backgroundGesture(zoom: zoom, th: th))
+            LaneBackground(comp: comp, layout: layout, scrollX: scrollX, scrollY: scrollY)
+                .gesture(backgroundGesture(zoom: zoom, layout: layout))
             ForEach(placed) { pc in
                 let x = CGFloat(pc.clip.start) * zoom - scrollX
-                let y = CGFloat(pc.trackIndex) * th - scrollY
-                ClipView(clip: pc.clip, trackIndex: pc.trackIndex)
+                let y = layout.top(pc.trackIndex) - scrollY
+                ClipView(clip: pc.clip, trackIndex: pc.trackIndex, layout: layout)
                     .frame(width: max(4, CGFloat(pc.clip.length) * zoom), height: th - 3)
                     .offset(x: x, y: y + 1)
             }
+            // Keyframe rows (◆) under layers that are twirled open.
+            ForEach(Array(layout.props.enumerated()), id: \.offset) { ti, props in
+                ForEach(Array(props.enumerated()), id: \.element.id) { j, prop in
+                    let y = layout.top(ti) + th + CGFloat(j) * TrackLayout.propRowHeight - scrollY
+                    if y + TrackLayout.propRowHeight >= 0 && y <= size.height {
+                        KeyframeLane(prop: prop, scrollX: scrollX, width: size.width)
+                            .frame(width: size.width, height: TrackLayout.propRowHeight)
+                            .offset(y: y)
+                    }
+                }
+            }
             if let p = dropPoint {
                 let beat = store.snapBeat(Double((p.x + scrollX) / zoom))
-                let ti = Int((p.y + scrollY) / th)
+                let ti = layout.index(atY: p.y + scrollY) ?? comp.tracks.count
                 Rectangle().fill(Theme.accent.opacity(0.3))
                     .overlay(Rectangle().stroke(Theme.accent, lineWidth: 1))
                     .frame(width: max(8, CGFloat(store.project.beatsPerBar) * zoom), height: th - 3)
-                    .offset(x: CGFloat(beat) * zoom - scrollX, y: CGFloat(min(ti, comp.tracks.count)) * th - scrollY + 1)
+                    .offset(x: CGFloat(beat) * zoom - scrollX, y: layout.top(ti) - scrollY + 1)
                     .allowsHitTesting(false)
             }
             if let m = marquee {
@@ -76,8 +88,8 @@ struct LanesView: View {
     }
 
     private func trackID(atY y: CGFloat) -> UUID? {
-        let ti = Int((y + scrollY) / store.trackHeight)
-        return ti >= 0 && ti < comp.tracks.count ? comp.tracks[ti].id : nil
+        guard let ti = store.trackLayout(for: comp).index(atY: y + scrollY) else { return nil }
+        return comp.tracks[ti].id
     }
 
     private func handleDrop(_ payload: DragPayload, at loc: CGPoint) -> Bool {
@@ -100,7 +112,7 @@ struct LanesView: View {
         return true
     }
 
-    private func backgroundGesture(zoom: CGFloat, th: CGFloat) -> some Gesture {
+    private func backgroundGesture(zoom: CGFloat, layout: TrackLayout) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { g in
                 store.focus = .timeline
@@ -110,7 +122,7 @@ struct LanesView: View {
                 marquee = r
                 // Select clips intersecting the rubber band.
                 let b0 = Double((r.minX + scrollX) / zoom), b1 = Double((r.maxX + scrollX) / zoom)
-                let t0 = Int((r.minY + scrollY) / th), t1 = Int((r.maxY + scrollY) / th)
+                let t0 = layout.index(atY: r.minY + scrollY) ?? 0, t1 = layout.index(atY: r.maxY + scrollY) ?? comp.tracks.count
                 var sel: Set<UUID> = []
                 for (ti, t) in comp.tracks.enumerated() where ti >= t0 && ti <= t1 {
                     for c in t.clips where c.end > b0 && c.start < b1 { sel.insert(c.id) }
@@ -132,6 +144,7 @@ struct LanesView: View {
                 }
                 lastClick = now
                 store.selectedClips = []
+                store.selectedKeyframes = []
                 store.inspector = .composition(store.activeCompID)
                 store.seek(store.snapBeat(beat, disable: NSEvent.modifierFlags.contains(.command)))
             }
@@ -141,6 +154,7 @@ struct LanesView: View {
 struct LaneBackground: View {
     @Environment(Store.self) private var store
     let comp: Composition
+    let layout: TrackLayout
     let scrollX: CGFloat
     let scrollY: CGFloat
 
@@ -152,10 +166,14 @@ struct LaneBackground: View {
         Canvas { ctx, size in
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.bg))
             for i in comp.tracks.indices {
-                let y = CGFloat(i) * th - scrollY
-                guard y + th >= 0 && y <= size.height else { continue }
+                let y = layout.top(i) - scrollY, h = layout.heights[i]
+                guard y + h >= 0 && y <= size.height else { continue }
                 ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: th)), with: .color(i % 2 == 0 ? Theme.lane : Theme.laneAlt))
-                ctx.fill(Path(CGRect(x: 0, y: y + th - 1, width: size.width, height: 1)), with: .color(Theme.border))
+                if h > th {
+                    // Keyframe rows sit on a slightly darker strip under their layer.
+                    ctx.fill(Path(CGRect(x: 0, y: y + th, width: size.width, height: h - th)), with: .color(Color.black.opacity(0.22)))
+                }
+                ctx.fill(Path(CGRect(x: 0, y: y + h - 1, width: size.width, height: 1)), with: .color(Theme.border))
             }
             // Loop region tint (hidden until there's something to loop).
             if store.loopEnabled && !comp.tracks.allSatisfy({ $0.clips.isEmpty }) {
@@ -193,6 +211,7 @@ struct ClipView: View {
     @Environment(Store.self) private var store
     let clip: Clip
     let trackIndex: Int
+    var layout: TrackLayout?
 
     private enum Mode { case move, trimLeft, trimRight }
     private struct DragInfo {
@@ -368,7 +387,12 @@ struct ClipView: View {
         switch d.mode {
         case .move:
             let newStart = store.snapBeat(d.clip.start + dx, disable: free)
-            let dt = Int((g.translation.height / store.trackHeight).rounded())
+            var dt = Int((g.translation.height / store.trackHeight).rounded())
+            if let layout {
+                // Layers can be taller when their keyframe rows are open: find the layer under the pointer.
+                let y = layout.top(trackIndex) + store.trackHeight / 2 + g.translation.height
+                dt = (layout.index(atY: y) ?? (y < 0 ? 0 : layout.tops.count - 1)) - trackIndex
+            }
             store.moveClips(d.origin, ids: d.ids, deltaBeats: newStart - d.clip.start, deltaTracks: dt)
         case .trimRight:
             let loop = mods.contains(.option)
@@ -406,6 +430,9 @@ struct ClipView: View {
         Button("Make Unique") { store.makeUnique(clip.id) }
         Button("Split at Playhead") { select(); store.splitSelectedClips(at: store.transport.position) }
         Button("Pre-compose") { select(); store.precomposeSelection() }
+        Divider()
+        Button("Fade In") { store.addFade(clip: clip.id, fadeIn: true) }
+        Button("Fade Out") { store.addFade(clip: clip.id, fadeIn: false) }
         Divider()
         Toggle("Loop Past End", isOn: Binding(get: { clip.loops }, set: { v in store.updateClip(clip.id) { $0.loops = v } }))
         Toggle("Mute Clip", isOn: Binding(get: { clip.mute }, set: { v in store.updateClip(clip.id) { $0.mute = v } }))
