@@ -22,7 +22,7 @@ Shaw is a music app for Macs running macOS 14 (Sonoma) or newer. It works on App
 
 1. Drag Shaw.app into your Applications folder.
 2. Double-click it. macOS says it can't check the developer because Shaw isn't from the App Store. Click Done.
-3. Open System Settings, go to Privacy & Security, scroll down and click "Open Anyway" next to the message about Shaw. Confirm with your password.
+3. Open System Settings, go to Privacy & Security, scroll down, and click "Open Anyway" next to the message about Shaw. Confirm with your password.
 
 You only do this once. Everything Shaw needs is inside the app.
 TXT

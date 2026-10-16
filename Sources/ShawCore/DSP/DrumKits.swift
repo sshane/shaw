@@ -61,10 +61,10 @@ public enum DrumKits {
     ]
 
     public static let kits: [DrumKitInfo] = [
-        DrumKitInfo(id: "trap", name: "Trap 808", summary: "Long boomy 808 kick, crisp snare and tight hats"),
+        DrumKitInfo(id: "trap", name: "Trap 808", summary: "Long boomy 808 kick, crisp snare, and tight hats"),
         DrumKitInfo(id: "house", name: "House 909", summary: "Punchy four-on-the-floor kick and bright hats"),
         DrumKitInfo(id: "boombap", name: "Boom Bap", summary: "Dusty, round hip-hop drums"),
-        DrumKitInfo(id: "lofi", name: "Lo-Fi", summary: "Crunchy, filtered and bit-reduced"),
+        DrumKitInfo(id: "lofi", name: "Lo-Fi", summary: "Crunchy, filtered, and bit-reduced"),
         DrumKitInfo(id: "techno", name: "Techno", summary: "Hard, distorted industrial kit"),
     ]
 

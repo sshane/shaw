@@ -23,7 +23,7 @@ struct ProjectPanel: View {
                     Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                .help("New composition, pattern, beat, folder or import")
+                .help("New composition, pattern, beat, folder, or import")
             }
             .padding(.horizontal, 8).frame(height: 26)
             .background(Color.black.opacity(0.15))

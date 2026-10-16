@@ -143,7 +143,7 @@ struct SlotCell: View {
                         }
                         lastClick = now
                     }
-                    .help("Drop a pattern, beat, composition or audio here. Double-click to draw a new pattern.")
+                    .help("Drop a pattern, beat, composition, or audio here. Double-click to draw a new pattern.")
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 3).stroke(target ? Theme.accent : Color.clear, lineWidth: 2))

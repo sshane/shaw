@@ -67,7 +67,7 @@ struct BrowserPanel: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(disabled)
-                .help(disabled ? "Add an instrument first. Effects go on clips, layers and compositions." : "")
+                .help(disabled ? "Add an instrument first. Effects go on clips, layers, and compositions." : "")
             }
         }
     }
@@ -132,13 +132,13 @@ struct BrowserPanel: View {
 
     private func hostDescription(_ host: EffectHost?) -> String {
         switch host {
-        case .clip?: return "Double-click adds to the selected clip. Or drag onto any clip, track or composition tab."
+        case .clip?: return "Double-click adds to the selected clip. Or drag onto any clip, track, or composition tab."
         case .track(let c, let t)?:
             let name = store.project.composition(c)?.tracks.first { $0.id == t }?.name ?? "track"
-            return "Double-click adds to \(name). Or drag onto any clip, track or composition tab."
+            return "Double-click adds to \(name). Or drag onto any clip, track, or composition tab."
         case .composition(let id)?:
             return "Double-click adds to the whole \(store.project.asset(id)?.name ?? "composition"). Or drag it onto something."
-        case nil: return "Drag onto a clip, track or composition tab."
+        case nil: return "Drag onto a clip, track, or composition tab."
         }
     }
 
