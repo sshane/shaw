@@ -82,7 +82,7 @@ struct ProjectPanel: View {
                     Text(a.name).font(Theme.header).foregroundStyle(Theme.text).lineLimit(1)
                     Text(detail(a)).font(Theme.tiny).foregroundStyle(Theme.textDim).lineLimit(2)
                     let n = store.project.usageCount(of: id)
-                    Text(n == 0 ? "Not used yet" : "Used \(n)× — edits apply everywhere")
+                    Text(n == 0 ? "Not used yet" : "Used \(n)×. Edits change every copy.")
                         .font(Theme.tiny).foregroundStyle(n > 1 ? Theme.accent : Theme.textFaint)
                 }
                 Spacer()

@@ -18,15 +18,13 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 codesign --force --deep --sign - "$APP"
 cat > "$STAGE/How to open Shaw.txt" <<'TXT'
-Shaw — a music app (macOS 14 Sonoma or newer, Apple Silicon or Intel)
+Shaw is a music app for Macs running macOS 14 (Sonoma) or newer. It works on Apple Silicon and Intel.
 
 1. Drag Shaw.app into your Applications folder.
-2. Double-click it. macOS will say it can't verify the developer
-   (it isn't from the App Store) — click Done.
-3. Open System Settings → Privacy & Security, scroll down, and click
-   "Open Anyway" next to the message about Shaw. Confirm with your password.
+2. Double-click it. macOS says it can't check the developer because Shaw isn't from the App Store. Click Done.
+3. Open System Settings, go to Privacy & Security, scroll down and click "Open Anyway" next to the message about Shaw. Confirm with your password.
 
-You only have to do this once. Everything Shaw needs is inside the app.
+You only do this once. Everything Shaw needs is inside the app.
 TXT
 ditto -c -k --keepParent "$APP" build/Shaw.zip
 (cd "$STAGE" && zip -q ../Shaw.zip "How to open Shaw.txt")

@@ -271,7 +271,7 @@ struct ClipView: View {
                 HStack(spacing: 3) {
                     if isComp { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 8)) }
                     Text(asset?.name ?? "Missing").font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                    if uses > 1 { Image(systemName: "link").font(.system(size: 8)).help("Linked — used \(uses) times") }
+                    if uses > 1 { Image(systemName: "link").font(.system(size: 8)).help("Linked: used \(uses) times") }
                     if clip.loops { Image(systemName: "repeat").font(.system(size: 8)) }
                     if !clip.effects.isEmpty { Image(systemName: "fx").font(.system(size: 8)) }
                     if clip.mute { Image(systemName: "speaker.slash.fill").font(.system(size: 8)) }
@@ -497,7 +497,7 @@ struct EmptyTimelineCard: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.accent)
             .controlSize(.large)
-            Text("Pick drums or a synth in the Browser on the left — click to hear it, double-click to add.")
+            Text("Pick drums or a synth in the Browser on the left. Click to hear it, double-click to add it.")
                 .font(Theme.small).foregroundStyle(Theme.textDim)
             if firstEver {
                 Button("Or open the demo song") { store.openDemo() }

@@ -59,7 +59,7 @@ enum DemoProject {
 
     // MARK: The song
 
-    /// "First Light" — A minor house, 124 BPM, 72 bars:
+    /// "First Light": A minor house, 124 BPM, 72 bars.
     /// Intro (8) · Build (8) · Drop (16) · Breakdown (8) · Build (8) · Drop + Lead (16) · Outro (8)
     static func make() -> Project {
         var p = Project(name: "First Light", bpm: 124)

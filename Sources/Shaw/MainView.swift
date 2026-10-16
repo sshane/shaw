@@ -33,7 +33,7 @@ struct MainView: View {
         .sheet(isPresented: Binding(get: { store.showWelcome }, set: { if !$0 { store.dismissWelcome() } })) {
             WelcomeView().environment(store)
         }
-        .navigationTitle(store.project.name + (store.dirty && store.fileURL != nil ? " — Edited" : ""))
+        .navigationTitle(store.project.name + (store.dirty && store.fileURL != nil ? " (Edited)" : ""))
     }
 }
 
@@ -77,7 +77,7 @@ struct PanelSlotView: View {
                 if let a = s.active {
                     panel(a)
                 } else {
-                    Text("Empty panel — use ☰ to add one")
+                    Text("Empty panel. Use ☰ to add one.")
                         .font(Theme.small).foregroundStyle(Theme.textFaint)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -157,7 +157,7 @@ struct TransportBar: View {
                            onChange: { v in store.live { $0.bpm = v } }, onEnd: { store.endGesture() })
                 Text("BPM").font(Theme.tiny).foregroundStyle(Theme.textDim)
             }
-            .help("Tempo — drag or double-click to type")
+            .help("Tempo. Drag it, or double-click to type.")
             Menu {
                 ForEach([2, 3, 4, 5, 6, 7], id: \.self) { n in
                     Button("\(n)/4") { store.edit { $0.beatsPerBar = n } }

@@ -275,7 +275,7 @@ struct TrackHeader: View {
                     Knob(value: track.pan, size: 14,
                          onChange: { v in store.updateTrack(track.id, live: true) { $0.pan = v } },
                          onEnd: { store.endGesture() })
-                        .help("Pan — double-click to center")
+                        .help("Pan. Double-click to center.")
                     TrackMeter(trackID: track.id).frame(width: 40, height: 4)
                 }
             }
@@ -416,7 +416,7 @@ struct RulerView: View {
                         let id = store.activeCompID
                         store.live { $0.updateComposition(id) { $0.length = snapped } }
                     }.onEnded { _ in lengthDrag = nil; store.endGesture() })
-                    .help("Composition end — drag to change duration")
+                    .help("Composition end. Drag it to change the length.")
             }
             .contentShape(Rectangle())
             .onContinuousHover { phase in

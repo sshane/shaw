@@ -1,129 +1,103 @@
 # Shaw
 
-A digital audio workstation for macOS built around **compositions**, the way After Effects and Premiere work, with a piano roll, a step sequencer, and Ableton-style clip launching.
+Shaw is a music app for the Mac that works like After Effects. I came from After Effects and Premiere, so I wanted compositions, linked clips, effects on anything and keyframes, but for making music. It's also as simple as I could make it: you start with one button, and everything else shows up when you need it.
 
-## Build and run
+![Shaw playing the demo song](docs/images/demo-song.png)
 
-Requires macOS 14+ and Xcode (Xcode-beta works; the script picks it up automatically).
+## What's different
+
+- **One timeline.** There's no separate session view. The orange loop bar at the top loops any part of the song, and opening a clip loops it.
+- **Linked clips.** When you duplicate a clip, every copy shares the same notes. Edit one and they all change. Make Unique gives a copy its own notes, and Merge joins clips into one.
+- **Compositions inside compositions.** Pre-compose a few clips and drop the result anywhere like a single clip, just like a precomp.
+- **Effects on anything.** Put effects on a clip, a layer or a whole composition. Copy and paste them with ⌘C and ⌘V.
+- **Keyframes.** Click a setting's stopwatch and change it over time. Diamonds show up under the layer, and you drag them around like in After Effects.
+- **Variations without recording.** Tweak a loop while it plays, then Save Variation keeps that version and gives you a fresh copy right after it. Play them back to back when you're done.
+- **Your keyboard is a piano.** The home row plays notes and Z / X change the octave. On drums, A is the kick and S is the snare.
+
+## Install
+
+Download `Shaw.zip` from the [releases page](../../releases), unzip it and drag Shaw into Applications. It runs on macOS 14 (Sonoma) or newer, on Apple Silicon and Intel.
+
+Shaw isn't signed with an Apple developer account, so macOS blocks it the first time. Open it once, then go to System Settings, Privacy & Security, and click **Open Anyway**.
+
+## Build it yourself
+
+You need Xcode (the beta works too).
 
 ```sh
-scripts/build-app.sh          # release build → build/Shaw.app
+scripts/build-app.sh      # builds build/Shaw.app
 open build/Shaw.app
-swift test                    # engine + editing tests
+scripts/package.sh        # builds a universal build/Shaw.zip to share
+swift test                # runs the tests
 ```
-
-## Sharing it
-
-`scripts/package.sh` builds a universal (Apple Silicon + Intel) app and zips it with short opening instructions into `build/Shaw.zip`. Everything Shaw needs is inside the app. It needs macOS 14 or newer. Because it isn't signed with an Apple Developer ID, the first launch needs System Settings → Privacy & Security → Open Anyway.
-
-## Demo song
-
-Shaw opens with **"First Light"**, a 72-bar A-minor house track at 124 BPM (File → Open Demo Project brings it back). It's arranged from linked sections: **Intro** (also the outro), **Build** (twice), **Drop** (four times), and **Breakdown**. Open any section and change it, and every copy changes. It also shows effects at every level: a filter sweeping the whole Intro composition, sidechain pump inside the Drop, delay and reverb on the lead, and EQ + limiter on Main as a master bus. Session slots are filled too, if you open the optional Session view from a ☰ menu.
-
-## The idea
-
-| After Effects / Premiere | Shaw |
-| --- | --- |
-| Project panel (footage, comps, folders) | **Project** panel — compositions, patterns, beats, audio files, folders |
-| Composition | **Composition** — tracks of clips, its own length and effects |
-| Precomp layer | A composition placed as a clip inside another composition |
-| Layers | **Tracks** — simultaneous lanes you drag clips around on |
-| Effect Controls | **Effect Controls** panel — the effect stack of whatever is selected |
-| Effects & Presets search | **Browser** — search "reverb", drag it onto anything |
-| Pre-compose (⇧⌘C) | Pre-compose (⇧⌘C) |
-| Composition duration | Drag the blue end marker on the ruler |
-
-**Everything is linked.** Clips, session slots and nested compositions all point at the original asset. Edit the "Drop" composition or the "Chords" pattern once and every place it's used changes. Use **Make Unique** (⇧⌘U) on a clip when you want an independent copy.
-
-**Effects stack the way you'd expect.** Clip effects run first, then track effects, then composition effects. A composition's effects apply after everything inside it, exactly like an effect on a precomp layer. Each placement of a composition renders with its own effect state, so two copies of a comp with reverb each ring out independently.
 
 ## Getting started
 
-A new project is empty on purpose. Click **Add an instrument** (or pick one in the Browser's **Instruments** tab: click to hear it, double-click to add). Shaw makes a track with a one-bar pattern, opens it in the piano roll and loops it. Press Space and start adding notes.
+New projects start empty with one button: **Add an instrument**. Pick drums or a synth in the Browser on the left. Click one to hear it, and double-click it to add it. Shaw makes a layer with a one-bar pattern, opens it in the piano roll and loops it. Press Space and start adding notes.
+
+To hear what a full song looks like, open **File → Open Demo Project**. The demo, "First Light", is a 72-bar house track built out of linked Intro, Build, Drop and Breakdown compositions.
+
+![Starting a new project](docs/images/start.png)
 
 ## Editing
 
-**Piano roll** (synths *and* drums: a drum kit shows one row per sound)
-- Double-click to add a note, double-click a note to delete it. Drag empty space to select.
-- Drag notes to move, drag the right edge to resize (⌥← / ⌥→ too), ⌥-drag to copy.
-- ⌘C / ⌘X / ⌘V / ⌘D, arrows to move, ↑/↓ to transpose. **B** toggles draw mode (click to draw).
-- Drum patterns have a **Steps** view: the same notes as an FL Studio-style step grid.
-- While paused, notes sound as you add them or drag them up and down (never while playing). The headphones button turns this off.
-- Piano keys show their note name while you hover them or play them on the keyboard.
-
-**Play with your keyboard** — A S D F G H J K L ; ' are white keys, W E T Y U O P black keys, Z / X octave, C / V velocity. Drum kits: A = kick, S = snare, and so on.
-
-**Variations without recording** — while a pattern loops, tweak it, then press **Save Variation** (⇧⌘D). The current version stays put and a copy appears right after it, now looping, ready for the next idea. **Loop All** plays every version in a row.
-
-**Swap an instrument** — drag an instrument onto a clip or into the open piano roll: the notes stay, the sound changes.
-
 **Timeline**
-- Drag a clip to move it (across tracks too). ⌘ while dragging disables snapping.
-- Drag an edge to trim (the cursor and a small grip show when you're on an edge). Past the end of the content is silence (hatched).
-- **Option-drag the right edge to loop** the content past its end. Repeats show notches.
-- Option-drag a clip body to duplicate it. ⌘D duplicates the selection right after itself.
-- Double-click a clip to open it (and loop it). Double-click an empty lane to draw a new pattern there.
-- Drag the top strip of the ruler to set the loop region; click it to toggle looping.
-- Scroll to pan, ⌘/⌥-scroll or pinch to zoom, ⌘0 to fit.
+- Drag a clip to move it. Hold ⌘ to move it off the grid.
+- Drag a clip's edge to trim it. Option-drag the right edge to loop it past its end.
+- ⌘D duplicates a clip right after itself, and the copy stays linked.
+- Double-click a clip to open it. Double-click an empty spot on a layer to draw a new pattern there.
+- Right-click a clip for Fade In, Fade Out, Merge, Make Unique and more.
+- Click a layer's header and press Delete to remove the layer.
 
-**Effects** (After Effects style) — each effect shows its main knobs; **More** reveals the rest, ✕ deletes it.
-- Click an effect's name to select it (⇧/⌘-click for more), ⌘A for all of that layer's effects.
-- ⌘C, then select one or more clips, a track or a composition and ⌘V to paste them all. Delete removes, ⌘D duplicates.
-- Drag an effect's name to reorder it, or onto another clip, track, tab or list to copy it there.
+**Piano roll** (melodies and drums)
+- Double-click to add a note, and double-click a note to delete it.
+- Drag notes to move them, drag their right edge to resize them, and Option-drag to copy them.
+- Drag across empty space to select notes. ⌘C, ⌘X, ⌘V and ⌘D work on the selection.
+- ⌥← and ⌥→ change note length. ↑ and ↓ transpose.
+- Press B to switch to draw mode, where a single click adds a note.
+- Drum patterns can switch to a step grid with the **Steps** button.
 
-**Keyframes** (After Effects style) — click the stopwatch next to any effect setting to keyframe it. From then on, changing the value at the playhead adds or updates a ◆. ◀ ◆ ▶ steps between keyframes or adds/removes one at the playhead.
-- Keyframed settings get rows under their layer in the timeline (twirl the ▸ in the layer header). Drag a ◆ sideways to move it in time (snaps to the grid, ⌘ for free) or up/down to change its value. Double-click a ◆ to type a value, double-click the row to add one, Delete removes selected ◆s.
-- Clip keyframes live in clip time, so they move with the clip. Track keyframes live in composition time.
-- Right-click a clip → **Fade In** / **Fade Out** adds a Volume effect with the keyframes already set.
+**Effects and keyframes**
+- Search the Browser's Effects tab and drag an effect onto a clip, a layer header or a composition tab.
+- Each effect shows its main settings. Click **More** for the rest, or ✕ to delete it.
+- Click an effect's name to select it. ⌘A selects every effect on that layer.
+- Click the stopwatch next to a setting to start keyframing it. Every change at the playhead adds a diamond.
 
-**Loop bar** — the orange bar on top of the ruler. Click it to turn looping on/off, drag its ends to resize, drag the middle to move it, click any empty bar in that strip to loop that bar.
-
-**Merge clips** — select clips on one layer, right-click → **Merge into One Clip** (⌘J). You get one linked clip with every note where it was; the originals go away. It's strict: grayed out (with the reason) for different instruments, compositions or audio, different layers, effects, gain, or keyframes.
-
-**Copy & paste clips** — ⌘C / ⌘V on the timeline pastes linked copies at the playhead. Right-click selects before showing the menu.
-
-**Session view** (optional) — an Ableton-style clip launcher, available from any panel's ☰ menu.
+![Keyframes fading a bass in and out](docs/images/keyframes.png)
 
 ## Shortcuts
 
-| Key | Action |
+| Keys | What they do |
 | --- | --- |
-| Space | Play / stop (returns to where you started) |
-| ⇧⌘D | Save variation |
-| A–' · Z/X · C/V | Play notes · octave · velocity |
+| Space | Play / stop |
 | ⌘L / ⌘K | Loop / metronome |
-| ⌘N / ⌘T | New composition / new track |
+| ⌘N / ⌘T | New composition / new layer |
 | ⇧⌘P / ⇧⌘B | New pattern / new drum pattern |
-| ⌘D / ⌘E | Duplicate / split at playhead |
+| ⌘D / ⇧⌘D | Duplicate / save variation |
+| ⌘E / ⌘J | Split at playhead / merge clips |
 | ⇧⌘C / ⇧⌘U | Pre-compose / make unique |
-| ⇧⌘L | Toggle loop on selected clips |
 | ⌘Z / ⇧⌘Z | Undo / redo |
 | ⌘S / ⇧⌘E | Save / export WAV |
 | ⌘= / ⌘- / ⌘0 | Zoom in / out / fit |
+| A–' · Z/X · C/V | Play notes · octave · velocity |
 
-## What's built in
+## What's inside
 
-- **Shaw Synth** — polyphonic subtractive synth: 2 oscillators, sub, noise, up to 7-voice unison, resonant filter with envelope and key tracking, pitch envelope, mono/legato glide, drive. Presets: Init, Supersaw, Pluck, Pad, Reese Bass, Sub Bass, 808 Bass, Acid, Keys, Lead, Bell, Noise Riser.
-- **Drum kits** (synthesized, no samples to license): Trap 808, House 909, Boom Bap, Lo-Fi, Techno — kick, snare, clap, closed/open hat (choked), toms, rim, perc, crash.
-- **Effects**: Reverb, Delay (tempo-synced, ping-pong), Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter (with synced LFO), Saturator, Bitcrusher, Volume, Utility.
-- Audio import (WAV, AIFF, MP3, M4A…) by dragging from Finder or ⌘I. WAV export of the current composition.
-- Autosave to `~/Library/Application Support/Shaw/`, projects save as `.shaw` (JSON).
+- **Shaw Synth**, a polyphonic synth with two oscillators, a sub, noise, unison, a resonant filter, envelopes, glide and drive. It comes with 12 presets, including Supersaw, Reese Bass, 808 Bass, Acid, Pluck and Pad.
+- **Five drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi and Techno. Shaw generates every sound in code, so there are no samples to download or license.
+- **14 effects**: Reverb, Delay, Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter, Saturator, Bitcrusher, Volume and Utility.
+- Audio import (drag files in from Finder), WAV export, autosave, and projects saved as `.shaw` files.
 
-## Architecture
+## How it works
 
 ```
-Sources/ShawCore/       platform-independent model + audio engine
-  Model/Project.swift   value-type project: assets, compositions, tracks, clips, patterns
-  Engine/GraphBuilder   project snapshot → render graph (state reused by path across edits)
-  Engine/RenderGraph    clip / track / composition / source nodes
-  Engine/AudioEngine    AVAudioEngine host, transport, session launching, preview, export
-  DSP/                  effects, synth, drum synthesis, filters
-Sources/Shaw/           SwiftUI app (Mac UI)
-Tests/                  engine and editing tests
+Sources/ShawCore/   the project model and audio engine (no Mac UI code)
+Sources/Shaw/       the SwiftUI app
+Tests/              engine and editing tests
 ```
 
-The project is plain value types, so undo is a snapshot and the audio thread gets an immutable copy. The engine pulls the whole graph from one render callback. Only the audio host and the UI are Mac-specific, which keeps a later Windows or web port to rewriting those two layers.
+A project is plain data, so undo just keeps snapshots and the audio thread always reads a frozen copy. Every edit rebuilds a small render graph, and each placement of a composition gets its own branch, so two copies of the same composition keep separate reverb tails. Only the audio output and the interface are Mac-specific, which keeps a Windows or web version possible later.
 
-## Roadmap ideas
+## Ideas for later
 
-Keyframes on synth settings and composition effects in the timeline, time-stretch / warping for audio, Audio Unit plugins, MIDI keyboard input, recording, sidechain routing, sample instruments, recording session clips into the timeline, and per-clip fades.
+Keyframes on synth settings, audio time-stretching, Audio Unit plugins, MIDI keyboards and recording.

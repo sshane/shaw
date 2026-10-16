@@ -6,7 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched as a bare executable (swift run) rather than an .app bundle.
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        // Debug snapshot runs stay in the background so they never grab your keyboard.
+        if !Store.isIsolatedLaunch { NSApp.activate(ignoringOtherApps: true) }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -25,6 +26,8 @@ struct ShawApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     KeyRouter.shared.install(store)
+                    // Show the whole song on launch once the window has its size.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.fitRequest += 1 }
                     DebugSnapshot.runIfRequested(store)
                 }
         }
@@ -184,7 +187,7 @@ final class KeyRouter {
                 } else if !store.selectedClips.isEmpty {
                     store.deleteSelectedClips()
                 } else if case .track(let cid, let tid)? = store.inspector, cid == store.activeCompID {
-                    store.deleteTrack(tid) // a selected layer (click its header) — ⌘Z brings it back
+                    store.deleteTrack(tid) // a selected layer (click its header); ⌘Z brings it back
                 } else {
                     return false
                 }

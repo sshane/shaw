@@ -81,7 +81,7 @@ public enum EffectRegistry {
                          keywords: ["redux", "lofi", "lo-fi", "crush", "decimate"],
                          params: BitcrusherFX.params, make: { _ in BitcrusherFX() }),
         EffectDescriptor(id: "volume", name: "Volume", category: "Utility",
-                         summary: "Turn it up or down — keyframe it for fades",
+                         summary: "Turn it up or down. Keyframe it for fades.",
                          keywords: ["gain", "level", "fade", "loudness", "quiet"],
                          params: VolumeFX.params, make: { _ in VolumeFX() }),
         EffectDescriptor(id: "utility", name: "Utility", category: "Utility",

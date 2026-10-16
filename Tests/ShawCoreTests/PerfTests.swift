@@ -23,6 +23,6 @@ final class PerfTests: XCTestCase {
         _ = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: 16, sampleRate: 48000)
         let elapsed = Date().timeIntervalSince(start)
         let audio = 16 * 60 / 120.0
-        print("PERF: rendered \(audio)s of 8x(3-note 7-voice supersaw + reverb + delay) in \(elapsed)s — \(audio / elapsed)x realtime")
+        print("PERF: rendered \(audio)s of 8x(3-note 7-voice supersaw + reverb + delay) in \(elapsed)s, \(audio / elapsed)x realtime")
     }
 }

@@ -132,7 +132,7 @@ struct CompositionInspector: View {
             PropertyRow(label: "Used") {
                 let n = store.project.usageCount(of: compID)
                 Text(compID == store.project.mainCompositionID && n == 0 ? "Main composition" :
-                        (n == 0 ? "Not placed anywhere" : "\(n) place\(n == 1 ? "" : "s") — all linked"))
+                        (n == 0 ? "Not placed anywhere" : "Used in \(n) place\(n == 1 ? "" : "s"), all linked"))
                     .font(Theme.small).foregroundStyle(Theme.textDim)
             }
             Text("Composition effects run after every track and clip inside it, like an After Effects adjustment on a precomp.")

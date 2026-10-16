@@ -168,7 +168,7 @@ struct MiniFader: View {
                 .onEnded { _ in onEnd() }
         )
         .onTapGesture(count: 2) { onChange(0); onEnd() }
-        .help(String(format: "%.1f dB — double-click for 0 dB", value))
+        .help(String(format: "%.1f dB. Double-click for 0 dB.", value))
     }
 }
 

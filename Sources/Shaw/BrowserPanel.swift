@@ -36,7 +36,7 @@ struct BrowserPanel: View {
             }
         }
         .overlay {
-            // When the project is empty, this is the one place to start — make it obvious.
+            // When the project is empty, this is the one place to start, so make it obvious.
             if empty && store.browserTab == .instruments {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(Theme.accent, lineWidth: 2)
@@ -67,7 +67,7 @@ struct BrowserPanel: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(disabled)
-                .help(disabled ? "Add an instrument first — effects go on instruments, tracks and compositions" : "")
+                .help(disabled ? "Add an instrument first. Effects go on clips, layers and compositions." : "")
             }
         }
     }

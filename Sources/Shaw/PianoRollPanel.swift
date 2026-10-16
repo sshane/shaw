@@ -151,7 +151,7 @@ struct PianoRollPanel: View {
                 }
             }
             .menuStyle(.borderlessButton).fixedSize()
-            .help("Change the sound — the notes stay. You can also drag an instrument from the Browser onto the piano roll.")
+            .help("Change the sound and keep the notes. You can also drag an instrument from the Browser onto the piano roll.")
             if p.instrument.isDrumKit {
                 @Bindable var store = store
                 Picker("", selection: $store.drumStepView) {
@@ -419,7 +419,7 @@ struct RollRuler: View {
                     let v = max(1, ((startLen! + Double(g.translation.width / zoom)) ).rounded())
                     store.live { $0.updateNotes(assetID) { $0.length = v } }
                 }.onEnded { _ in startLen = nil; store.endGesture() })
-                .help("Pattern end — drag to change length")
+                .help("Pattern end. Drag it to change the length.")
         }
     }
 }
@@ -558,7 +558,7 @@ struct NoteGrid: View {
         return max(0, floorMode ? floor(b / g) * g : (b / g).rounded() * g)
     }
 
-    /// Held preview while dragging a note — only if auditioning is on and the song is stopped.
+    /// Held preview while dragging a note, only if auditioning is on and the song is stopped.
     private func preview(_ pitch: Int) {
         guard store.auditionNotes, !store.transport.playing, pitch != previewPitch else { return }
         if let p = previewPitch { store.engine.previewNoteOff(p) }

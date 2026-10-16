@@ -77,7 +77,7 @@ extension Store {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.09 + 0.35) { self.engine.previewNoteOff(n) }
             }
         case .kit(let k):
-            // Kick, hat, snare, hat — quick, under half a second.
+            // Kick, hat, snare, hat: quick, under half a second.
             for (i, sound) in ["kick", "chat", "snare", "chat"].enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.11) {
                     self.engine.previewDrum(kit: k, sound: sound, velocity: sound == "chat" ? 0.6 : 0.9)
