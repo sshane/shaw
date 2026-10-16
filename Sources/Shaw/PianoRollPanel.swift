@@ -53,7 +53,12 @@ struct PianoRollPanel: View {
             }
             .onAppear { install(id) }
             .onDisappear { monitor.remove() }
-            .onChange(of: store.pianoRollAsset) { _, _ in scrollY = -1; store.selectedNotes = [] }
+            .onChange(of: store.pianoRollAsset) { _, new in
+                scrollY = -1
+                scrollX = 0
+                store.selectedNotes = []
+                if let new, case .notes(let p)? = store.project.asset(new)?.content { centerIfNeeded(p, gridSize) }
+            }
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "pianokeys").font(.system(size: 28)).foregroundStyle(Theme.textFaint)

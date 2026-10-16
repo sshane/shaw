@@ -45,6 +45,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 @Observable final class TransportModel {
     var playing = false
     var position = 0.0
+    var sessionBeat = 0.0
     var sessions: [UUID: SessionInfo] = [:]
     var masterLevel: Float = 0
 }
@@ -74,6 +75,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var zoom: Double = 15 // pixels per beat
     var snap: SnapSetting = .auto
     var trackHeight: CGFloat = 58
+    /// Bumped to ask the timeline to zoom so the whole composition fits.
+    var fitRequest = 0
+    /// True while the user drags the playhead, so follow-scrolling doesn't fight them.
+    @ObservationIgnored var scrubbing = false
 
     // Transport settings (mirrored into the engine)
     var loopEnabled = false { didSet { syncLoop() } }
@@ -117,6 +122,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         let s = engine.snapshot()
         if transport.playing != s.playing { transport.playing = s.playing }
         if transport.position != s.position { transport.position = s.position }
+        if transport.sessionBeat != s.sessionBeat { transport.sessionBeat = s.sessionBeat }
         if transport.sessions != s.sessions { transport.sessions = s.sessions }
         let lvl = max(engine.masterMeter.peakL, engine.masterMeter.peakR)
         if abs(transport.masterLevel - lvl) > 0.002 { transport.masterLevel = lvl }
@@ -134,6 +140,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     /// Apply a discrete edit (one undo step).
     func edit(_ body: (inout Project) -> Void) {
+        gestureActive = false // a discrete edit always starts a fresh undo step
         let before = project
         body(&project)
         guard project != before else { return }
@@ -228,6 +235,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             activeCompID = id
             selectedClips = []
             refreshEngine()
+            fitRequest += 1
         }
         inspector = .composition(id)
         workspace.reveal(.timeline)
@@ -337,7 +345,14 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     @discardableResult
     func duplicateAsset(_ id: AssetID) -> AssetID? {
-        guard var a = project.asset(id), let idx = project.index(of: id) else { return nil }
+        guard let idx = project.index(of: id), let copy = duplicated(project.assets[idx]) else { return nil }
+        edit { $0.assets.insert(copy, at: idx + 1) }
+        return copy.id
+    }
+
+    /// A copy of an asset with fresh ids (not yet added to the project).
+    private func duplicated(_ original: Asset) -> Asset? {
+        var a = original
         a.id = UUID()
         a.name = project.uniqueName(a.name.replacingOccurrences(of: " copy", with: "") + " copy")
         if case .composition(var c) = a.content {
@@ -348,9 +363,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             }
             a.content = .composition(c)
         }
-        let copy = a
-        edit { $0.assets.insert(copy, at: idx + 1) }
-        return copy.id
+        return a
     }
 
     func deleteAssets(_ ids: Set<AssetID>) {
@@ -566,9 +579,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     /// Give a clip its own copy of its source so edits no longer affect other uses.
     func makeUnique(_ clipID: UUID) {
-        guard let c = clip(clipID), let newID = duplicateAsset(c.assetID) else { return }
-        // duplicateAsset already pushed an undo step; fold the reassignment into the same edit chain.
-        updateClip(clipID) { $0.assetID = newID }
+        guard let c = clip(clipID), let idx = project.index(of: c.assetID), let copy = duplicated(project.assets[idx]) else { return }
+        let cid = activeCompID
+        edit { p in
+            p.assets.insert(copy, at: idx + 1)
+            p.updateComposition(cid) { $0.updateClip(clipID) { $0.assetID = copy.id } }
+        }
     }
 
     /// After Effects "Pre-compose": move selected clips into a new composition and replace them with one clip.
@@ -707,7 +723,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         let len = max(project.sourceLength(of: asset), 0.0001)
         for t in comp.tracks {
             if let s = transport.sessions[t.id], let scene = s.playing, t.slots[scene]?.assetID == asset {
-                return (pos - s.launchBeat).truncatingRemainder(dividingBy: len)
+                return max(0, transport.sessionBeat - s.launchBeat).truncatingRemainder(dividingBy: len)
             }
             for c in t.clips where c.assetID == asset && pos >= c.start && pos < c.end {
                 let src = c.offset + pos - c.start
@@ -765,6 +781,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         engine.seek(0)
         refreshEngine()
         scheduleAutosave()
+        fitRequest += 1
     }
 
     func save() {

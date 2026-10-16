@@ -109,7 +109,9 @@ final class EngineTests: XCTestCase {
             let r = UnsafeMutablePointer<Float>.allocate(capacity: 512); defer { r.deallocate() }
             s.noteOn(48, velocity: 0.9, params: params)
             var energy: Float = 0
-            for _ in 0..<60 {
+            // Slow-attack presets (the riser fades in over seconds) get longer to speak.
+            let blocks = name == "Noise Riser" ? 900 : 60
+            for _ in 0..<blocks {
                 l.initialize(repeating: 0, count: 512); r.initialize(repeating: 0, count: 512)
                 s.render(l, r, frames: 512, params: params)
                 for i in 0..<512 { XCTAssert(l[i].isFinite); energy += l[i] * l[i] }

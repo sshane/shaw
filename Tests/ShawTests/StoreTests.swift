@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 import ShawCore
 @testable import Shaw
@@ -14,6 +15,25 @@ final class StoreTests: XCTestCase {
         let (l, _) = OfflineRenderer.renderToMemory(project: s.project, composition: s.project.mainCompositionID, beats: 24)
         XCTAssertGreaterThan(rms(l), 0.01)
         XCTAssertLessThan(l.map(abs).max() ?? 0, 4)
+    }
+
+    /// Renders the whole demo song and checks each section is audible and nothing clips hard.
+    func testDemoSongMix() {
+        let s = makeStore()
+        let main = s.project.mainCompositionID
+        let (l, r) = OfflineRenderer.renderToMemory(project: s.project, composition: main, beats: 288)
+        let fpb = 48000.0 * 60 / s.project.bpm
+        let sections: [(String, Double, Double)] = [("Intro", 0, 32), ("Build", 32, 64), ("Drop", 64, 128), ("Breakdown", 128, 160),
+                                                     ("Build 2", 160, 192), ("Drop 2", 192, 256), ("Outro", 256, 288)]
+        for (name, b0, b1) in sections {
+            let seg = Array(l[Int(b0 * fpb)..<Int(b1 * fpb)])
+            let rr = Array(r[Int(b0 * fpb)..<Int(b1 * fpb)])
+            let level = 20 * log10(Double(max(rms(seg), 1e-9)))
+            let peak = max(seg.map(abs).max() ?? 0, rr.map(abs).max() ?? 0)
+            print(String(format: "MIX %-10@ rms %6.1f dBFS  peak %.2f", name as NSString, level, peak))
+            XCTAssertGreaterThan(level, -40, "\(name) is nearly silent")
+            XCTAssertLessThan(peak, 1.5, "\(name) clips")
+        }
     }
 
     func testCompositionCannotContainItself() {
@@ -42,10 +62,11 @@ final class StoreTests: XCTestCase {
     func testDuplicateStaysLinked() {
         let s = makeStore()
         let drop = s.activeComp!.tracks[2].clips[0]
+        let before = s.activeComp!.tracks[2].clips.count
         s.selectedClips = [drop.id]
         s.duplicateSelectedClips()
         let copies = s.activeComp!.tracks[2].clips.filter { $0.assetID == drop.assetID }
-        XCTAssertEqual(copies.count, 3)
+        XCTAssertEqual(copies.count, before + 1)
         XCTAssertTrue(copies.contains { $0.start == drop.end })
     }
 
@@ -93,11 +114,12 @@ final class StoreTests: XCTestCase {
 
     func testSplitClip() {
         let s = makeStore()
-        let clip = s.activeComp!.tracks[0].clips[0] // Chords 0..64
+        let clip = s.activeComp!.tracks[0].clips.min { $0.start < $1.start }! // Intro, 0..32
+        let before = s.activeComp!.tracks[0].clips.count
         s.selectedClips = [clip.id]
         s.splitSelectedClips(at: 10)
         let clips = s.activeComp!.tracks[0].clips.sorted { $0.start < $1.start }
-        XCTAssertEqual(clips.count, 2)
+        XCTAssertEqual(clips.count, before + 1)
         XCTAssertEqual(clips[0].length, 10)
         XCTAssertEqual(clips[1].start, 10)
         XCTAssertEqual(clips[1].offset, 10)
@@ -131,5 +153,19 @@ final class StoreTests: XCTestCase {
         let trimmed = clipSegments(offset: 0, length: 10, loops: false, sourceLength: 4)
         XCTAssertEqual(trimmed.count, 2)
         XCTAssertTrue(trimmed[1].empty)
+    }
+}
+
+final class ExportTests: XCTestCase {
+    func testExportDemoSongToWav() throws {
+        let p = DemoProject.make()
+        let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] ?? NSTemporaryDirectory()
+        let url = URL(fileURLWithPath: dir).appendingPathComponent("First Light.wav")
+        try? FileManager.default.removeItem(at: url)
+        try OfflineRenderer.export(project: p, composition: p.mainCompositionID, to: url)
+        let file = try AVAudioFile(forReading: url)
+        let seconds = Double(file.length) / file.fileFormat.sampleRate
+        XCTAssertEqual(seconds, 288 * 60 / p.bpm + 2, accuracy: 0.05)
+        XCTAssertEqual(file.fileFormat.channelCount, 2)
     }
 }

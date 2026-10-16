@@ -24,7 +24,8 @@ struct LanesView: View {
         let visible0 = Double(scrollX / zoom), visible1 = Double((scrollX + size.width) / zoom)
         // Flattened so a clip keeps its identity (and drag state) while moving between tracks.
         let placed = comp.tracks.enumerated().flatMap { ti, t in t.clips.map { PlacedClip(clip: $0, trackIndex: ti) } }
-            .filter { $0.clip.end >= visible0 && $0.clip.start <= visible1 }
+            // Selected clips stay mounted even off-screen so an in-progress drag is never torn down.
+            .filter { ($0.clip.end >= visible0 && $0.clip.start <= visible1) || store.selectedClips.contains($0.clip.id) }
 
         ZStack(alignment: .topLeading) {
             LaneBackground(comp: comp, scrollX: scrollX, scrollY: scrollY)
@@ -365,7 +366,8 @@ struct ClipView: View {
         guard let d = drag, hypot(g.translation.width, g.translation.height) >= 2 || d.mode != .move else { return }
         let free = mods.contains(.command)
         let dx = Double(g.translation.width) / store.zoom
-        let minLen = max(store.gridBeats(), 1.0 / 16)
+        // Never force a short clip to grow just because the grid is coarse.
+        let minLen = free ? 1.0 / 64 : min(max(store.gridBeats(), 1.0 / 16), d.clip.length)
         let L = store.project.sourceLength(of: d.clip.assetID)
         switch d.mode {
         case .move:

@@ -17,11 +17,11 @@ public enum SynthParams {
         ParamDef("resonance", "Resonance", 0, 1, 0.15, .percent),
         ParamDef("fenv", "Filter Env", -1, 1, 0.3, .percent),
         ParamDef("keytrack", "Key Track", 0, 1, 0.3, .percent),
-        ParamDef("a", "Attack", 0.001, 5, 0.004, .seconds, .log),
+        ParamDef("a", "Attack", 0.001, 10, 0.004, .seconds, .log),
         ParamDef("d", "Decay", 0.005, 5, 0.3, .seconds, .log),
         ParamDef("s", "Sustain", 0, 1, 0.75, .percent),
         ParamDef("r", "Release", 0.005, 8, 0.25, .seconds, .log),
-        ParamDef("fa", "Filter Attack", 0.001, 5, 0.004, .seconds, .log),
+        ParamDef("fa", "Filter Attack", 0.001, 10, 0.004, .seconds, .log),
         ParamDef("fd", "Filter Decay", 0.005, 5, 0.35, .seconds, .log),
         ParamDef("fs", "Filter Sustain", 0, 1, 0.3, .percent),
         ParamDef("fr", "Filter Release", 0.005, 8, 0.3, .seconds, .log),
@@ -31,6 +31,7 @@ public enum SynthParams {
         ParamDef("glide", "Glide", 0, 1, 0, .seconds),
         ParamDef("drive", "Drive", 0, 1, 0, .percent),
         ParamDef("volume", "Volume", -36, 6, -8, .db),
+        ParamDef("osclevel", "Osc Level", 0, 1, 1, .percent),
     ]
 
     static let index: [String: Int] = Dictionary(uniqueKeysWithValues: defs.enumerated().map { ($1.id, $0) })
@@ -38,15 +39,15 @@ public enum SynthParams {
     // Indices into the resolved parameter array.
     static let osc1 = 0, osc2 = 1, semi2 = 2, fine2 = 3, mix = 4, sub = 5, noise = 6, unison = 7, spread = 8
     static let cutoff = 9, res = 10, fenv = 11, keytrack = 12, a = 13, d = 14, s = 15, r = 16
-    static let fa = 17, fd = 18, fs = 19, fr = 20, penv = 21, pdecay = 22, mode = 23, glide = 24, drive = 25, volume = 26
+    static let fa = 17, fd = 18, fs = 19, fr = 20, penv = 21, pdecay = 22, mode = 23, glide = 24, drive = 25, volume = 26, oscLevel = 27
 }
 
 public enum SynthPresets {
-    public static let names = ["Init", "Supersaw", "Pluck", "Pad", "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Keys", "Lead", "Bell"]
+    public static let names = ["Init", "Supersaw", "Pluck", "Pad", "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Keys", "Lead", "Bell", "Noise Riser"]
 
     public static let categories: [String: String] = [
         "Init": "Synth", "Supersaw": "Lead", "Pluck": "Pluck", "Pad": "Pad", "Reese Bass": "Bass",
-        "Sub Bass": "Bass", "808 Bass": "Bass", "Acid": "Bass", "Keys": "Keys", "Lead": "Lead", "Bell": "Keys",
+        "Sub Bass": "Bass", "808 Bass": "Bass", "Acid": "Bass", "Keys": "Keys", "Lead": "Lead", "Bell": "Keys", "Noise Riser": "FX",
     ]
 
     static let overrides: [String: [String: Double]] = [
@@ -60,6 +61,9 @@ public enum SynthPresets {
         "Acid": ["osc1": 2, "mix": 0, "cutoff": 400, "resonance": 0.85, "fenv": 0.75, "fd": 0.22, "fs": 0.05, "mode": 2, "glide": 0.06, "s": 0.9, "r": 0.08, "drive": 0.4, "keytrack": 0.5, "volume": -10],
         "Keys": ["osc1": 1, "osc2": 0, "semi2": 12, "mix": 0.3, "cutoff": 3000, "fenv": 0.3, "fd": 0.6, "d": 1.4, "s": 0.35, "r": 0.5, "volume": -8],
         "Lead": ["osc1": 3, "osc2": 2, "fine2": 9, "cutoff": 4500, "resonance": 0.3, "fenv": 0.2, "mode": 2, "glide": 0.05, "s": 0.9, "r": 0.2, "drive": 0.2, "volume": -10],
+        // White noise whose filter opens over ~8 seconds: hold one long note for a build-up.
+        "Noise Riser": ["osclevel": 0, "noise": 1, "cutoff": 220, "resonance": 0.35, "fenv": 0.78, "keytrack": 0,
+                        "fa": 7.5, "fd": 2, "fs": 1, "fr": 0.8, "a": 6, "d": 1, "s": 1, "r": 0.6, "volume": -16],
         "Bell": ["osc1": 0, "osc2": 1, "semi2": 19, "fine2": 0, "mix": 0.45, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 2.5, "s": 0, "r": 2, "volume": -10],
     ]
 
@@ -257,7 +261,7 @@ public final class Synth {
     }
 
     public func allNotesOff() {
-        heldStack.removeAll()
+        heldStack.removeAll(keepingCapacity: true)
         for i in voices.indices where voices[i].isActive {
             voices[i].held = false
             voices[i].amp.gate(on: false)
@@ -266,7 +270,7 @@ public final class Synth {
     }
 
     public func reset() {
-        heldStack.removeAll()
+        heldStack.removeAll(keepingCapacity: true)
         for i in voices.indices {
             voices[i].amp = ADSR()
             voices[i].fenv = ADSR()
@@ -304,7 +308,7 @@ public final class Synth {
         let driveGain = Float(1 + drive * 8), driveComp = 1 / Float(1 + drive * 2.5)
         let vol = Float(dbToGain(p[SynthParams.volume]))
         let srF = Float(sr)
-        let uniNorm = 1 / sqrt(Double(uniCount))
+        let uniNorm = 1 / sqrt(Double(uniCount)) * p[SynthParams.oscLevel]
         // Unison detune is constant for the block; precompute instead of calling pow() per sample.
         var detunes = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         var ratios = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
@@ -349,7 +353,7 @@ public final class Synth {
                 }
                 sl *= uniNorm; sr2 *= uniNorm
                 if sub > 0 {
-                    let s = sin(2 * .pi * v.phSub) * sub
+                    let s = sin(2 * .pi * v.phSub) * sub * p[SynthParams.oscLevel]
                     v.phSub += f0 * 0.5 / sr; if v.phSub >= 1 { v.phSub -= 1 }
                     sl += s; sr2 += s
                 }

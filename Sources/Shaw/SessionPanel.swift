@@ -168,7 +168,7 @@ struct SlotProgress: View {
 
     var body: some View {
         let len = max(store.project.sourceLength(of: assetID), 0.001)
-        let pos = store.transport.position - launchBeat
+        let pos = store.transport.sessionBeat - launchBeat
         let n = pos < 0 ? 0 : pos.truncatingRemainder(dividingBy: len) / len
         GeometryReader { g in
             Rectangle().fill(Color.black.opacity(0.45)).frame(width: g.size.width * n, height: 3)

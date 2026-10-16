@@ -197,14 +197,22 @@ final class ClipNode {
 
 // MARK: - Session (clip launcher)
 
+/// Monotonic beat counter for session clips. Unlike the transport position it
+/// never jumps on loop wraps or seeks, so launched clips stay in phase.
+public final class SessionClock {
+    public var beat = 0.0
+    public init() {}
+}
+
 /// Launch state for one track's session slots. Mutated on the main thread
-/// only while holding the engine's render lock.
+/// only while holding the engine's render lock. Beats are on the session clock.
 public final class SessionTrackState {
     public var playing: Int?        // scene index
     public var launchBeat: Double = 0
     public var queued: Int?         // scene index, or -1 = stop
     public var queuedBeat: Double = 0
-    public init() {}
+    let clock: SessionClock
+    public init(clock: SessionClock) { self.clock = clock }
 
     public var isActive: Bool { playing != nil || (queued ?? -1) >= 0 }
 }
@@ -246,7 +254,7 @@ final class TrackNode {
         let buf = state.buffer
         buf.clear(frames)
         if let s = session, !tail, s.isActive || s.queued != nil {
-            renderSession(s, b0: b0, frames: frames, ctx: ctx, songBeat: songBeat, into: buf)
+            renderSession(s, frames: frames, ctx: ctx, songBeat: songBeat, into: buf)
             // Arrangement clips that are still ringing out keep their tails.
             for c in clips where c.state.active {
                 c.render(b0: b0, frames: frames, ctx: ctx, songBeat: songBeat, into: buf, tail: true)
@@ -264,12 +272,14 @@ final class TrackNode {
         buf.mix(into: out, frames, gainL: gainL, gainR: gainR)
     }
 
-    private func renderSession(_ s: SessionTrackState, b0: Double, frames: Int, ctx: RenderContext, songBeat: Double,
+    private func renderSession(_ s: SessionTrackState, frames: Int, ctx: RenderContext, songBeat: Double,
                                into buf: StereoBuffer) {
         let bps = ctx.beatsPerSample
+        // The slot was removed (or its asset deleted) while playing.
+        if let p = s.playing, slots[p] == nil { s.playing = nil }
         var f = 0
         while f < frames {
-            let b = b0 + Double(f) * bps
+            let b = s.clock.beat + Double(f) * bps
             var n = frames - f
             if let q = s.queued {
                 let qf = Int(((s.queuedBeat - b) / bps).rounded(.up))

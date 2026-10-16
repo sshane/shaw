@@ -108,6 +108,7 @@ struct FolderRow: View {
     @State private var target = false
     @State private var renaming = false
     @State private var text = ""
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         HStack(spacing: 4) {
@@ -115,7 +116,11 @@ struct FolderRow: View {
             Image(systemName: "folder.fill").font(.system(size: 11)).foregroundStyle(Theme.textDim)
             if renaming {
                 TextField("", text: $text).textFieldStyle(.plain).font(Theme.small)
+                    .focused($nameFocused)
+                    .onAppear { nameFocused = true }
                     .onSubmit { commit() }
+                    .onExitCommand { renaming = false }
+                    .onChange(of: nameFocused) { _, f in if !f && renaming { commit() } }
             } else {
                 Text(folder.name).font(Theme.small).foregroundStyle(Theme.text)
             }

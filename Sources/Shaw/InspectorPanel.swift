@@ -105,7 +105,8 @@ struct CompositionInspector: View {
             }
             PropertyRow(label: "Used") {
                 let n = store.project.usageCount(of: compID)
-                Text(n == 0 ? "Not placed anywhere" : "\(n) place\(n == 1 ? "" : "s") — all linked")
+                Text(compID == store.project.mainCompositionID && n == 0 ? "Main composition" :
+                        (n == 0 ? "Not placed anywhere" : "\(n) place\(n == 1 ? "" : "s") — all linked"))
                     .font(Theme.small).foregroundStyle(Theme.textDim)
             }
             Text("Composition effects run after every track and clip inside it, like an After Effects adjustment on a precomp.")
@@ -321,7 +322,7 @@ struct InstrumentInspector: View {
     let assetID: AssetID
 
     static let groups: [(String, [String])] = [
-        ("Oscillators", ["osc1", "osc2", "semi2", "fine2", "mix", "sub", "noise", "unison", "spread"]),
+        ("Oscillators", ["osc1", "osc2", "semi2", "fine2", "mix", "osclevel", "sub", "noise", "unison", "spread"]),
         ("Filter", ["cutoff", "resonance", "fenv", "keytrack"]),
         ("Amp Envelope", ["a", "d", "s", "r"]),
         ("Filter Envelope", ["fa", "fd", "fs", "fr"]),

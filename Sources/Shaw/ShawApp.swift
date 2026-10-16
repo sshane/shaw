@@ -90,6 +90,7 @@ struct ShawCommands: Commands {
             Button("Switch Timeline / Session") { KeyRouter.shared.toggleMainView() }
             Button("Zoom In") { store.zoom = min(400, store.zoom * 1.25) }.keyboardShortcut("=")
             Button("Zoom Out") { store.zoom = max(2, store.zoom / 1.25) }.keyboardShortcut("-")
+            Button("Zoom to Fit") { store.fitRequest += 1 }.keyboardShortcut("0")
             Divider()
             Button(store.workspace.showLeft ? "Hide Left Panels" : "Show Left Panels") { store.workspace.showLeft.toggle() }
             Button(store.workspace.showBottom ? "Hide Bottom Panel" : "Show Bottom Panel") { store.workspace.showBottom.toggle() }
@@ -150,7 +151,8 @@ final class KeyRouter {
         case 51, 117: // delete, forward delete
             switch store.focus {
             case .project: store.deleteAssets(store.selectedAssets)
-            default: store.deleteSelectedClips()
+            case .timeline: store.deleteSelectedClips()
+            default: return false // never delete hidden timeline clips from another panel
             }
             return true
         case 48: // tab

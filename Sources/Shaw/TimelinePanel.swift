@@ -28,7 +28,7 @@ struct TimelinePanel: View {
                             .frame(height: Self.rulerHeight)
                         GeometryReader { geo in
                             LanesView(comp: comp, scrollX: scrollX, scrollY: scrollY, size: geo.size)
-                                .onAppear { lanesSize = geo.size }
+                                .onAppear { lanesSize = geo.size; fit() }
                                 .onChange(of: geo.size) { _, s in lanesSize = s }
                         }
                     }
@@ -44,6 +44,14 @@ struct TimelinePanel: View {
         .onAppear(perform: installScroll)
         .onDisappear { monitor.remove() }
         .onChange(of: store.activeCompID) { _, _ in scrollX = 0; scrollY = 0 }
+        .onChange(of: store.fitRequest) { _, _ in fit() }
+    }
+
+    /// Zoom so the whole composition is visible.
+    private func fit() {
+        guard let comp = store.activeComp, lanesSize.width > 50 else { return }
+        store.zoom = min(60, max(2, Double(lanesSize.width - 20) / max(comp.length, 4)))
+        scrollX = 0
     }
 
     private func contentWidth(_ comp: Composition) -> CGFloat {
@@ -185,6 +193,7 @@ struct TrackHeader: View {
     @State private var renaming = false
     @State private var text = ""
     @State private var target = false
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         let selected = store.inspector == .track(store.activeCompID, track.id)
@@ -194,8 +203,11 @@ struct TrackHeader: View {
                 HStack(spacing: 4) {
                     if renaming {
                         TextField("", text: $text).textFieldStyle(.plain).font(Theme.small)
+                            .focused($nameFocused)
+                            .onAppear { nameFocused = true }
                             .onSubmit { commitRename() }
                             .onExitCommand { renaming = false }
+                            .onChange(of: nameFocused) { _, f in if !f && renaming { commitRename() } }
                     } else {
                         Text(track.name).font(Theme.small).foregroundStyle(Theme.text).lineLimit(1)
                             .onTapGesture(count: 2) { text = track.name; renaming = true }
@@ -394,10 +406,12 @@ struct RulerView: View {
                         }
                     }
                 } else {
+                    store.scrubbing = true
                     store.seek(store.snapBeat(beat, disable: NSEvent.modifierFlags.contains(.command)))
                 }
             }
             .onEnded { g in
+                store.scrubbing = false
                 if g.startLocation.y < 12, let d = loopDrag, d.mode != 0, abs(g.translation.width) < 2 {
                     store.loopEnabled.toggle() // click the brace to toggle looping
                 }
@@ -431,7 +445,7 @@ struct PlayheadLine: View {
         }
         .onChange(of: store.transport.position) { _, pos in
             // Follow the playhead while playing.
-            guard store.transport.playing, width > 50 else { return }
+            guard store.transport.playing, !store.scrubbing, width > 50 else { return }
             let px = CGFloat(pos * store.zoom) - scrollX
             if px > width * 0.92 || px < 0 { scrollX = max(0, CGFloat(pos * store.zoom) - width * 0.08) }
         }

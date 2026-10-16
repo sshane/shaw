@@ -5,6 +5,8 @@ import os
 public struct TransportSnapshot {
     public var playing: Bool
     public var position: Double
+    /// Session clock (see `SessionClock`); session launch beats are on this clock.
+    public var sessionBeat: Double
     public var sessions: [UUID: SessionInfo]
 }
 
@@ -45,6 +47,7 @@ public final class AudioEngine {
     private var masterGain: Float = 1
     private var idleFrames = Int.max
     private var sessionList: [SessionTrackState] = []
+    private let sessionClock = SessionClock()
     private var clickFrames = 0
     private var clickFreq = 1000.0
     private var clickPhase = 0.0
@@ -124,7 +127,7 @@ public final class AudioEngine {
         guard let comp = project.composition(root) else { return }
         for t in comp.tracks {
             if meters[t.id] == nil { meters[t.id] = LevelMeter() }
-            if sessions[t.id] == nil { sessions[t.id] = SessionTrackState() }
+            if sessions[t.id] == nil { sessions[t.id] = SessionTrackState(clock: sessionClock) }
         }
         let old = locked { graph?.states ?? [:] }
         var builder = GraphBuilder(project: project, sampleRate: sampleRate, previous: old, samples: SampleLibrary.shared,
@@ -158,6 +161,7 @@ public final class AudioEngine {
             playStart = position
             playing = true
             idleFrames = 0
+            sessionClock.beat = position
         }
     }
 
@@ -195,7 +199,7 @@ public final class AudioEngine {
             for (id, s) in sessions where s.playing != nil || s.queued != nil {
                 info[id] = SessionInfo(playing: s.playing, queued: s.queued, launchBeat: s.launchBeat)
             }
-            return TransportSnapshot(playing: playing, position: position, sessions: info)
+            return TransportSnapshot(playing: playing, position: position, sessionBeat: sessionClock.beat, sessions: info)
         }
     }
 
@@ -208,31 +212,44 @@ public final class AudioEngine {
 
     public func launch(track: UUID, scene: Int) {
         guard let s = sessions[track] else { return }
-        locked { launchLocked(s, scene) }
+        locked {
+            let wasPlaying = startForSessionLocked()
+            launchLocked(s, scene, immediately: !wasPlaying)
+        }
     }
 
-    private func launchLocked(_ s: SessionTrackState, _ scene: Int) {
-        if !playing {
-            playing = true
-            playStart = position
-            idleFrames = 0
+    /// Starts the transport if needed. Returns whether it was already playing.
+    private func startForSessionLocked() -> Bool {
+        if playing { return true }
+        playing = true
+        playStart = position
+        idleFrames = 0
+        sessionClock.beat = position
+        return false
+    }
+
+    private func launchLocked(_ s: SessionTrackState, _ scene: Int, immediately: Bool) {
+        if immediately {
+            if let p = s.playing, p != scene { s.queued = scene; s.queuedBeat = sessionClock.beat; return }
             s.playing = scene
-            s.launchBeat = position
+            s.launchBeat = sessionClock.beat
             s.queued = nil
         } else {
             s.queued = scene
-            s.queuedBeat = nextBar(after: position)
+            s.queuedBeat = nextBar(after: sessionClock.beat)
         }
     }
 
     public func launchScene(_ scene: Int, tracks: [UUID: Bool]) {
         // `tracks` maps each track in the composition to whether it has a clip in this scene.
         locked {
+            // Decide once, so every track in the scene starts on the same beat.
+            let wasPlaying = startForSessionLocked()
             for (id, has) in tracks {
                 guard let s = sessions[id] else { continue }
-                if has { launchLocked(s, scene) } else if s.playing != nil {
+                if has { launchLocked(s, scene, immediately: !wasPlaying) } else if s.playing != nil {
                     s.queued = -1
-                    s.queuedBeat = nextBar(after: position)
+                    s.queuedBeat = nextBar(after: sessionClock.beat)
                 }
             }
         }
@@ -243,7 +260,7 @@ public final class AudioEngine {
         locked {
             if playing {
                 s.queued = -1
-                s.queuedBeat = nextBar(after: position)
+                s.queuedBeat = nextBar(after: sessionClock.beat)
             } else {
                 s.playing = nil
                 s.queued = nil
@@ -255,7 +272,7 @@ public final class AudioEngine {
         locked {
             for (_, s) in sessions where s.playing != nil {
                 s.queued = -1
-                s.queuedBeat = playing ? nextBar(after: position) : position
+                s.queuedBeat = playing ? nextBar(after: sessionClock.beat) : sessionClock.beat
             }
         }
     }
@@ -308,6 +325,10 @@ public final class AudioEngine {
         os_unfair_lock_unlock(lockPtr)
     }
 
+    var lockPtrForTesting: UnsafeMutablePointer<os_unfair_lock> { lockPtr }
+    var masterForTesting: StereoBuffer { master }
+    func renderBlockForTesting(_ n: Int) { renderBlock(n) }
+
     private func renderBlock(_ n: Int) {
         master.clear(n)
         let ctx = RenderContext(sampleRate: sampleRate, bpm: bpm)
@@ -324,6 +345,7 @@ public final class AudioEngine {
                     root.render(beat: position, frames: seg, l: master.l + f, r: master.r + f, ctx: ctx, songBeat: position)
                     if metronomeOn { metronome(from: position, frames: seg, offset: f, bps: bps) }
                     position += Double(seg) * bps
+                    sessionClock.beat += Double(seg) * bps
                     if loopOn && position >= loopEnd - 1e-9 { position = loopStart + max(0, position - loopEnd) }
                     f += seg
                 }
@@ -467,4 +489,24 @@ extension OfflineRenderer {
         }
         return (outL, outR)
     }
+}
+
+extension AudioEngine {
+    /// Runs the real-time render path without an audio device (tests only).
+    func renderForTesting(frames: Int) -> [Float] {
+        var out: [Float] = []
+        out.reserveCapacity(frames)
+        var done = 0
+        os_unfair_lock_lock(lockPtrForTesting)
+        while done < frames {
+            let n = min(512, frames - done)
+            renderBlockForTesting(n)
+            out += Array(UnsafeBufferPointer(start: masterForTesting.l, count: n))
+            done += n
+        }
+        os_unfair_lock_unlock(lockPtrForTesting)
+        return out
+    }
+
+    func sessionStateForTesting(_ track: UUID) -> SessionInfo? { snapshot().sessions[track] }
 }
