@@ -10,6 +10,12 @@ import Foundation
 // (different paths) built from the same composition data. That is what makes
 // edits propagate everywhere while each instance still has its own tail.
 
+/// Frames needed to cover `beats`, rounded up, but forgiving floating-point noise so a
+/// boundary that is mathematically exact never spills one frame late.
+@inline(__always) func framesUntil(_ beats: Double, _ bps: Double) -> Int {
+    max(1, Int((beats / bps - 1e-4).rounded(.up)))
+}
+
 protocol SourceNode: AnyObject {
     /// Add source output for the source-local range starting at `beat`.
     func render(beat: Double, frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>,
@@ -138,7 +144,7 @@ final class ClipNode {
             let sb = songBeat + Double(f) * bps
             let l = buf.l + f, r = buf.r + f
             if b < start {
-                f += min(frames - f, max(1, Int(((start - b) / bps).rounded(.up))))
+                f += min(frames - f, framesUntil(start - b, bps))
                 continue
             }
             if b >= end {
@@ -149,17 +155,19 @@ final class ClipNode {
             var segEnd = end
             if loops {
                 src = src.truncatingRemainder(dividingBy: sourceLength)
+                // A frame within half a sample of the end *is* the wrap point (floating-point error).
+                if sourceLength - src < bps * 0.5 { src = 0 }
                 segEnd = min(end, b + (sourceLength - src))
-            } else if src >= sourceLength {
+            } else if src >= sourceLength - bps * 0.5 {
                 // Past the end of the content: silence (but let notes and tails ring).
-                let n = min(frames - f, max(1, Int(((end - b) / bps).rounded(.up))))
+                let n = min(frames - f, framesUntil(end - b, bps))
                 source.renderTail(frames: n, l: l, r: r, ctx: ctx, songBeat: sb)
                 f += n
                 continue
             } else {
                 segEnd = min(end, b + (sourceLength - src))
             }
-            let n = min(frames - f, max(1, Int(((segEnd - b) / bps).rounded(.up))))
+            let n = min(frames - f, framesUntil(segEnd - b, bps))
             source.render(beat: src, frames: n, l: l, r: r, ctx: ctx, songBeat: sb)
             f += n
         }
@@ -282,7 +290,7 @@ final class TrackNode {
             let b = s.clock.beat + Double(f) * bps
             var n = frames - f
             if let q = s.queued {
-                let qf = Int(((s.queuedBeat - b) / bps).rounded(.up))
+                let qf = Int(((s.queuedBeat - b) / bps - 1e-4).rounded(.up))
                 if qf <= 0 {
                     // Switch now.
                     if let p = s.playing, let old = slots[p] { old.deactivate() }
@@ -490,20 +498,24 @@ final class NoteSourceNode: SourceNode {
                 ctx: RenderContext, songBeat: Double) {
         let synth = state.synth
         let bps = ctx.beatsPerSample
+        // Events are collected from a window shifted one sample early. Loop wraps and clip
+        // starts land up to a sample *after* the exact beat (frame rounding), and without
+        // this a note sitting on beat 1 would count as already past and be skipped.
+        let w0 = beat - bps, w1 = beat + Double(frames) * bps - bps
         if abs(beat - state.expected) > bps * 1.5 {
             // Jumped (seek, loop wrap): release what was playing and pick up notes already in progress.
             synth.allNotesOff()
-            for n in notes where n.start < beat - bps * 0.5 && min(n.end, length) > beat + bps {
+            for n in notes where n.start < w0 && min(n.end, length) > beat + bps {
                 synth.noteOn(n.pitch, velocity: Float(n.velocity), params: params)
             }
         }
         state.expected = beat + Double(frames) * bps
-        var idx = firstEvent(atOrAfter: beat)
+        var idx = firstEvent(atOrAfter: w0)
         var f = 0
         while idx < events.count {
             let e = events[idx]
-            let ef = max(0, Int(((e.beat - beat) / bps).rounded(.down)))
-            if ef >= frames { break }
+            if e.beat >= w1 { break }
+            let ef = min(frames - 1, max(0, Int(((e.beat - beat) / bps).rounded(.down))))
             if ef > f {
                 synth.render(l + f, r + f, frames: ef - f, params: params)
                 f = ef
@@ -635,13 +647,15 @@ final class DrumSourceNode: SourceNode {
                 ctx: RenderContext, songBeat: Double) {
         let bps = ctx.beatsPerSample
         player.expected = beat + Double(frames) * bps
+        // Same one-sample-early window as notes, so hits on beat 1 survive loop wraps.
+        let w0 = beat - bps, w1 = beat + Double(frames) * bps - bps
         var lo = 0, hi = hits.count
-        while lo < hi { let m = (lo + hi) / 2; if hits[m].beat < beat { lo = m + 1 } else { hi = m } }
+        while lo < hi { let m = (lo + hi) / 2; if hits[m].beat < w0 { lo = m + 1 } else { hi = m } }
         var idx = lo, f = 0
         while idx < hits.count {
             let h = hits[idx]
-            let hf = max(0, Int(((h.beat - beat) / bps).rounded(.down)))
-            if hf >= frames { break }
+            if h.beat >= w1 { break }
+            let hf = min(frames - 1, max(0, Int(((h.beat - beat) / bps).rounded(.down))))
             if hf > f { player.render(l + f, r + f, frames: hf - f); f = hf }
             player.trigger(rows[h.row], velocity: h.velocity, outputRate: ctx.sampleRate)
             idx += 1

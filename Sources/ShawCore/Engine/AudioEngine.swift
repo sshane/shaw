@@ -340,13 +340,14 @@ public final class AudioEngine {
                     var seg = n - f
                     if loopOn {
                         if position >= loopEnd { position = loopStart }
-                        seg = min(seg, max(1, Int(((loopEnd - position) / bps).rounded(.up))))
+                        seg = min(seg, framesUntil(loopEnd - position, bps))
                     }
                     root.render(beat: position, frames: seg, l: master.l + f, r: master.r + f, ctx: ctx, songBeat: position)
                     if metronomeOn { metronome(from: position, frames: seg, offset: f, bps: bps) }
                     position += Double(seg) * bps
                     sessionClock.beat += Double(seg) * bps
-                    if loopOn && position >= loopEnd - 1e-9 { position = loopStart + max(0, position - loopEnd) }
+                    // Land exactly on the loop start (the sub-sample overshoot is dropped).
+                    if loopOn && position >= loopEnd - 1e-9 { position = loopStart }
                     f += seg
                 }
                 if !loopOn && position >= g.rootLength && !sessionList.contains(where: { $0.isActive }) {
