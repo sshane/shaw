@@ -63,6 +63,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         }
     }
     static let fileURLKey = "ShawProjectFile"
+    static let welcomeKey = "ShawSeenWelcome.v1"
+
+    func dismissWelcome() {
+        showWelcome = false
+        if !isolated { UserDefaults.standard.set(true, forKey: Store.welcomeKey) }
+    }
     var dirty = false
 
     // Navigation
@@ -82,6 +88,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var selectedEffects: Set<UUID> = []
     var selectedEffectsHost: EffectHost?
     @ObservationIgnored var clipboard: ShawClipboard?
+    /// First-launch quick start (also Help → Welcome to Shaw).
+    var showWelcome = false
     /// Layers whose keyframe rows are twirled open in the timeline, and the selected ◆s.
     var expandedTracks: Set<UUID> = []
     var selectedKeyframes: Set<UUID> = []
@@ -175,6 +183,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             RunLoop.main.add(timer!, forMode: .common)
         }
         if isolated { workspace = .standard }
+        showWelcome = isolated ? ProcessInfo.processInfo.environment["SHAW_WELCOME"] != nil
+                               : !UserDefaults.standard.bool(forKey: Store.welcomeKey)
         if let first = p.assets.first(where: { $0.kind == .notes }) { pianoRollAsset = first.id }
     }
 

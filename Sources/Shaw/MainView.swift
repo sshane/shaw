@@ -30,6 +30,9 @@ struct MainView: View {
             }
         }
         .background(Theme.bg)
+        .sheet(isPresented: Binding(get: { store.showWelcome }, set: { if !$0 { store.dismissWelcome() } })) {
+            WelcomeView().environment(store)
+        }
         .navigationTitle(store.project.name + (store.dirty && store.fileURL != nil ? " — Edited" : ""))
     }
 }

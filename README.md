@@ -12,6 +12,10 @@ open build/Shaw.app
 swift test                    # engine + editing tests
 ```
 
+## Sharing it
+
+`scripts/package.sh` builds a universal (Apple Silicon + Intel) app and zips it with short opening instructions into `build/Shaw.zip`. Everything Shaw needs is inside the app. It needs macOS 14 or newer. Because it isn't signed with an Apple Developer ID, the first launch needs System Settings → Privacy & Security → Open Anyway.
+
 ## Demo song
 
 Shaw opens with **"First Light"**, a 72-bar A-minor house track at 124 BPM (File → Open Demo Project brings it back). It's arranged from linked sections: **Intro** (also the outro), **Build** (twice), **Drop** (four times), and **Breakdown**. Open any section and change it, and every copy changes. It also shows effects at every level: a filter sweeping the whole Intro composition, sidechain pump inside the Drop, delay and reverb on the lead, and EQ + limiter on Main as a master bus. Session slots are filled too, if you open the optional Session view from a ☰ menu.

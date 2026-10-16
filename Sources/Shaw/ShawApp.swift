@@ -68,6 +68,9 @@ struct ShawCommands: Commands {
             Button("Split at Playhead") { store.splitSelectedClips(at: store.transport.position) }.keyboardShortcut("e")
             Button("Save Variation") { store.saveVariation() }.keyboardShortcut("d", modifiers: [.command, .shift])
         }
+        CommandGroup(replacing: .help) {
+            Button("Welcome to Shaw") { store.showWelcome = true }
+        }
         CommandMenu("Composition") {
             Button("New Composition") { store.openComposition(store.newComposition()) }.keyboardShortcut("n")
             Button("New Pattern") { store.open(asset: store.newPattern()) }.keyboardShortcut("p", modifiers: [.command, .shift])
@@ -284,7 +287,8 @@ enum DebugSnapshot {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + (Double(env["SHAW_DELAY"] ?? "") ?? 2.5)) {
-            guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }), let v = w.contentView,
+            let sheet = env["SHAW_WELCOME"] != nil ? NSApp.windows.first(where: { $0.isSheet && $0.isVisible }) : nil
+            guard let w = sheet ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }), let v = w.contentView,
                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(1) }
             v.cacheDisplay(in: v.bounds, to: rep)
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
