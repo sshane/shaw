@@ -196,6 +196,11 @@ enum DebugSnapshot {
             if let k = PanelKind(rawValue: String(name)) { store.workspace.reveal(k) }
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
+        if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,
+           let t = comp.tracks.first(where: { !$0.slots.isEmpty }), let scene = t.slots.keys.min() {
+            store.updateTrack(t.id) { $0.effects.append(EffectRegistry.descriptor("reverb")!.makeEffect()) }
+            store.inspector = .slot(store.activeCompID, t.id, scene)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + (Double(env["SHAW_DELAY"] ?? "") ?? 2.5)) {
             guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }), let v = w.contentView,
                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(1) }

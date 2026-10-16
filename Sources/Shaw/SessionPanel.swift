@@ -116,7 +116,7 @@ struct SlotCell: View {
                     let now = Date()
                     if now.timeIntervalSince(lastClick) < 0.35 { store.open(asset: a.id) }
                     lastClick = now
-                    store.inspector = a.kind == .composition ? .composition(a.id) : .asset(a.id)
+                    store.inspector = .slot(store.activeCompID, track.id, scene)
                 }
                 .shawDraggable(.asset(a.id), preview: a.name)
                 .contextMenu {

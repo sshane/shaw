@@ -34,6 +34,9 @@ public enum SynthParams {
         ParamDef("osclevel", "Osc Level", 0, 1, 1, .percent),
     ]
 
+    /// The handful of synth controls shown by default.
+    public static let basic = ["cutoff", "resonance", "a", "r", "volume"]
+
     static let index: [String: Int] = Dictionary(uniqueKeysWithValues: defs.enumerated().map { ($1.id, $0) })
 
     // Indices into the resolved parameter array.

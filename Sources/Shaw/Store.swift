@@ -9,6 +9,8 @@ enum InspectorTarget: Equatable {
     case track(AssetID, UUID)
     case clip(AssetID, UUID)
     case asset(AssetID)
+    /// A session slot: composition, track, scene.
+    case slot(AssetID, UUID, Int)
 }
 
 /// Anything that can hold an effect chain. Compositions and tracks are treated alike.
@@ -64,7 +66,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var pianoRollAsset: AssetID?
     var beatAsset: AssetID?
     var focus: FocusArea = .timeline
-    var workspace = Workspace.load() { didSet { if workspace != oldValue { workspace.save() } } }
+    var workspace = Workspace.load() { didSet { if workspace != oldValue && !isolated { workspace.save() } } }
     var renamingAsset: AssetID?
     var selectedNotes: Set<UUID> = []
     var rollSnap: Double = 0.25
@@ -99,9 +101,15 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     /// Set in tests: no alerts, no autosave.
     @ObservationIgnored var headless = false
+    /// Debug/snapshot runs: start from the demo and never touch the user's autosave or preferences.
+    @ObservationIgnored private(set) var isolated = false
 
-    init(project initial: Project? = nil, headless: Bool = false) {
-        let p = initial ?? Store.restoreAutosave() ?? DemoProject.make()
+    /// True when launched for a debug snapshot (see DebugSnapshot); such runs must not touch user data.
+    static var isIsolatedLaunch: Bool { ProcessInfo.processInfo.environment["SHAW_SNAPSHOT"] != nil }
+
+    init(project initial: Project? = nil, headless: Bool = false, isolated: Bool = Store.isIsolatedLaunch) {
+        self.isolated = isolated || headless
+        let p = initial ?? (self.isolated ? nil : Store.restoreAutosave()) ?? DemoProject.make()
         project = p
         activeCompID = p.mainCompositionID
         openComps = [p.mainCompositionID]
@@ -114,6 +122,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.poll() }
             RunLoop.main.add(timer!, forMode: .common)
         }
+        if isolated { workspace = .standard }
         if let first = p.assets.first(where: { $0.kind == .notes }) { pianoRollAsset = first.id }
         if let first = p.assets.first(where: { $0.kind == .drums }) { beatAsset = first.id }
     }
@@ -685,6 +694,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         case .track(let c, let t)?: return .track(c, t)
         case .clip(let c, let k)?: return .clip(c, k)
         case .asset(let a)?: return project.composition(a) != nil ? .composition(a) : nil
+        case .slot(let c, let t, _)?: return .track(c, t)
         case nil: return .composition(activeCompID)
         }
     }
@@ -843,7 +853,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     private func scheduleAutosave() {
-        guard !headless else { return }
+        guard !headless, !isolated else { return }
         autosaveWork?.cancel()
         let p = project
         let work = DispatchWorkItem {

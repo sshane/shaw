@@ -44,6 +44,7 @@ struct InspectorPanel: View {
                 case .composition: CompositionInspector(compID: id)
                 }
             }
+        case .slot(let cid, let tid, let scene): SlotInspector(compID: cid, trackID: tid, scene: scene)
         }
     }
 }
@@ -195,11 +196,9 @@ struct ClipInspector: View {
             }
             Text("Tip: Option-drag a clip's right edge to loop it. Plain drag trims; past the end is silent (hatched).")
                 .font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(.horizontal, 10).padding(.top, 4)
-            EffectStack(host: .clip(compID, clipID))
-            if let src, src.kind == .notes {
-                Divider().padding(.vertical, 8)
-                InstrumentInspector(assetID: src.id)
-            }
+            SourceSoundSection(assetID: c.assetID)
+            EffectStack(host: .clip(compID, clipID), title: "Clip Effects")
+            EffectStack(host: .track(compID, comp.tracks[ti].id), title: "Track Effects · \(comp.tracks[ti].name)")
         }
     }
 
@@ -217,11 +216,12 @@ struct ClipInspector: View {
 struct EffectStack: View {
     @Environment(Store.self) private var store
     let host: EffectHost
+    var title = "Effects"
 
     var body: some View {
         let effects = store.effects(of: host)
         HStack {
-            Text("EFFECTS").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint)
+            Text(title.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint).lineLimit(1)
             Spacer()
             Menu {
                 ForEach(EffectRegistry.all) { d in
@@ -231,13 +231,14 @@ struct EffectStack: View {
                 Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Add an effect")
         }
         .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 4)
         if effects.isEmpty {
             Text("Drop an effect here, or search the Browser (e.g. \"reverb\") and drag it onto anything.")
                 .font(Theme.tiny).foregroundStyle(Theme.textFaint)
                 .frame(maxWidth: .infinity)
-                .padding(14)
+                .padding(12)
                 .background(RoundedRectangle(cornerRadius: 6).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4])).foregroundStyle(Theme.textFaint.opacity(0.5)))
                 .padding(.horizontal, 10)
         }
@@ -247,29 +248,28 @@ struct EffectStack: View {
     }
 }
 
+/// One effect: its main controls up front, the rest behind "More", and a visible delete button.
 struct EffectCard: View {
     @Environment(Store.self) private var store
     let host: EffectHost
     let effect: Effect
     let index: Int
     let count: Int
+    @State private var showAdvanced = false
 
     var body: some View {
         let d = EffectRegistry.descriptor(effect.kind)
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Button {
-                    store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].expanded.toggle() } }
-                } label: {
-                    Image(systemName: effect.expanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).frame(width: 12)
-                }
-                .buttonStyle(.plain)
                 Toggle("", isOn: Binding(get: { effect.enabled }, set: { v in
-                    store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].enabled = v } }
+                    update { $0.enabled = v }
                 }))
                 .toggleStyle(.checkbox).labelsHidden().controlSize(.small)
-                .help("Enable / bypass")
+                .help("On / off")
                 Text(d?.name ?? effect.kind).font(Theme.header).foregroundStyle(effect.enabled ? Theme.text : Theme.textFaint)
+                    .contentShape(Rectangle())
+                    .onTapGesture { update { $0.expanded.toggle() } }
+                    .help("Click to collapse")
                 Spacer()
                 Menu {
                     Button("Move Up") { move(-1) }.disabled(index == 0)
@@ -277,33 +277,53 @@ struct EffectCard: View {
                     Button("Duplicate") {
                         store.updateEffects(host) { fx in var c = effect; c.id = UUID(); fx.insert(c, at: index + 1) }
                     }
-                    Button("Reset Parameters") {
-                        store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params = d?.params.defaults() ?? [:] } }
-                    }
-                    Divider()
-                    Button("Remove", role: .destructive) { store.updateEffects(host) { $0.removeAll { $0.id == effect.id } } }
+                    Button("Reset to Defaults") { update { $0.params = d?.params.defaults() ?? [:] } }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 11))
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                Button {
+                    store.updateEffects(host) { $0.removeAll { $0.id == effect.id } }
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.textDim)
+                .help("Delete this effect")
             }
             .frame(height: 24)
             if effect.expanded, let d {
-                ForEach(d.params) { p in
-                    ParamRow(def: p, value: p.clamp(effect.params[p.id] ?? p.defaultValue),
-                             onChange: { v in
-                                 store.updateEffects(host, live: true) { fx in
-                                     if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params[p.id] = v }
-                                 }
-                             },
-                             onEnd: { store.endGesture() })
-                    .padding(.leading, 18)
+                ForEach(d.basicParams) { p in row(p) }
+                let advanced = d.advancedParams
+                if !advanced.isEmpty {
+                    Button(showAdvanced ? "Less" : "More (\(advanced.count))") { showAdvanced.toggle() }
+                        .buttonStyle(.plain)
+                        .font(Theme.tiny).foregroundStyle(Theme.accent)
+                        .padding(.leading, 4).padding(.vertical, 2)
+                    if showAdvanced { ForEach(advanced) { p in row(p) } }
                 }
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.18)))
         .padding(.horizontal, 6).padding(.vertical, 2)
+    }
+
+    private func row(_ p: ParamDef) -> some View {
+        ParamRow(def: p, value: p.clamp(effect.params[p.id] ?? p.defaultValue),
+                 onChange: { v in
+                     store.updateEffects(host, live: true) { fx in
+                         if let i = fx.firstIndex(where: { $0.id == effect.id }) { fx[i].params[p.id] = v }
+                     }
+                 },
+                 onEnd: { store.endGesture() })
+            .padding(.leading, 4)
+    }
+
+    private func update(_ f: @escaping (inout Effect) -> Void) {
+        store.updateEffects(host) { fx in if let i = fx.firstIndex(where: { $0.id == effect.id }) { f(&fx[i]) } }
     }
 
     private func move(_ d: Int) {
@@ -315,11 +335,55 @@ struct EffectCard: View {
     }
 }
 
+// MARK: - Sound of a clip or slot
+
+/// The instrument (or kit) behind a clip, shown compactly.
+struct SourceSoundSection: View {
+    @Environment(Store.self) private var store
+    let assetID: AssetID
+
+    var body: some View {
+        switch store.project.asset(assetID)?.kind {
+        case .notes?: InstrumentInspector(assetID: assetID, compact: true)
+        case .drums?: BeatInspector(assetID: assetID, compact: true)
+        default: EmptyView()
+        }
+    }
+}
+
+// MARK: - Session slot
+
+struct SlotInspector: View {
+    @Environment(Store.self) private var store
+    let compID: AssetID
+    let trackID: UUID
+    let scene: Int
+
+    var body: some View {
+        if let comp = store.project.composition(compID), let ti = comp.trackIndex(trackID),
+           let slot = comp.tracks[ti].slots[scene], let a = store.project.asset(slot.assetID) {
+            let t = comp.tracks[ti]
+            InspectorTitle(icon: assetIcon(a.kind), kind: "Session clip · \(t.name)", name: a.name, color: Theme.label(a.colorIndex))
+            HStack(spacing: 6) {
+                Button("Launch") { store.launch(track: trackID, scene: scene) }
+                Button("Open") { store.open(asset: a.id) }
+            }
+            .controlSize(.small).padding(.horizontal, 10).padding(.bottom, 4)
+            SourceSoundSection(assetID: a.id)
+            if a.kind == .composition { EffectStack(host: .composition(a.id), title: "Composition Effects · \(a.name)") }
+            EffectStack(host: .track(compID, trackID), title: "Track Effects · \(t.name)")
+        }
+    }
+}
+
 // MARK: - Instrument (synth)
 
 struct InstrumentInspector: View {
     @Environment(Store.self) private var store
     let assetID: AssetID
+    /// Compact: shown inside a clip/slot inspector, with a smaller header.
+    var compact = false
+    @State private var showAll = false
 
     static let groups: [(String, [String])] = [
         ("Oscillators", ["osc1", "osc2", "semi2", "fine2", "mix", "osclevel", "sub", "noise", "unison", "spread"]),
@@ -332,41 +396,61 @@ struct InstrumentInspector: View {
 
     var body: some View {
         if let a = store.project.asset(assetID), case .notes(let p) = a.content {
-            InspectorTitle(icon: "pianokeys", kind: "Pattern · Shaw Synth", name: a.name, color: Theme.label(a.colorIndex))
+            if compact {
+                SectionHeader(title: "Sound · Shaw Synth")
+            } else {
+                InspectorTitle(icon: "pianokeys", kind: "Pattern · Shaw Synth", name: a.name, color: Theme.label(a.colorIndex))
+            }
             PropertyRow(label: "Preset") {
                 Menu(p.instrument.preset) {
                     ForEach(SynthPresets.names, id: \.self) { n in
                         Button(n) {
                             store.edit { $0.updateNotes(assetID) { $0.instrument = .preset(n) } }
-                            store.engine.previewNoteOn(60, instrument: .preset(n))
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.engine.previewNoteOff(60) }
+                            if !store.transport.playing {
+                                store.engine.previewNoteOn(60, instrument: .preset(n))
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.engine.previewNoteOff(60) }
+                            }
                         }
                     }
                 }
                 .menuStyle(.borderlessButton).fixedSize()
             }
-            PropertyRow(label: "Length") {
-                DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
-                           format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
-                           onChange: { v in store.live { $0.updateNotes(assetID) { $0.length = v * Double(store.project.beatsPerBar) } } },
-                           onEnd: { store.endGesture() })
-            }
-            ForEach(Self.groups, id: \.0) { group in
-                SectionHeader(title: group.0)
-                ForEach(group.1, id: \.self) { pid in
-                    if let def = SynthParams.defs.first(where: { $0.id == pid }) {
-                        ParamRow(def: def, value: def.clamp(p.instrument.params[pid] ?? def.defaultValue),
-                                 onChange: { v in
-                                     store.live { $0.updateNotes(assetID) { pat in
-                                         pat.instrument.params[pid] = v
-                                         if !pat.instrument.preset.hasSuffix("*") { pat.instrument.preset += "*" }
-                                     } }
-                                 },
-                                 onEnd: { store.endGesture() })
-                        .padding(.horizontal, 10)
-                    }
+            if !compact {
+                PropertyRow(label: "Length") {
+                    DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
+                               format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
+                               onChange: { v in store.live { $0.updateNotes(assetID) { $0.length = v * Double(store.project.beatsPerBar) } } },
+                               onEnd: { store.endGesture() })
                 }
             }
+            if showAll {
+                ForEach(Self.groups, id: \.0) { group in
+                    SectionHeader(title: group.0)
+                    ForEach(group.1, id: \.self) { pid in paramRow(pid, p) }
+                }
+            } else {
+                ForEach(SynthParams.basic, id: \.self) { pid in paramRow(pid, p) }
+            }
+            Button(showAll ? "Show fewer synth controls" : "Show all synth controls (\(SynthParams.defs.count - SynthParams.basic.count) more)") {
+                showAll.toggle()
+            }
+            .buttonStyle(.plain)
+            .font(Theme.tiny).foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder private func paramRow(_ pid: String, _ p: NotePattern) -> some View {
+        if let def = SynthParams.defs.first(where: { $0.id == pid }) {
+            ParamRow(def: def, value: def.clamp(p.instrument.params[pid] ?? def.defaultValue),
+                     onChange: { v in
+                         store.live { $0.updateNotes(assetID) { pat in
+                             pat.instrument.params[pid] = v
+                             if !pat.instrument.preset.hasSuffix("*") { pat.instrument.preset += "*" }
+                         } }
+                     },
+                     onEnd: { store.endGesture() })
+            .padding(.horizontal, 10)
         }
     }
 }
@@ -376,10 +460,15 @@ struct InstrumentInspector: View {
 struct BeatInspector: View {
     @Environment(Store.self) private var store
     let assetID: AssetID
+    var compact = false
 
     var body: some View {
         if let a = store.project.asset(assetID), case .drums(let d) = a.content {
-            InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Beat", name: a.name, color: Theme.label(a.colorIndex))
+            if compact {
+                SectionHeader(title: "Sound · Drum Kit")
+            } else {
+                InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Beat", name: a.name, color: Theme.label(a.colorIndex))
+            }
             PropertyRow(label: "Kit") {
                 Menu(DrumKits.kitName(d.kit)) {
                     ForEach(DrumKits.kits) { k in Button(k.name) { store.edit { $0.updateDrums(assetID) { $0.kit = k.id } } } }
@@ -394,7 +483,7 @@ struct BeatInspector: View {
                 DragNumber(value: d.swing * 100, range: 0...100, step: 1, sensitivity: 0.5, format: { "\(Int($0))%" },
                            onChange: { v in store.live { $0.updateDrums(assetID) { $0.swing = v / 100 } } }, onEnd: { store.endGesture() })
             }
-            Button("Open in Beat Maker") { store.open(asset: assetID) }.controlSize(.small).padding(10)
+            if !compact { Button("Open in Beat Maker") { store.open(asset: assetID) }.controlSize(.small).padding(10) }
         }
     }
 }

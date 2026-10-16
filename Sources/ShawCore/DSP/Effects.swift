@@ -17,6 +17,17 @@ public struct EffectDescriptor: Identifiable {
     public let make: (Double) -> EffectProcessor
 
     public func makeEffect() -> Effect { Effect(kind: id, params: params.defaults()) }
+
+    /// The two or three controls most people reach for; the rest live behind "More".
+    public var basicParams: [ParamDef] {
+        let ids = EffectRegistry.basic[id] ?? params.prefix(2).map(\.id)
+        return ids.compactMap { pid in params.first { $0.id == pid } }
+    }
+
+    public var advancedParams: [ParamDef] {
+        let basic = Set(basicParams.map(\.id))
+        return params.filter { !basic.contains($0.id) }
+    }
 }
 
 public enum EffectRegistry {
@@ -73,6 +84,22 @@ public enum EffectRegistry {
                          summary: "Gain, pan, stereo width and mono",
                          keywords: ["gain", "volume", "pan", "width", "mono", "stereo"],
                          params: UtilityFX.params, make: { _ in UtilityFX() }),
+    ]
+
+    static let basic: [String: [String]] = [
+        "reverb": ["mix", "size"],
+        "delay": ["time", "feedback", "mix"],
+        "chorus": ["depth", "mix"],
+        "phaser": ["rate", "mix"],
+        "autopan": ["rate", "amount"],
+        "pump": ["rate", "depth"],
+        "compressor": ["threshold", "ratio"],
+        "limiter": ["gain"],
+        "eq": ["lowgain", "midgain", "highgain"],
+        "filter": ["type", "cutoff", "resonance"],
+        "saturator": ["drive", "mix"],
+        "bitcrusher": ["bits", "downsample"],
+        "utility": ["gain", "pan", "width"],
     ]
 
     static let byID: [String: EffectDescriptor] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
