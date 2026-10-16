@@ -99,9 +99,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     /// Editors: false = Ableton style (double-click to add/delete), true = click to draw/paint.
     var drawMode = false
     /// Play notes and hits while clicking them in the editors (never while the song plays).
-    var auditionNotes = UserDefaults.standard.bool(forKey: "ShawAuditionNotes") {
-        didSet { if !isolated { UserDefaults.standard.set(auditionNotes, forKey: "ShawAuditionNotes") } }
+    var auditionNotes = (UserDefaults.standard.object(forKey: "ShawAuditionNotes.v2") as? Bool) ?? true {
+        didSet { if !isolated { UserDefaults.standard.set(auditionNotes, forKey: "ShawAuditionNotes.v2") } }
     }
+    /// The pattern under the mouse; every clip using it lights up so you can see its linked copies.
+    var hoveredAsset: AssetID?
     /// Copied piano-roll notes (⌘C / ⌘X) and where ⌘V pastes them (last click in the grid).
     @ObservationIgnored var noteClipboard: [Note] = []
     @ObservationIgnored var rollInsertBeat: Double?
@@ -202,8 +204,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     func edit(_ body: (inout Project) -> Void) {
         gestureActive = false // a discrete edit always starts a fresh undo step
         let before = project
-        body(&project)
-        guard project != before else { return }
+        // Edit a copy, then swap it in: closures may safely read `store.project` while editing
+        // (mutating `project` in place while reading it is a Swift exclusivity violation → crash).
+        var next = project
+        body(&next)
+        guard next != before else { return }
+        project = next
         pushUndo(before)
         changed()
     }
@@ -212,8 +218,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     /// undo; call `endGesture()` when the drag finishes.
     func live(_ body: (inout Project) -> Void) {
         let before = project
-        body(&project)
-        guard project != before else { return }
+        var next = project // see edit(_:)
+        body(&next)
+        guard next != before else { return }
+        project = next
         if !gestureActive {
             gestureActive = true
             pushUndo(before)

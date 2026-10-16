@@ -285,6 +285,17 @@ struct ClipView: View {
             .overlay(RoundedRectangle(cornerRadius: 3).stroke(selected ? Theme.selection : (dropTarget ? Theme.accent : Color.black.opacity(0.5)),
                                                               lineWidth: selected || dropTarget ? 1.5 : 1))
             .opacity(clip.mute ? 0.45 : 1)
+            .overlay {
+                // Hovering any copy of a pattern outlines all of its linked copies.
+                if store.hoveredAsset == clip.assetID && uses > 1 {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .allowsHitTesting(false)
+                }
+            }
+            .onHover { inside in
+                if inside { store.hoveredAsset = clip.assetID } else if store.hoveredAsset == clip.assetID { store.hoveredAsset = nil }
+            }
             .contentShape(Rectangle())
             .gesture(bodyGesture())
             .overlay(alignment: .leading) { edgeHandle(.trimLeft) }
@@ -430,6 +441,10 @@ struct ClipView: View {
         Button("Make Unique") { store.makeUnique(clip.id) }
         Button("Split at Playhead") { select(); store.splitSelectedClips(at: store.transport.position) }
         Button("Pre-compose") { select(); store.precomposeSelection() }
+        let problem = store.mergeProblem(store.selectedClips)
+        Button("Merge into One Clip") { store.mergeSelectedClips() }
+            .disabled(problem != nil)
+        if let problem { Text(problem).foregroundStyle(.secondary) }
         Divider()
         Button("Fade In") { store.addFade(clip: clip.id, fadeIn: true) }
         Button("Fade Out") { store.addFade(clip: clip.id, fadeIn: false) }

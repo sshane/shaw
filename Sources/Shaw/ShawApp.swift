@@ -75,6 +75,8 @@ struct ShawCommands: Commands {
             Button("New Track") { store.addTrack() }.keyboardShortcut("t")
             Divider()
             Button("Pre-compose Selection") { store.precomposeSelection() }.keyboardShortcut("c", modifiers: [.command, .shift])
+            Button("Merge Clips into One") { store.mergeSelectedClips() }.keyboardShortcut("j")
+                .disabled(store.mergeProblem(store.selectedClips) != nil)
             Button("Make Clip Unique") {
                 if let id = store.selectedClips.first { store.makeUnique(id) }
             }.keyboardShortcut("u", modifiers: [.command, .shift])

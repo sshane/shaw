@@ -313,6 +313,7 @@ struct Keyboard: View {
     let keyHeight: CGFloat
     var layout: RowLayout = .piano
     @State private var held: Int?
+    @State private var hoverPitch: Int?
 
     var body: some View {
         Canvas { ctx, size in
@@ -348,13 +349,20 @@ struct Keyboard: View {
                     ctx.fill(Path(CGRect(x: size.width - 4, y: y, width: 4, height: keyHeight)), with: .color(Theme.accent.opacity(0.75)))
                 }
                 ctx.fill(Path(CGRect(x: 0, y: y + keyHeight - 0.5, width: size.width, height: 0.5)), with: .color(.black.opacity(0.25)))
-                if pitch % 12 == 0 {
-                    ctx.draw(Text(RollGrid.name(pitch)).font(.system(size: 9, weight: .semibold)).foregroundStyle(.black.opacity(0.6)),
-                             at: CGPoint(x: size.width - 3, y: y + keyHeight / 2), anchor: .trailing)
+                // C is always labelled; any other key shows its name while hovered or played.
+                let showName = pitch % 12 == 0 || lit || pitch == hoverPitch
+                if showName && keyHeight >= 7 {
+                    let ink: Color = lit ? .white : (black ? .white.opacity(0.85) : .black.opacity(0.6))
+                    let x = black ? size.width * 0.62 - 3 : size.width - 6
+                    ctx.draw(Text(RollGrid.name(pitch)).font(.system(size: 9, weight: .semibold)).foregroundStyle(ink),
+                             at: CGPoint(x: x, y: y + keyHeight / 2), anchor: .trailing)
                 }
             }
         }
         .contentShape(Rectangle())
+        .onContinuousHover { phase in
+            if case .active(let p) = phase { hoverPitch = layout.pitch(atRow: Int((p.y + scrollY) / keyHeight)) } else { hoverPitch = nil }
+        }
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
                 store.focus = .pianoRoll

@@ -209,3 +209,90 @@ final class KeyframeWorkflowTests: XCTestCase {
         XCTAssertEqual(s.project.asset(clip.assetID)?.name, "My Groove", "names you chose are kept")
     }
 }
+
+final class EditSafetyTests: XCTestCase {
+    /// Regression: typing a pattern length crashed (reading the project inside its own edit).
+    func testEditsMayReadTheProject() {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.addInstrument(.synth("808 Bass"))
+        let id = s.pianoRollAsset!
+        s.live { $0.updateNotes(id) { $0.length = 3 * Double(s.project.beatsPerBar) } }
+        s.endGesture()
+        s.edit { $0.updateComposition(s.activeCompID) { $0.length = 2 * Double(s.project.beatsPerBar) } }
+        if case .notes(let p)? = s.project.asset(id)?.content { XCTAssertEqual(p.length, 12) }
+        XCTAssertEqual(s.activeComp?.length, 8)
+    }
+}
+
+final class MergeTests: XCTestCase {
+    /// Three separate one-bar 808 clips on one layer, one note each.
+    func threeBasses() -> (Store, [UUID]) {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.addInstrument(.synth("808 Bass"))
+        let first = s.activeComp!.tracks[0].clips[0]
+        s.edit { $0.updateNotes(first.assetID) { $0.notes = [Note(pitch: 33, start: 0, length: 2)] } }
+        s.selectedClips = [first.id]
+        s.saveVariation()
+        s.saveVariation()
+        let clips = s.activeComp!.tracks[0].clips.sorted { $0.start < $1.start }
+        for (i, c) in clips.enumerated() {
+            s.edit { $0.updateNotes(c.assetID) { $0.notes = [Note(pitch: 33 + i * 3, start: 0, length: 2)] } }
+        }
+        return (s, clips.map(\.id))
+    }
+
+    func testMergeIntoOneLinkedClipSoundsTheSame() {
+        let (s, ids) = threeBasses()
+        let main = s.project.mainCompositionID
+        let patternsBefore = s.project.assets.filter { $0.kind == .notes }.count
+        let (before, _) = OfflineRenderer.renderToMemory(project: s.project, composition: main, beats: 12)
+        s.selectedClips = Set(ids)
+        XCTAssertNil(s.mergeProblem(s.selectedClips))
+        s.mergeSelectedClips()
+        let clips = s.activeComp!.tracks[0].clips
+        XCTAssertEqual(clips.count, 1)
+        XCTAssertEqual(clips[0].start, 0)
+        XCTAssertEqual(clips[0].length, 12)
+        guard case .notes(let p)? = s.project.asset(clips[0].assetID)?.content else { return XCTFail() }
+        XCTAssertEqual(p.notes.map(\.start), [0, 4, 8])
+        XCTAssertEqual(p.notes.map(\.pitch), [33, 36, 39])
+        XCTAssertEqual(s.project.assets.filter { $0.kind == .notes }.count, patternsBefore - 2, "three patterns become one")
+        let (after, _) = OfflineRenderer.renderToMemory(project: s.project, composition: main, beats: 12)
+        // Synth oscillators start at random phases, so compare loudness beat by beat, not samples.
+        let fpb = Int(48000 * 60 / s.project.bpm)
+        func rms(_ x: [Float], _ b: Int) -> Float {
+            let seg = x[(b * fpb)..<min(x.count, (b + 1) * fpb)]
+            return sqrt(seg.reduce(0) { $0 + $1 * $1 } / Float(max(1, seg.count)))
+        }
+        for b in 0..<12 {
+            let a = rms(before, b), c = rms(after, b)
+            XCTAssertLessThan(abs(a - c), max(0.01, a * 0.1), "beat \(b) should sound the same after merging")
+        }
+        s.undo()
+        XCTAssertEqual(s.activeComp!.tracks[0].clips.count, 3, "one undo brings the three clips back")
+    }
+
+    func testMergeIsStrict() {
+        let (s, ids) = threeBasses()
+        XCTAssertNotNil(s.mergeProblem([ids[0]]), "needs two or more")
+        s.replaceInstrument(ofAsset: s.clip(ids[2])!.assetID, with: .synth("Pluck"))
+        XCTAssertEqual(s.mergeProblem(Set(ids)), "Clips use different instruments")
+        XCTAssertNil(s.mergeProblem([ids[0], ids[1]]))
+        s.addEffect("reverb", to: .clip(s.activeCompID, ids[0]))
+        XCTAssertEqual(s.mergeProblem([ids[0], ids[1]]), "Clips have different effects")
+
+        s.addInstrument(.synth("808 Bass"))
+        let other = s.activeComp!.tracks[1].clips[0].id
+        XCTAssertEqual(s.mergeProblem([ids[1], other]), "Clips are on different layers")
+    }
+
+    func testAudibleNotesHonourTrimAndLoop() {
+        var p = NotePattern(length: 4)
+        p.notes = [Note(pitch: 60, start: 0, length: 1), Note(pitch: 62, start: 2, length: 1)]
+        var trimmed = Clip(assetID: UUID(), start: 0, length: 2, offset: 2)
+        XCTAssertEqual(Store.audibleNotes(of: trimmed, pattern: p).map(\.pitch), [62], "only what's inside the trimmed window")
+        trimmed.loops = true
+        trimmed.length = 8
+        XCTAssertEqual(Store.audibleNotes(of: trimmed, pattern: p).map(\.start), [0, 2, 4, 6], "looping repeats it")
+    }
+}

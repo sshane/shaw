@@ -44,7 +44,8 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 - Drag notes to move, drag the right edge to resize (⌥← / ⌥→ too), ⌥-drag to copy.
 - ⌘C / ⌘X / ⌘V / ⌘D, arrows to move, ↑/↓ to transpose. **B** toggles draw mode (click to draw).
 - Drum patterns have a **Steps** view: the same notes as an FL Studio-style step grid.
-- Clicking notes is silent by default (and always while playing); the headphones button turns previews on.
+- While paused, notes sound as you add them or drag them up and down (never while playing). The headphones button turns this off.
+- Piano keys show their note name while you hover them or play them on the keyboard.
 
 **Play with your keyboard** — A S D F G H J K L ; ' are white keys, W E T Y U O P black keys, Z / X octave, C / V velocity. Drum kits: A = kick, S = snare, and so on.
 
@@ -72,6 +73,10 @@ A new project is empty on purpose. Click **Add an instrument** (or pick one in t
 - Right-click a clip → **Fade In** / **Fade Out** adds a Volume effect with the keyframes already set.
 
 **Loop bar** — the orange bar on top of the ruler. Click it to turn looping on/off, drag its ends to resize, drag the middle to move it, click any empty bar in that strip to loop that bar.
+
+**Merge clips** — select clips on one layer, right-click → **Merge into One Clip** (⌘J). You get one linked clip with every note where it was; the originals go away. It's strict: grayed out (with the reason) for different instruments, compositions or audio, different layers, effects, gain, or keyframes.
+
+**Linked copies** — hover a clip (or a pattern in the Project panel) and every linked copy is outlined.
 
 **Copy & paste clips** — ⌘C / ⌘V on the timeline pastes linked copies at the playhead. Right-click selects before showing the menu.
 
