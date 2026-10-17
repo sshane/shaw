@@ -160,7 +160,7 @@ struct InstrumentEditorView: View {
                            in: 0...1, onEditingChanged: { if !$0 { store.endGesture() } })
                         .controlSize(.mini)
                 }
-                .help("Osc 2 bends Osc 1's wave instead of only mixing with it. Great for bells and growls.")
+                .help("Osc 2 bends Osc 1's wave instead of only mixing with it. Great for bells and growls. FM Env (under the volume envelope) makes each note start brighter.")
             }
         }
         .padding(10)
@@ -247,6 +247,10 @@ struct InstrumentEditorView: View {
             params(id, p, ["a", "d", "s", "r"])
             Divider().overlay(Theme.border).padding(.vertical, 2)
             params(id, p, ["penv", "pdecay"], names: ["penv": "Pitch Drop", "pdecay": "Drop Time"])
+            if (p["on2"] ?? 1) > 0.5 {
+                // Extra FM at the start of each note that dies away: the bright attack of FM pianos and bells.
+                params(id, p, ["fmenv", "fmdecay"])
+            }
         }
         .padding(10).panelBox()
     }
@@ -352,7 +356,7 @@ struct InstrumentEditorView: View {
 
     private func removeOsc(_ id: AssetID, _ p: [String: Double], _ n: Int) {
         var c: [String: Double] = ["on\(n)": 0]
-        if n == 2 { c["fm"] = 0; c["lfofm"] = 0 } // FM needs osc 2
+        if n == 2 { c["fm"] = 0; c["lfofm"] = 0; c["fmenv"] = 0 } // FM needs osc 2
         setOsc(id, p, c)
     }
 }

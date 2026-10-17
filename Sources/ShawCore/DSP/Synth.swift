@@ -60,6 +60,11 @@ public enum SynthParams {
         ParamDef("fine4", "Osc 4 Fine", -50, 50, 0, .cents),
         ParamDef("lvl4", "Osc 4 Level", 0, 1, 0.5, .percent),
         .choice("on4", "Osc 4", ["Off", "On"], 0),
+        // FM envelope: each note starts with this much extra FM, which dies away over FM Decay, so the
+        // attack is bright and metallic and the note settles mellow (DX7-style pianos and bells).
+        // Harder notes get more of it. At 0 (the default) older sounds don't change.
+        ParamDef("fmenv", "FM Env", 0, 1, 0, .percent),
+        ParamDef("fmdecay", "FM Decay", 0.005, 5, 0.4, .seconds, .log),
     ]
 
     /// Beats per LFO cycle for each `lfosync` choice (0 = free running in Hz).
@@ -79,12 +84,13 @@ public enum SynthParams {
     static let semi1 = 38, lvl1 = 39, lvl2 = 40, on2 = 41
     static let osc3 = 42, semi3 = 43, fine3 = 44, lvl3 = 45, on3 = 46
     static let osc4 = 47, semi4 = 48, fine4 = 49, lvl4 = 50, on4 = 51
+    static let fmEnv = 52, fmDecay = 53
 }
 
 public enum SynthPresets {
     public static let names = [
-        "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass",
-        "Keys", "Electric Piano", "Organ", "Bell", "Music Box",
+        "Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass", "FM Bass",
+        "Keys", "Electric Piano", "Tine Piano", "Organ", "Bell", "Music Box",
         "Pluck", "Marimba", "Kalimba", "Stab",
         "Lead", "Supersaw", "Vibrato Lead", "Whistle",
         "Pad", "Warm Pad", "Dark Pad", "Glass Pad",
@@ -99,8 +105,8 @@ public enum SynthPresets {
 
     public static let categories: [String: String] = {
         var c: [String: String] = [:]
-        for n in ["Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass"] { c[n] = "Bass" }
-        for n in ["Keys", "Electric Piano", "Organ", "Bell", "Music Box"] { c[n] = "Keys" }
+        for n in ["Reese Bass", "Sub Bass", "808 Bass", "Acid", "Wobble Bass", "Pluck Bass", "Deep Bass", "FM Bass"] { c[n] = "Bass" }
+        for n in ["Keys", "Electric Piano", "Tine Piano", "Organ", "Bell", "Music Box"] { c[n] = "Keys" }
         for n in ["Pluck", "Marimba", "Kalimba", "Stab"] { c[n] = "Pluck" }
         for n in ["Lead", "Supersaw", "Vibrato Lead", "Whistle"] { c[n] = "Lead" }
         for n in ["Pad", "Warm Pad", "Dark Pad", "Glass Pad"] { c[n] = "Pad" }
@@ -122,35 +128,78 @@ public enum SynthPresets {
         "Init": [:],
         // Bass
         "Reese Bass": ["osc1": 2, "osc2": 2, "fine2": 25, "unison": 1, "spread": 0.2, "cutoff": 700, "resonance": 0.2, "fenv": 0.1, "mode": 1, "glide": 0.04, "sub": 0.4, "drive": 0.3, "s": 1, "r": 0.15, "volume": -8],
-        "Sub Bass": ["drift": 0, "osc1": 0, "osc2": 0, "mix": 0, "sub": 0, "cutoff": 400, "fenv": 0, "mode": 1, "glide": 0.03, "s": 1, "r": 0.12, "drive": 0.15, "volume": -11],
+        // A clean sine sub, with a whisper of the octave so it still reads on small speakers.
+        "Sub Bass": ["drift": 0, "osc1": 0, "osc2": 0, "semi2": 12, "fine2": 0, "mix": 0.06, "sub": 0, "cutoff": 400, "fenv": 0, "keytrack": 0.5,
+                     "mode": 1, "glide": 0.03, "a": 0.004, "s": 1, "r": 0.1, "drive": 0, "volume": -7],
         "808 Bass": ["drift": 0, "osc1": 0, "osc2": 0, "mix": 0, "cutoff": 2000, "fenv": 0, "penv": 12, "pdecay": 0.04, "a": 0.002, "d": 2.2, "s": 0.0, "r": 0.4, "mode": 2, "glide": 0.06, "drive": 0.45, "volume": -4],
         "Acid": ["osc1": 2, "mix": 0, "cutoff": 400, "resonance": 0.85, "fenv": 0.75, "fd": 0.22, "fs": 0.05, "mode": 2, "glide": 0.06, "s": 0.9, "r": 0.08, "drive": 0.4, "keytrack": 0.5, "volume": -10],
         "Wobble Bass": ["osc1": 2, "osc2": 3, "fine2": 0, "mix": 0.4, "sub": 0.5, "cutoff": 280, "resonance": 0.55, "fenv": 0, "keytrack": 0.2, "mode": 1, "glide": 0.02, "s": 1, "r": 0.1, "drive": 0.5, "lfosync": 2, "lfocut": 0.75, "volume": -7],
-        "Pluck Bass": ["osc1": 3, "osc2": 2, "mix": 0.3, "sub": 0.3, "cutoff": 500, "resonance": 0.3, "fenv": 0.6, "fd": 0.15, "fs": 0, "d": 0.35, "s": 0.2, "r": 0.08, "mode": 1, "volume": -6],
-        "Deep Bass": ["osc1": 0, "osc2": 1, "semi2": 12, "mix": 0.25, "cutoff": 900, "fenv": 0.1, "s": 0.9, "r": 0.15, "mode": 1, "glide": 0.02, "drive": 0.2, "volume": -10],
+        // Punchy: saw and a square an octave down through a 24 dB filter that snaps shut, a tiny pitch drop for the hit.
+        "Pluck Bass": ["osc1": 2, "osc2": 3, "semi2": -12, "fine2": 0, "mix": 0.35, "sub": 0.3, "ftype": 1, "cutoff": 200, "resonance": 0.3,
+                       "fenv": 0.65, "fd": 0.18, "fs": 0.04, "keytrack": 0.5, "a": 0.001, "d": 0.4, "s": 0.3, "r": 0.08,
+                       "penv": 2, "pdecay": 0.02, "mode": 1, "drive": 0.35, "drift": 0.15, "volume": -2.5],
+        // Deep and round: triangle and a soft saw under a low 24 dB filter, with a sine sub and a little warmth.
+        "Deep Bass": ["osc1": 1, "osc2": 2, "semi2": 0, "fine2": 4, "mix": 0.3, "sub": 0.5, "ftype": 1, "cutoff": 320, "resonance": 0.1,
+                      "fenv": 0.3, "fd": 0.35, "fs": 0.3, "keytrack": 0.5, "a": 0.003, "d": 0.6, "s": 0.85, "r": 0.12,
+                      "mode": 1, "glide": 0.02, "drive": 0.25, "drift": 0.2, "volume": -7],
+        // FM bass: a sine whose FM envelope gives a bright, slappy attack that settles into a round tone.
+        "FM Bass": ["osc1": 0, "osc2": 0, "semi2": 0, "fine2": 0, "mix": 0, "fm": 0.03, "fmenv": 0.3, "fmdecay": 0.25, "sub": 0.3,
+                    "cutoff": 5000, "fenv": 0, "keytrack": 0, "a": 0.001, "d": 0.8, "s": 0.4, "r": 0.1, "mode": 1, "glide": 0.02,
+                    "drive": 0.2, "drift": 0.1, "volume": -6.5],
         // Keys
-        "Keys": ["osc1": 1, "osc2": 0, "semi2": 12, "mix": 0.3, "cutoff": 3000, "fenv": 0.3, "fd": 0.6, "d": 1.4, "s": 0.35, "r": 0.5, "volume": -8],
-        "Electric Piano": ["osc1": 0, "osc2": 1, "semi2": 12, "mix": 0.25, "cutoff": 4000, "fenv": 0.2, "fd": 0.4, "keytrack": 0.5, "d": 1.6, "s": 0.25, "r": 0.4, "lforate": 4.5, "lfoamp": 0.25, "volume": -7],
+        // Analog poly keys: saw and square through a 24 dB filter with a piano-like decay, chorused.
+        "Keys": ["osc1": 2, "osc2": 3, "semi2": 0, "fine2": 6, "mix": 0.4, "ftype": 1, "cutoff": 750, "resonance": 0.15, "fenv": 0.5,
+                 "fa": 0.001, "fd": 0.55, "fs": 0.2, "fr": 0.4, "keytrack": 0.6, "a": 0.002, "d": 1.6, "s": 0.35, "r": 0.4,
+                 "drift": 0.35, "volume": -2.5],
+        // FM electric piano: a sine carrier and a sine modulator at the same pitch (slightly detuned, so it
+        // shimmers). The FM envelope gives each note a bright bark that settles mellow; harder notes bark more.
+        "Electric Piano": ["osc1": 0, "osc2": 0, "semi2": 0, "fine2": 3, "mix": 0, "fm": 0.035, "fmenv": 0.16, "fmdecay": 1,
+                           "cutoff": 9000, "resonance": 0, "fenv": 0, "keytrack": 0.3, "a": 0.002, "d": 3.5, "s": 0.12, "r": 0.4,
+                           "lforate": 4.8, "lfoamp": 0.2, "drive": 0.08, "drift": 0.15, "volume": -9.5],
+        // DX-style tine piano: FM at 1:3, so the attack rings like a tine and fades to a near-pure tone,
+        // with the octave underneath for body.
+        "Tine Piano": ["osc1": 0, "osc2": 0, "semi2": 19, "fine2": 2, "mix": 0, "fm": 0.01, "fmenv": 0.18, "fmdecay": 0.45,
+                       "on3": 1, "osc3": 0, "semi3": 12, "fine3": 0, "lvl3": 0.2, "cutoff": 12000, "resonance": 0, "fenv": 0, "keytrack": 0,
+                       "a": 0.001, "d": 3, "s": 0.08, "r": 0.5, "lforate": 5, "lfoamp": 0.1, "drift": 0.15, "volume": -9.5],
         "Organ": ["osc1": 0, "osc2": 3, "semi2": 12, "mix": 0.35, "sub": 0.4, "cutoff": 3500, "fenv": 0, "a": 0.005, "d": 0.1, "s": 1, "r": 0.08, "lforate": 6, "lfopitch": 0.08, "volume": -12],
-        "Bell": ["osc1": 0, "osc2": 1, "semi2": 19, "fine2": 0, "mix": 0.45, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 2.5, "s": 0, "r": 2, "volume": -8],
+        // Tubular bell: FM at an inharmonic 1:3.5 ratio, starting bright and ringing out pure.
+        "Bell": ["osc1": 0, "osc2": 0, "semi2": 22, "fine2": -31, "mix": 0, "fm": 0.03, "fmenv": 0.22, "fmdecay": 2.5, "cutoff": 12000,
+                 "fenv": 0, "keytrack": 0, "a": 0.001, "d": 4, "s": 0, "r": 2.5, "drift": 0.1, "volume": -12],
         "Music Box": ["osc1": 0, "osc2": 0, "semi2": 24, "fine2": 0, "mix": 0.3, "cutoff": 9000, "fenv": 0, "a": 0.001, "d": 1.2, "s": 0, "r": 0.8, "volume": -6],
         // Pluck
-        "Pluck": ["osc2": 3, "semi2": 12, "mix": 0.35, "cutoff": 900, "resonance": 0.25, "fenv": 0.7, "fd": 0.18, "fs": 0, "d": 0.4, "s": 0, "r": 0.3, "keytrack": 0.6, "volume": -5],
+        // Bright pluck: saw plus a square an octave up, three voices wide, with a fast filter snap.
+        "Pluck": ["osc1": 2, "osc2": 3, "semi2": 12, "fine2": 0, "mix": 0.3, "unison": 1, "spread": 0.18, "cutoff": 800, "resonance": 0.2,
+                  "fenv": 0.7, "fd": 0.25, "fs": 0, "fr": 0.3, "keytrack": 0.6, "a": 0.001, "d": 0.55, "s": 0, "r": 0.35,
+                  "drift": 0.2, "volume": -4],
         "Marimba": ["osc1": 0, "osc2": 1, "semi2": 24, "fine2": 0, "mix": 0.15, "cutoff": 5000, "fenv": 0, "a": 0.001, "d": 0.35, "s": 0, "r": 0.2, "volume": -4],
         "Kalimba": ["osc1": 1, "osc2": 0, "semi2": 12, "fine2": 0, "mix": 0.3, "cutoff": 3500, "fenv": 0.3, "fd": 0.1, "fs": 0, "d": 0.5, "s": 0, "r": 0.3, "volume": -4],
         "Stab": ["osc1": 2, "osc2": 2, "fine2": 15, "unison": 1, "spread": 0.4, "cutoff": 2500, "resonance": 0.2, "fenv": 0.5, "fd": 0.12, "fs": 0, "d": 0.18, "s": 0, "r": 0.12, "volume": -4],
         // Lead
-        "Lead": ["osc1": 3, "osc2": 2, "fine2": 9, "cutoff": 4500, "resonance": 0.3, "fenv": 0.2, "mode": 2, "glide": 0.05, "s": 0.9, "r": 0.2, "drive": 0.2, "volume": -13],
-        "Supersaw": ["unison": 3, "spread": 0.45, "fine2": 12, "cutoff": 9000, "fenv": 0.1, "a": 0.01, "s": 0.85, "r": 0.4, "volume": -12],
+        // Classic mono lead: two saws and a square (one an octave down), a filter that opens on each note,
+        // glide, a touch of vibrato, and some drive.
+        "Lead": ["osc1": 2, "osc2": 3, "fine2": 7, "mix": 0.45, "on3": 1, "osc3": 2, "semi3": -12, "fine3": -4, "lvl3": 0.4,
+                 "cutoff": 2600, "resonance": 0.25, "fenv": 0.35, "fa": 0.004, "fd": 0.4, "fs": 0.4, "keytrack": 0.5,
+                 "a": 0.004, "d": 0.3, "s": 1, "r": 0.18, "mode": 2, "glide": 0.06, "lforate": 5.5, "lfopitch": 0.12,
+                 "drive": 0.3, "drift": 0.3, "volume": -13],
+        // Seven saws with supersaw detune, plus an octave layer, for big chords and trance leads.
+        "Supersaw": ["osc1": 2, "osc2": 2, "semi2": 12, "fine2": 0, "mix": 0.3, "unison": 3, "spread": 0.5, "cutoff": 8000, "resonance": 0.05,
+                     "fenv": 0.12, "fa": 0.005, "fd": 0.6, "fs": 0.6, "keytrack": 0.25, "a": 0.012, "d": 0.6, "s": 0.9, "r": 0.45,
+                     "drift": 0.3, "volume": -12],
         "Vibrato Lead": ["osc1": 2, "osc2": 3, "fine2": 6, "cutoff": 5000, "resonance": 0.2, "fenv": 0.15, "a": 0.02, "s": 0.9, "r": 0.25, "mode": 2, "glide": 0.04, "lforate": 5.5, "lfopitch": 0.35, "volume": -10],
         "Whistle": ["osc1": 0, "osc2": 0, "mix": 0, "noise": 0.05, "cutoff": 6000, "fenv": 0, "a": 0.06, "s": 1, "r": 0.2, "mode": 2, "glide": 0.08, "lforate": 5, "lfopitch": 0.25, "volume": -12],
         // Pad
         "Pad": ["unison": 2, "spread": 0.5, "a": 0.9, "d": 1.5, "s": 0.8, "r": 2.2, "cutoff": 2500, "fenv": 0.25, "fa": 1.2, "fd": 2, "fs": 0.4, "volume": -14],
-        "Warm Pad": ["osc1": 2, "osc2": 1, "fine2": 9, "unison": 1, "spread": 0.3, "cutoff": 1200, "resonance": 0.1, "fenv": 0.15, "a": 1.2, "d": 2, "s": 0.85, "r": 2.5, "fa": 1.5, "fd": 3, "fs": 0.5, "lforate": 0.3, "lfocut": 0.1, "volume": -12],
+        // Warm analog pad: detuned saws, a sine sub, a 24 dB filter that swells open, and slow drift and movement.
+        "Warm Pad": ["osc1": 2, "osc2": 2, "fine2": 8, "mix": 0.5, "sub": 0.2, "unison": 1, "spread": 0.22, "ftype": 1, "cutoff": 1100,
+                     "resonance": 0.12, "fenv": 0.25, "fa": 1.4, "fd": 2.5, "fs": 0.55, "fr": 2, "keytrack": 0.4,
+                     "a": 0.9, "d": 2, "s": 0.85, "r": 2.2, "lforate": 0.22, "lfocut": 0.1, "drift": 0.5, "volume": -13.5],
         "Dark Pad": ["osc1": 2, "osc2": 2, "unison": 2, "spread": 0.5, "cutoff": 600, "resonance": 0.25, "fenv": 0.3, "a": 1.5, "s": 0.9, "r": 3, "fa": 3, "fd": 4, "fs": 0.3, "volume": -10],
         "Glass Pad": ["osc1": 1, "osc2": 0, "semi2": 12, "fine2": 0, "mix": 0.4, "cutoff": 5000, "fenv": 0, "a": 0.8, "d": 2, "s": 0.7, "r": 2.5, "lforate": 3, "lfoamp": 0.15, "volume": -12],
         // Strings & Brass
-        "Strings": ["osc1": 2, "osc2": 2, "fine2": 8, "unison": 2, "spread": 0.25, "cutoff": 3500, "fenv": 0.1, "a": 0.45, "d": 1, "s": 0.9, "r": 0.9, "lforate": 5, "lfopitch": 0.1, "volume": -14],
+        // String ensemble: detuned saws with an octave above, a soft swell, gentle vibrato, and analog drift.
+        "Strings": ["osc1": 2, "osc2": 2, "fine2": 9, "mix": 0.5, "on3": 1, "osc3": 2, "semi3": 12, "fine3": 4, "lvl3": 0.3,
+                    "unison": 1, "spread": 0.35, "cutoff": 3800, "resonance": 0.05, "fenv": 0.12, "fa": 0.5, "fd": 1.5, "fs": 0.6,
+                    "keytrack": 0.4, "a": 0.35, "d": 1.2, "s": 0.95, "r": 0.8, "lforate": 5.2, "lfopitch": 0.08, "drift": 0.4, "volume": -14],
         "Brass": ["osc1": 2, "osc2": 2, "fine2": 5, "cutoff": 1200, "resonance": 0.15, "fenv": 0.55, "fa": 0.08, "fd": 0.4, "fs": 0.5, "a": 0.04, "d": 0.3, "s": 0.85, "r": 0.2, "keytrack": 0.5, "volume": -10],
         "Pizzicato": ["osc1": 2, "osc2": 1, "mix": 0.3, "cutoff": 2500, "fenv": 0.4, "fd": 0.08, "fs": 0, "a": 0.001, "d": 0.25, "s": 0, "r": 0.15, "volume": -3],
         // Chiptune
@@ -238,7 +287,9 @@ public enum SynthPresets {
         // Existing presets that benefit from some space.
         case "Supersaw", "Stab": return [wide, room]
         case "Pad", "Warm Pad", "Dark Pad", "Glass Pad", "Strings": return [wide, hall]
-        case "Pluck", "Kalimba", "Marimba", "Bell", "Music Box", "Electric Piano": return [echo, room]
+        case "Pluck", "Kalimba", "Marimba", "Bell", "Music Box": return [echo, room]
+        // Electric pianos and poly keys sound classic through a chorus.
+        case "Electric Piano", "Tine Piano", "Keys": return [wide, room]
         case "Lead", "Vibrato Lead", "Whistle", "Brass": return [echo, room]
         case "Reese Bass", "Wobble Bass", "Acid": return [grit]
         // Future Bass
@@ -316,23 +367,61 @@ struct ADSR {
     }
 }
 
+/// Two-sample polyBLEP: twice the residual of a unit step at phase 0 (a step of 2, as in a saw).
 @inline(__always) func polyBlep(_ t: Double, _ dt: Double) -> Double {
     if t < dt { let x = t / dt; return x + x - x * x - 1 }
     if t > 1 - dt { let x = (t - 1) / dt; return x * x + x + x + 1 }
     return 0
 }
 
+/// Four-sample polyBLEP from the integrated cubic B-spline: the residual of a unit step at phase 0.
+/// Spreading the correction over two samples each side suppresses aliasing much better than the
+/// two-sample version (about 10 dB at the top of the keyboard) for almost no extra work, since it
+/// only runs next to a step. Needs `dt < 0.25`.
+@inline(__always) func blep4(_ t: Double, _ dt: Double) -> Double {
+    if t < 2 * dt {
+        let x = t / dt
+        if x < 1 { let x2 = x * x; return -0.5 + x * (2.0 / 3) - x2 * x / 3 + x2 * x2 / 8 }
+        let y = 2 - x, y2 = y * y
+        return -y2 * y2 / 24
+    }
+    if t > 1 - 2 * dt {
+        let x = (t - 1) / dt
+        if x > -1 { let x2 = x * x; return 0.5 + x * (2.0 / 3) - x2 * x / 3 - x2 * x2 / 8 }
+        let y = 2 + x, y2 = y * y
+        return y2 * y2 / 24
+    }
+    return 0
+}
+
+/// Two-sample polyBLAMP: the residual of a unit change of slope (per sample) at phase 0. Smooths the
+/// corners of the triangle wave, whose naive version aliases at high notes.
+@inline(__always) func polyBlamp(_ t: Double, _ dt: Double) -> Double {
+    if t < dt { let y = 1 - t / dt; return y * y * y / 6 }
+    if t > 1 - dt { let y = 1 + (t - 1) / dt; return y * y * y / 6 }
+    return 0
+}
+
 @inline(__always) func oscillator(_ wave: Int, _ phase: Double, _ dt: Double) -> Double {
     switch wave {
     case 0: return sin(2 * .pi * phase)
-    case 1: return phase < 0.5 ? 4 * phase - 1 : 3 - 4 * phase
-    case 2: return 2 * phase - 1 - polyBlep(phase, dt)
+    case 1:
+        let v = phase < 0.5 ? 4 * phase - 1 : 3 - 4 * phase
+        guard dt < 0.25 else { return v }
+        // Most samples are nowhere near a corner; skip the correction for them.
+        let h = phase < 0.5 ? phase : phase - 0.5
+        if h >= dt && h <= 0.5 - dt { return v }
+        // The slope turns by +8 per cycle at phase 0 and by -8 at the peak.
+        let t2 = phase < 0.5 ? phase + 0.5 : phase - 0.5
+        return v + 8 * dt * (polyBlamp(phase, dt) - polyBlamp(t2, dt))
+    case 2:
+        if dt < 0.25 { return 2 * phase - 1 - 2 * blep4(phase, dt) }
+        return 2 * phase - 1 - polyBlep(phase, dt)
     default:
-        var v = phase < 0.5 ? 1.0 : -1.0
-        v += polyBlep(phase, dt)
         var t2 = phase + 0.5; if t2 >= 1 { t2 -= 1 }
-        v -= polyBlep(t2, dt)
-        return v
+        let v = phase < 0.5 ? 1.0 : -1.0
+        if dt < 0.125 { return v + 2 * (blep4(phase, dt) - blep4(t2, dt)) }
+        return v + polyBlep(phase, dt) - polyBlep(t2, dt)
     }
 }
 
@@ -353,8 +442,17 @@ struct SynthVoice {
     var dcxL: Float = 0, dcyL: Float = 0, dcxR: Float = 0, dcyR: Float = 0
     /// Stolen to make room for a new note: release over a few milliseconds.
     var quickFade = false
-    /// Slow random pitch wander, in semitones, like an analog oscillator.
+    /// Slow random pitch wander, in semitones, like an analog oscillator. Osc 1 follows `drift`;
+    /// osc 2–4 wander on their own (`drift2`), so the detune between oscillators keeps moving.
     var drift = 0.0, driftTarget = 0.0
+    var drift2 = 0.0, drift2Target = 0.0
+    /// Per-note cutoff offset (a ratio), like the small differences between analog voice cards.
+    var cutVar = 1.0
+    /// FM envelope level (1 at the start of a note, decaying) and the smoothed FM index, in cycles.
+    var fmEnv: Float = 0
+    var fmIdx = 0.0
+    /// Smoothed velocity gain, so a retriggered mono note never jumps in level mid-wave.
+    var velGain: Float = 0
     var held = false
 
     var isActive: Bool { amp.stage != .idle }
@@ -382,6 +480,28 @@ public final class Synth {
     let ph4: UnsafeMutablePointer<Double>
     static let maxUnison = 7
     static let unisonCounts = [1, 3, 5, 7]
+    /// Unison detune positions (outermost about ±1), seven per voice count. Uneven like the JP-8000
+    /// supersaw, so the voices never beat in a repeating pattern, and slightly lopsided for the same reason.
+    static let unisonDetune: [Double] = [
+        0, 0, 0, 0, 0, 0, 0,
+        -1, 0, 0.98, 0, 0, 0, 0,
+        -1, -0.39, 0, 0.37, 0.98, 0, 0,
+        -1, -0.5716, -0.1775, 0, 0.181, 0.565, 0.9767,
+    ]
+    /// Pan positions (-1 left, 1 right) for the same voices: flat and sharp voices alternate sides, so
+    /// neither side sounds out of tune and the stereo image is even.
+    static let unisonPan: [Double] = [
+        0, 0, 0, 0, 0, 0, 0,
+        -1, 0, 1, 0, 0, 0, 0,
+        -1, 0.6, 0, -0.6, 1, 0, 0,
+        -1, 0.67, -0.33, 0, 0.33, -0.67, 1,
+    ]
+    /// Level of the detuned voices next to the center one, which stays loudest and keeps the pitch focused.
+    static let unisonSideGain: [Double] = [1, 0.85, 0.75, 0.7]
+    /// This block's unison frequency ratios and per-voice left/right gains (no allocation on the audio thread).
+    let uniRatio: UnsafeMutablePointer<Double>
+    let uniL: UnsafeMutablePointer<Double>
+    let uniR: UnsafeMutablePointer<Double>
 
     public init(sampleRate: Double) {
         sr = sampleRate
@@ -391,6 +511,15 @@ public final class Synth {
         ph2 = .allocate(capacity: n)
         ph3 = .allocate(capacity: n)
         ph4 = .allocate(capacity: n)
+        uniRatio = .allocate(capacity: Synth.maxUnison)
+        uniL = .allocate(capacity: Synth.maxUnison)
+        uniR = .allocate(capacity: Synth.maxUnison)
+        uniRatio.initialize(repeating: 1, count: Synth.maxUnison)
+        uniL.initialize(repeating: 1, count: Synth.maxUnison)
+        uniR.initialize(repeating: 1, count: Synth.maxUnison)
+        // Touch the tables here, so their one-time setup never happens on the audio thread.
+        _ = Synth.unisonDetune.count + Synth.unisonPan.count + Synth.unisonSideGain.count + Synth.unisonCounts.count
+        _ = SynthParams.lfoSyncBeats.count
         // Spread start phases so unison voices don't start in sync, but seeded, so every bounce
         // of a song sounds identical.
         var seed: UInt32 = 0x5EED
@@ -408,6 +537,9 @@ public final class Synth {
         ph2.deallocate()
         ph3.deallocate()
         ph4.deallocate()
+        uniRatio.deallocate()
+        uniL.deallocate()
+        uniR.deallocate()
     }
 
     static func freq(_ note: Int) -> Double { 440 * pow(2, Double(note - 69) / 12) }
@@ -434,6 +566,13 @@ public final class Synth {
                 v.amp.gate(on: true, retrigger: true)
                 v.fenv.gate(on: true, retrigger: true)
                 v.pitchEnv = 1
+                v.fmEnv = 1
+                v.cutVar = cutoffVariation(p)
+            }
+            if !wasActive {
+                // Starting from silence, so nothing to smooth from.
+                v.velGain = 0.3 + 0.7 * v.velocity
+                v.fmIdx = startFM(v.velocity, p)
             }
             voices[0] = v
             for i in 1..<voices.count where voices[i].isActive { voices[i].amp.gate(on: false) }
@@ -477,6 +616,10 @@ public final class Synth {
         v.order = counter
         v.held = true
         v.pitchEnv = 1
+        v.fmEnv = 1
+        v.cutVar = cutoffVariation(p)
+        v.velGain = 0.3 + 0.7 * velocity
+        v.fmIdx = startFM(velocity, p)
         configure(&v, p)
         v.amp.gate(on: true)
         v.fenv.gate(on: true)
@@ -534,6 +677,20 @@ public final class Synth {
 
     public var isSilent: Bool { !voices.contains { $0.isActive } }
 
+    /// FM index (in cycles) at the very start of a note.
+    private func startFM(_ velocity: Float, _ p: [Double]) -> Double {
+        max(0, p[SynthParams.fm] + p[SynthParams.fmEnv] * Synth.fmVelocity(velocity)) * 2.5
+    }
+
+    /// How much of the FM envelope a note gets: harder notes ring brighter.
+    @inline(__always) static func fmVelocity(_ velocity: Float) -> Double { 0.35 + 0.65 * Double(velocity) }
+
+    /// A small random cutoff offset for each note, scaled by Drift, like analog voices that never quite match.
+    private func cutoffVariation(_ p: [Double]) -> Double {
+        let d = p[SynthParams.drift]
+        return d > 0 ? pow(2, noise() * 0.12 * d) : 1
+    }
+
     private func configure(_ v: inout SynthVoice, _ p: [Double]) {
         v.amp.configure(a: p[SynthParams.a], d: p[SynthParams.d], s: p[SynthParams.s], r: p[SynthParams.r], sr: sr)
         v.fenv.configure(a: p[SynthParams.fa], d: p[SynthParams.fd], s: p[SynthParams.fs], r: p[SynthParams.fr], sr: sr)
@@ -573,12 +730,19 @@ public final class Synth {
         let g3 = p[SynthParams.on3] > 0.5 ? p[SynthParams.lvl3] * 0.5 : 0
         let g4 = p[SynthParams.on4] > 0.5 ? p[SynthParams.lvl4] * 0.5 : 0
         let sub = p[SynthParams.sub], nz = p[SynthParams.noise]
-        let uniCount = Synth.unisonCounts[min(3, max(0, Int(p[SynthParams.unison])))]
+        let uniIdx = min(3, max(0, Int(p[SynthParams.unison])))
+        let uniCount = Synth.unisonCounts[uniIdx]
         let spread = p[SynthParams.spread]
         let cutoff = p[SynthParams.cutoff], res = Float(p[SynthParams.res])
         let fenvAmt = p[SynthParams.fenv], keytrack = p[SynthParams.keytrack]
         let ftype = Int(p[SynthParams.ftype])
         let fm = p[SynthParams.fm], lfoFM = p[SynthParams.lfoFM]
+        let fmEnvAmt = p[SynthParams.fmEnv]
+        let fmEnvCoef = Float(exp(-4.6 / max(1, p[SynthParams.fmDecay] * sr)))
+        let fmOn = fm > 0 || lfoFM > 0 || fmEnvAmt > 0
+        // FM index changes glide over about a millisecond, so knob moves and retriggers never click.
+        let fmSmooth = exp(-1 / (0.001 * sr))
+        let velSmooth = Float(exp(-1 / (0.003 * sr)))
         let driftAmt = p[SynthParams.drift]
         let penv = p[SynthParams.penv]
         let pdec = Float(exp(-4.6 / max(1, p[SynthParams.pdecay] * sr)))
@@ -615,20 +779,20 @@ public final class Synth {
         }
         // Drift moves toward a new random target a few times a second.
         let driftCoef = exp(-1 / (0.25 * sr / Double(max(1, frames))))
-        let uniNorm = 1 / sqrt(Double(uniCount)) * p[SynthParams.oscLevel]
-        // Unison detune is constant for the block; precompute instead of calling pow() per sample.
-        var detunes = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        var ratios = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
-        withUnsafeMutableBytes(of: &detunes) { d in
-            withUnsafeMutableBytes(of: &ratios) { r in
-                let dp = d.bindMemory(to: Double.self), rp = r.bindMemory(to: Double.self)
-                for u in 0..<uniCount {
-                    dp[u] = uniCount == 1 ? 0 : (Double(u) / Double(uniCount - 1) * 2 - 1)
-                    rp[u] = pow(2, dp[u] * spread * 0.6 / 12)
-                }
-            }
+        // Unison is constant for the block; precompute instead of calling pow() per sample.
+        // Supersaw-style: uneven detune, the center voice louder than the sides, and flat and sharp
+        // voices on both sides. Normalized so the total level matches a single voice.
+        let side = Synth.unisonSideGain[uniIdx]
+        let uniNorm = p[SynthParams.oscLevel] / sqrt(1 + Double(uniCount - 1) * side * side)
+        for u in 0..<uniCount {
+            let det = Synth.unisonDetune[uniIdx * Synth.maxUnison + u]
+            uniRatio[u] = pow(2, det * spread * 0.6 / 12)
+            let pan = 0.5 + Synth.unisonPan[uniIdx * Synth.maxUnison + u] * 0.45
+            let g = (det == 0 ? 1 : side) * uniNorm * 2
+            uniL[u] = g * (1 - pan)
+            uniR[u] = g * pan
         }
-        let detunesArr = detunes, ratiosArr = ratios
+        let maxFM = sr * 0.45
 
         for vi in voices.indices where voices[vi].isActive {
             var v = voices[vi]
@@ -639,11 +803,16 @@ public final class Synth {
             if driftAmt > 0 {
                 if abs(v.drift - v.driftTarget) < 0.01 || noise() > 0.97 { v.driftTarget = noise() * 0.08 }
                 v.drift = v.driftTarget + (v.drift - v.driftTarget) * driftCoef
+                if abs(v.drift2 - v.drift2Target) < 0.01 || noise() > 0.97 { v.drift2Target = noise() * 0.08 }
+                v.drift2 = v.drift2Target + (v.drift2 - v.drift2Target) * driftCoef
             }
             let driftRatio = driftAmt > 0 ? pow(2, v.drift * driftAmt / 12) : 1
-            let velGain = 0.3 + 0.7 * v.velocity
+            // Osc 2–4 relative to osc 1, so their detune against it wanders slowly.
+            let rel = driftAmt > 0 ? pow(2, (v.drift2 - v.drift) * driftAmt / 12) : 1
+            let r2 = ratio2 * rel, r3 = ratio3 * rel, r4 = ratio4 * rel
+            let velTarget = 0.3 + 0.7 * v.velocity
+            let fmVel = fmEnvAmt * Synth.fmVelocity(v.velocity)
             let base = vi * Synth.maxUnison
-            let detunes = TupleIndex(detunesArr), detuneRatios = TupleIndex(ratiosArr)
             for i in 0..<frames {
                 if glideCoef > 0 { v.freq = v.targetFreq + (v.freq - v.targetFreq) * glideCoef } else { v.freq = v.targetFreq }
                 var f0 = v.freq * driftRatio
@@ -655,13 +824,23 @@ public final class Synth {
                 }
                 // A big pitch envelope on a high note can pass the sample rate; keep oscillators sane.
                 f0 = min(f0, sr * 0.45)
-                // FM: osc 2 bends osc 1's phase. The LFO can push it for talking, growling basses.
-                let fmIndex = max(0, fm + lfoFM * (lfo * 0.5 + 0.5)) * 2.5
+                // FM: osc 2 bends osc 1's phase. The LFO can push it for talking, growling basses, and the
+                // FM envelope makes each note start bright and settle.
+                var fmIndex = 0.0
+                if fmOn {
+                    var target = max(0, fm + fmVel * Double(v.fmEnv) + lfoFM * (lfo * 0.5 + 0.5)) * 2.5
+                    // Keep the FM sidebands under Nyquist (Carson's rule): past it they fold back as harsh,
+                    // unrelated tones on high notes.
+                    let limit = max(0, (maxFM - f0 * ratio1) / (f0 * r2) - 1) / (2 * .pi)
+                    if target > limit { target = limit }
+                    v.fmIdx = target + (v.fmIdx - target) * fmSmooth
+                    fmIndex = v.fmIdx
+                    v.fmEnv *= fmEnvCoef
+                }
                 var sl = 0.0, sr2 = 0.0
                 for u in 0..<uniCount {
-                    let det = detunes[u]
-                    let fu = f0 * detuneRatios[u]
-                    let dt1 = fu * ratio1 / sr, dt2 = fu * ratio2 / sr
+                    let fu = f0 * uniRatio[u]
+                    let dt1 = fu * ratio1 / sr, dt2 = fu * r2 / sr
                     let k = base + u
                     let o2 = oscillator(w2, ph2[k], dt2)
                     let o1: Double
@@ -677,20 +856,18 @@ public final class Synth {
                     ph1[k] += dt1; if ph1[k] >= 1 { ph1[k] -= ph1[k].rounded(.down) }
                     ph2[k] += dt2; if ph2[k] >= 1 { ph2[k] -= ph2[k].rounded(.down) }
                     if g3 > 0 {
-                        let dt3 = fu * ratio3 / sr
+                        let dt3 = fu * r3 / sr
                         o += oscillator(w3, ph3[k], dt3) * g3
                         ph3[k] += dt3; if ph3[k] >= 1 { ph3[k] -= ph3[k].rounded(.down) }
                     }
                     if g4 > 0 {
-                        let dt4 = fu * ratio4 / sr
+                        let dt4 = fu * r4 / sr
                         o += oscillator(w4, ph4[k], dt4) * g4
                         ph4[k] += dt4; if ph4[k] >= 1 { ph4[k] -= ph4[k].rounded(.down) }
                     }
-                    let pan = uniCount == 1 ? 0.5 : 0.5 + det * 0.45
-                    sl += o * (1 - pan) * 2
-                    sr2 += o * pan * 2
+                    sl += o * uniL[u]
+                    sr2 += o * uniR[u]
                 }
-                sl *= uniNorm; sr2 *= uniNorm
                 if sub > 0 {
                     let s = sin(2 * .pi * v.phSub) * sub * p[SynthParams.oscLevel]
                     v.phSub += f0 * 0.5 / sr; if v.phSub >= 1 { v.phSub -= 1 }
@@ -701,7 +878,7 @@ public final class Synth {
                 let fe = Double(v.fenv.next())
                 if i & 7 == 0 {
                     let kt = pow(f0 / 261.6, keytrack)
-                    let c = min(cutoff * kt * pow(2, fenvAmt * fe * 7 + lfo * lfoCut * 4), sr * 0.45)
+                    let c = min(cutoff * v.cutVar * kt * pow(2, fenvAmt * fe * 7 + lfo * lfoCut * 4), sr * 0.45)
                     if ftype == 1 {
                         // Two stages: a Butterworth-ish first stage, resonance on the second.
                         v.fL.set(cutoff: Float(c), resonance: 0.08, sampleRate: srF)
@@ -715,18 +892,18 @@ public final class Synth {
                 var l: Float, r: Float
                 switch ftype {
                 case 1:
-                    l = v.fL2.process(v.fL.process(Float(sl)).0).0
-                    r = v.fR2.process(v.fR.process(Float(sr2)).0).0
+                    l = v.fL2.processLimited(v.fL.process(Float(sl)).0).0
+                    r = v.fR2.processLimited(v.fR.process(Float(sr2)).0).0
                 case 2:
                     // Band-pass scaled by k keeps the peak near unity at any resonance.
                     l = v.fL.process(Float(sl)).1 * v.fL.k
                     r = v.fR.process(Float(sr2)).1 * v.fR.k
                 case 3:
-                    l = v.fL.process(Float(sl)).2
-                    r = v.fR.process(Float(sr2)).2
+                    l = v.fL.processLimited(Float(sl)).2
+                    r = v.fR.processLimited(Float(sr2)).2
                 default:
-                    l = v.fL.process(Float(sl)).0
-                    r = v.fR.process(Float(sr2)).0
+                    l = v.fL.processLimited(Float(sl)).0
+                    r = v.fR.processLimited(Float(sr2)).0
                 }
                 if drive > 0 {
                     l = adaaTanh(l * driveGain, &v.dzL) * driveComp * 1.5
@@ -735,7 +912,8 @@ public final class Synth {
                     let yl = l - v.dcxL + dcR * v.dcyL; v.dcxL = l; v.dcyL = yl; l = yl
                     let yr = r - v.dcxR + dcR * v.dcyR; v.dcxR = r; v.dcyR = yr; r = yr
                 }
-                var a = v.amp.next() * velGain * vol
+                v.velGain = velTarget + (v.velGain - velTarget) * velSmooth
+                var a = v.amp.next() * v.velGain * vol
                 if lfoAmp > 0 { a *= 1 - lfoAmp * Float(0.5 - 0.5 * lfo) }
                 outL[i] += l * a
                 outR[i] += r * a
@@ -775,21 +953,4 @@ public final class Synth {
 @inline(__always) func logCosh(_ x: Float) -> Float {
     let a = abs(x)
     return a + log1pf(expf(-2 * a)) - 0.6931472
-}
-
-/// Allocation-free indexable view over a 7-element tuple.
-struct TupleIndex {
-    let t: (Double, Double, Double, Double, Double, Double, Double)
-    init(_ t: (Double, Double, Double, Double, Double, Double, Double)) { self.t = t }
-    @inline(__always) subscript(i: Int) -> Double {
-        switch i {
-        case 0: return t.0
-        case 1: return t.1
-        case 2: return t.2
-        case 3: return t.3
-        case 4: return t.4
-        case 5: return t.5
-        default: return t.6
-        }
-    }
 }
