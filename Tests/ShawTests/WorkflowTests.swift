@@ -123,10 +123,19 @@ final class ClipboardTests: XCTestCase {
         XCTAssertTrue(s.effects(of: .clip(s.activeCompID, b.id)).isEmpty, "one paste is one undo step")
     }
 
+    func testPresetEffectsLandOnTheNewLayer() {
+        let s = store()
+        s.addInstrument(.synth("Future Chords"))
+        let t = s.activeComp!.tracks[0]
+        XCTAssertEqual(t.effects.map(\.kind), ["pump", "chorus", "reverb"])
+        XCTAssertEqual(t.effects[0].params.count, EffectRegistry.descriptor("pump")!.params.count, "every parameter is filled in")
+    }
+
     func testReorderAndCopyByDragging() {
         let s = store()
-        s.addInstrument(.synth("Pluck"))
-        s.addInstrument(.synth("Pad"))
+        // Presets with no effects of their own, so the layers start empty.
+        s.addInstrument(.synth("Init"))
+        s.addInstrument(.synth("Organ"))
         let comp = s.activeComp!
         let t0 = EffectHost.track(s.activeCompID, comp.tracks[0].id), t1 = EffectHost.track(s.activeCompID, comp.tracks[1].id)
         s.addEffect("reverb", to: t0)

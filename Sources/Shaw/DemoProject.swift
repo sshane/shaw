@@ -10,6 +10,9 @@ enum DemoProject {
         p.updateComposition(p.mainCompositionID) { c in
             c.length = 32
             c.tracks = []
+            // A light master chain, like a finished song: glue the mix together, then bring it up to volume.
+            c.effects = [effect("compressor", ["threshold": -14, "ratio": 2, "attack": 30, "release": 150, "makeup": 1]),
+                         effect("limiter", ["gain": 3, "ceiling": -0.5])]
         }
         return p
     }

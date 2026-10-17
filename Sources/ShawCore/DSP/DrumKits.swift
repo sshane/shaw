@@ -57,7 +57,7 @@ public enum DrumKits {
         DrumVoiceInfo(id: "tomhi", name: "High Tom", choke: 0),
         DrumVoiceInfo(id: "rim", name: "Rim", choke: 0),
         DrumVoiceInfo(id: "perc", name: "Perc", choke: 0),
-        DrumVoiceInfo(id: "crash", name: "Crash", choke: 0),
+        DrumVoiceInfo(id: "crash", name: "Crash", choke: 2),
     ]
 
     public static let kits: [DrumKitInfo] = [
@@ -122,60 +122,67 @@ public enum DrumKits {
 
     static func generate(kit: String, sampleRate sr: Double) -> [String: SampleData] {
         var kick: KickSpec, snare: SnareSpec, hat: HatSpec
-        var clapTail = 0.12, tomDecay = 0.35, crashDecay = 1.6
+        var clapTail = 0.12, tomDecay = 0.35, crashDecay = 0.55
         var post: ([Float]) -> [Float] = { $0 }
         switch kit {
         case "house":
             kick = KickSpec(start: 260, end: 50, pitchDecay: 0.03, ampDecay: 0.32, click: 0.5, drive: 1.6, length: 0.6)
             snare = SnareSpec(tone: 190, toneDecay: 0.06, noiseDecay: 0.18, noiseLevel: 0.8, hp: 1500, length: 0.4)
-            hat = HatSpec(closed: 0.05, open: 0.42, hp: 7000, metal: 0.7)
+            hat = HatSpec(closed: 0.05, open: 0.2, hp: 7000, metal: 0.7)
             clapTail = 0.18
         case "boombap":
             kick = KickSpec(start: 180, end: 52, pitchDecay: 0.04, ampDecay: 0.28, click: 0.25, drive: 2.2, length: 0.55)
             snare = SnareSpec(tone: 210, toneDecay: 0.08, noiseDecay: 0.16, noiseLevel: 0.65, hp: 900, length: 0.4)
-            hat = HatSpec(closed: 0.06, open: 0.3, hp: 5000, metal: 0.4)
+            hat = HatSpec(closed: 0.06, open: 0.16, hp: 5000, metal: 0.4)
             tomDecay = 0.3
             post = { lowpass($0, 7000, sr) }
         case "lofi":
             kick = KickSpec(start: 160, end: 48, pitchDecay: 0.05, ampDecay: 0.3, click: 0.1, drive: 2.5, length: 0.5)
             snare = SnareSpec(tone: 230, toneDecay: 0.07, noiseDecay: 0.14, noiseLevel: 0.55, hp: 700, length: 0.35)
-            hat = HatSpec(closed: 0.05, open: 0.25, hp: 4500, metal: 0.3)
+            hat = HatSpec(closed: 0.05, open: 0.14, hp: 4500, metal: 0.3)
             post = { crush(lowpass($0, 4200, sr), bits: 9, hold: 3) }
         case "techno":
             kick = KickSpec(start: 300, end: 46, pitchDecay: 0.022, ampDecay: 0.45, click: 0.8, drive: 4.0, length: 0.7)
             snare = SnareSpec(tone: 170, toneDecay: 0.05, noiseDecay: 0.12, noiseLevel: 0.9, hp: 2000, length: 0.3)
-            hat = HatSpec(closed: 0.035, open: 0.3, hp: 8000, metal: 0.9)
+            hat = HatSpec(closed: 0.035, open: 0.15, hp: 8000, metal: 0.75)
             clapTail = 0.25
-            crashDecay = 2.2
+            crashDecay = 0.45
         case "electro":
             kick = KickSpec(start: 210, end: 50, pitchDecay: 0.025, ampDecay: 0.42, click: 0.55, drive: 1.8, length: 0.6)
             snare = SnareSpec(tone: 220, toneDecay: 0.04, noiseDecay: 0.11, noiseLevel: 0.95, hp: 2500, length: 0.3)
-            hat = HatSpec(closed: 0.04, open: 0.25, hp: 8000, metal: 0.85)
+            hat = HatSpec(closed: 0.04, open: 0.13, hp: 8000, metal: 0.8)
             clapTail = 0.14
         case "drill":
             kick = KickSpec(start: 120, end: 40, pitchDecay: 0.08, ampDecay: 1.4, click: 0.3, drive: 1.6, length: 1.9)
             snare = SnareSpec(tone: 230, toneDecay: 0.04, noiseDecay: 0.12, noiseLevel: 0.9, hp: 2600, length: 0.3)
-            hat = HatSpec(closed: 0.03, open: 0.3, hp: 9000, metal: 0.7)
+            hat = HatSpec(closed: 0.03, open: 0.14, hp: 9000, metal: 0.7)
             clapTail = 0.16
         default: // trap
             kick = KickSpec(start: 150, end: 44, pitchDecay: 0.06, ampDecay: 1.1, click: 0.35, drive: 1.4, length: 1.6)
             snare = SnareSpec(tone: 200, toneDecay: 0.05, noiseDecay: 0.17, noiseLevel: 0.85, hp: 1800, length: 0.4)
-            hat = HatSpec(closed: 0.035, open: 0.38, hp: 8500, metal: 0.6)
+            hat = HatSpec(closed: 0.035, open: 0.17, hp: 8500, metal: 0.6)
             clapTail = 0.2
         }
 
-        func make(_ x: [Float]) -> SampleData { SampleData(left: normalize(post(x)), sampleRate: sr) }
+        // Peak-normalized, then balanced by ear-loudness: long voices (crash, open hat, toms) sound
+        // much louder than a snare at the same peak, so they're turned down to sit together.
+        let gains: [String: Float] = ["kick": 0.7, "crash": 0.35, "ohat": 0.5, "tomlo": 0.6, "tomhi": 0.6]
+        var current = ""
+        func make(_ x: [Float]) -> SampleData {
+            let g = gains[current] ?? 1
+            return SampleData(left: normalize(post(x)).map { $0 * g }, sampleRate: sr)
+        }
         var out: [String: SampleData] = [:]
-        out["kick"] = make(synthKick(kick, sr))
-        out["snare"] = make(synthSnare(snare, sr))
-        out["clap"] = make(synthClap(tail: clapTail, sr))
-        out["chat"] = make(synthHat(decay: hat.closed, hp: hat.hp, metal: hat.metal, sr, seed: 7))
-        out["ohat"] = make(synthHat(decay: hat.open, hp: hat.hp, metal: hat.metal, sr, seed: 9))
-        out["tomlo"] = make(synthTom(freq: 95, decay: tomDecay, sr))
-        out["tomhi"] = make(synthTom(freq: 165, decay: tomDecay * 0.85, sr))
-        out["rim"] = make(synthRim(sr))
-        out["perc"] = make(synthPerc(sr))
-        out["crash"] = make(synthHat(decay: crashDecay, hp: 4000, metal: 0.9, sr, seed: 13, wide: true))
+        current = "kick"; out["kick"] = make(synthKick(kick, sr))
+        current = "snare"; out["snare"] = make(synthSnare(snare, sr))
+        current = "clap"; out["clap"] = make(synthClap(tail: clapTail, sr))
+        current = "chat"; out["chat"] = make(synthHat(decay: hat.closed, hp: hat.hp, metal: hat.metal, sr, seed: 7))
+        current = "ohat"; out["ohat"] = make(synthHat(decay: hat.open, hp: hat.hp, metal: hat.metal, sr, seed: 9))
+        current = "tomlo"; out["tomlo"] = make(synthTom(freq: 95, decay: tomDecay, sr))
+        current = "tomhi"; out["tomhi"] = make(synthTom(freq: 165, decay: tomDecay * 0.85, sr))
+        current = "rim"; out["rim"] = make(synthRim(sr))
+        current = "perc"; out["perc"] = make(synthPerc(sr))
+        current = "crash"; out["crash"] = make(synthHat(decay: crashDecay, hp: 4000, metal: 0.9, sr, seed: 13, wide: true))
         return out
     }
 
@@ -183,11 +190,14 @@ public enum DrumKits {
         let m = x.reduce(0) { max($0, abs($1)) }
         guard m > 0 else { return x }
         let g = peak / m
-        // Short fade at the end so truncated tails never click.
-        let fadeN = min(x.count, 256)
+        // Smooth fade over the last 30% so a tail that is still sounding (a driven kick) never
+        // ends in a click or a thump. Tails that already died away don't change.
+        let fadeStart = Int(Double(x.count) * 0.7)
+        let fadeN = max(1, x.count - fadeStart)
         return x.enumerated().map { i, v in
-            let fade = i >= x.count - fadeN ? Float(x.count - i) / Float(fadeN) : 1
-            return v * g * fade
+            guard i >= fadeStart else { return v * g }
+            let t = Float(i - fadeStart) / Float(fadeN)
+            return v * g * (0.5 + 0.5 * cosf(.pi * t))
         }
     }
 
@@ -231,7 +241,7 @@ public enum DrumKits {
     }
 
     static func synthSnare(_ s: SnareSpec, _ sr: Double) -> [Float] {
-        let n = Int(s.length * sr)
+        let n = Int(max(s.length, s.noiseDecay * 6) * sr)
         var rng = Rng(s: 3)
         var hp = Biquad(), lp = Biquad()
         hp.set(.highpass, freq: s.hp, q: 0.7, sampleRate: sr)
@@ -262,31 +272,38 @@ public enum DrumKits {
         }
     }
 
+    /// Hats and cymbals: six band-limited 808-style square waves (no aliasing fizz) plus noise,
+    /// band-passed and high-passed. `decay` is the time constant; the sample stops once it's
+    /// about 60 dB down, so nothing rings on long after you stop hearing it.
     static func synthHat(decay: Double, hp: Double, metal: Float, _ sr: Double, seed: UInt32, wide: Bool = false) -> [Float] {
-        let n = Int((decay * 5 + 0.02) * sr)
+        let n = Int((decay * 7 + 0.01) * sr)
         var rng = Rng(s: seed)
-        // Classic 808 metallic ratios: six detuned square waves.
         let freqs = [205.3, 304.4, 369.6, 522.7, 540.0, 800.0].map { $0 * (wide ? 1.3 : 1.7) }
         var phases = [Double](repeating: 0, count: 6)
-        var h1 = Biquad(), h2 = Biquad()
+        var h1 = Biquad(), h2 = Biquad(), bp = Biquad()
         h1.set(.highpass, freq: hp, q: 0.7, sampleRate: sr)
         h2.set(.highpass, freq: hp, q: 0.7, sampleRate: sr)
+        bp.set(.peak, freq: wide ? 6500 : 10000, q: 0.8, gainDb: 5, sampleRate: sr)
         return (0..<n).map { i in
             let t = Double(i) / sr
-            var m: Float = 0
+            var m: Double = 0
             for j in 0..<6 {
-                phases[j] += freqs[j] / sr
+                let dt = freqs[j] / sr
+                m += oscillator(3, phases[j], dt)
+                phases[j] += dt
                 if phases[j] >= 1 { phases[j] -= 1 }
-                m += phases[j] < 0.5 ? 1 : -1
             }
-            let src = m / 6 * metal + rng.next() * (1 - metal * 0.6)
-            let env = Float(exp(-t / decay)) * Float(min(1, t / 0.0005))
-            return h2.process(h1.process(src)) * env
+            let src = Float(m / 6) * metal + rng.next() * (1 - metal * 0.5)
+            // A bright stick hit up front, then the body decays.
+            let body = exp(-t / decay)
+            let hit = wide ? 0.6 * exp(-t / 0.03) : 0.3 * exp(-t / 0.006)
+            let env = Float(min(1, body + hit) * min(1, t / 0.0004))
+            return bp.process(h2.process(h1.process(src))) * env
         }
     }
 
     static func synthTom(freq: Double, decay: Double, _ sr: Double) -> [Float] {
-        let n = Int(decay * 4 * sr)
+        let n = Int(decay * 6 * sr)
         var phase = 0.0
         var rng = Rng(s: 11)
         return (0..<n).map { i in
@@ -306,8 +323,8 @@ public enum DrumKits {
         var phase = 0.0
         return (0..<n).map { i in
             let t = Double(i) / sr
-            phase += 1700 / sr
-            let tri = Float(phase.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : -1) * Float(exp(-t / 0.006))
+            let tri = Float(oscillator(1, phase, 1700 / sr) * exp(-t / 0.006))
+            phase += 1700 / sr; if phase >= 1 { phase -= 1 }
             return tri * 0.6 + bp.process(rng.next()) * Float(exp(-t / 0.02)) * 2
         }
     }
@@ -320,8 +337,10 @@ public enum DrumKits {
         var p1 = 0.0, p2 = 0.0
         return (0..<n).map { i in
             let t = Double(i) / sr
-            p1 += 540 / sr; p2 += 800 / sr
-            let s = (p1.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.0 : -1.0) + (p2.truncatingRemainder(dividingBy: 1) < 0.5 ? 1.0 : -1.0)
+            // Band-limited squares, so the bell doesn't fizz with aliasing.
+            let s = oscillator(3, p1, 540 / sr) + oscillator(3, p2, 800 / sr)
+            p1 += 540 / sr; if p1 >= 1 { p1 -= 1 }
+            p2 += 800 / sr; if p2 >= 1 { p2 -= 1 }
             let env = t < 0.01 ? 1 : 0.6 * exp(-(t - 0.01) / 0.09) + 0.4 * exp(-t / 0.015)
             return bp.process(Float(s * env))
         }

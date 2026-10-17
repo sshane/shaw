@@ -488,7 +488,7 @@ struct InstrumentInspector: View {
                         Button(n) {
                             store.edit { $0.updateNotes(assetID) { $0.instrument = .preset(n) } }
                             if !store.transport.playing {
-                                store.engine.previewNoteOn(60, instrument: .preset(n))
+                                store.previewNoteOn(60, instrument: .preset(n), asset: assetID)
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.engine.previewNoteOff(60) }
                             }
                         }

@@ -539,13 +539,13 @@ final class NoteSourceNode: SourceNode {
             if e.beat >= w1 { break }
             let ef = min(frames - 1, max(0, Int(((e.beat - beat) / bps).rounded(.down))))
             if ef > f {
-                synth.render(l + f, r + f, frames: ef - f, params: params, bpm: ctx.bpm)
+                synth.render(l + f, r + f, frames: ef - f, params: params, bpm: ctx.bpm, beat: songBeat + Double(f) * bps)
                 f = ef
             }
             if e.on { synth.noteOn(e.pitch, velocity: e.velocity, params: params) } else { synth.noteOff(e.pitch, params: params) }
             idx += 1
         }
-        if f < frames { synth.render(l + f, r + f, frames: frames - f, params: params, bpm: ctx.bpm) }
+        if f < frames { synth.render(l + f, r + f, frames: frames - f, params: params, bpm: ctx.bpm, beat: songBeat + Double(f) * bps) }
     }
 
     func renderTail(frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>, ctx: RenderContext, songBeat: Double) {
@@ -589,7 +589,6 @@ struct DrumVoice {
 
 final class DrumPlayer {
     var voices = [DrumVoice](repeating: DrumVoice(), count: 32)
-    var next = 0
     var expected = -1.0
 
     func trigger(_ row: DrumRowInfo, velocity: Float, outputRate: Double) {
@@ -598,12 +597,30 @@ final class DrumPlayer {
             for i in voices.indices where voices[i].sample != nil && voices[i].choke == row.choke { voices[i].fading = true }
         }
         let vel = velocity * velocity
-        voices[next] = DrumVoice(sample: s, pos: 0, rate: row.rate * s.sampleRate / outputRate,
-                                 gainL: row.gainL * vel, gainR: row.gainR * vel, choke: row.choke)
-        next = (next + 1) % voices.count
+        let v = DrumVoice(sample: s, pos: 0, rate: row.rate * s.sampleRate / outputRate,
+                          gainL: row.gainL * vel, gainR: row.gainR * vel, choke: row.choke)
+        // A free slot first. With none free, steal the oldest and let it fade out in a spare slot
+        // instead of cutting it mid-sound (which clicks, and used to chop crashes under hat rolls).
+        if let free = voices.firstIndex(where: { $0.sample == nil }) {
+            voices[free] = v
+            return
+        }
+        var oldest = 0, most = -1.0
+        for i in voices.indices where voices[i].pos / voices[i].rate > most { most = voices[i].pos / voices[i].rate; oldest = i }
+        voices[oldest].fading = true
+        if let spare = fadeSlots.firstIndex(where: { $0.sample == nil }) { fadeSlots[spare] = voices[oldest] }
+        voices[oldest] = v
     }
 
+    /// Stolen voices fade out here for a few milliseconds.
+    var fadeSlots = [DrumVoice](repeating: DrumVoice(), count: 8)
+
     func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int) {
+        render(&voices, l, r, frames: frames)
+        render(&fadeSlots, l, r, frames: frames)
+    }
+
+    private func render(_ voices: inout [DrumVoice], _ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int) {
         for vi in voices.indices {
             guard let s = voices[vi].sample else { continue }
             var v = voices[vi]
@@ -628,10 +645,11 @@ final class DrumPlayer {
 
     func reset() {
         for i in voices.indices { voices[i].sample = nil }
+        for i in fadeSlots.indices { fadeSlots[i].sample = nil }
         expected = -1
     }
 
-    var isSilent: Bool { !voices.contains { $0.sample != nil } }
+    var isSilent: Bool { !voices.contains { $0.sample != nil } && !fadeSlots.contains { $0.sample != nil } }
 }
 
 final class DrumSourceNode: SourceNode {

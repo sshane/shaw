@@ -48,7 +48,7 @@ enum InstrumentChoice: Equatable, Identifiable {
     }
 
     /// Display order of categories in the Instruments tab.
-    static let categoryOrder = ["Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Chiptune", "FX", "Synth"]
+    static let categoryOrder = ["Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Future Bass", "Dubstep & Bass House", "Hyperpop", "Chiptune", "FX", "Synth"]
 }
 
 extension Store {
@@ -69,6 +69,7 @@ extension Store {
         switch choice {
         case .synth(let p):
             let inst = Instrument.preset(p)
+            engine.setPreviewEffects(SynthPresets.effects(for: p))
             let notes = p == "Noise Riser" ? [60] : [48, 55, 60]
             for (i, n) in notes.enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.09) {
@@ -96,6 +97,10 @@ extension Store {
         }
         let at = start ?? (loopEnabled && hasContentIn(activeCompID) ? loopStart : 0)
         let trackID = track ?? addTrack(name: choice.name)
+        if track == nil, case .synth(let p) = choice {
+            let fx = SynthPresets.effects(for: p)
+            if !fx.isEmpty { updateTrack(trackID) { $0.effects = fx } }
+        }
         if let c = addClip(asset: id, at: (at / bar).rounded(.down) * bar, track: trackID) {
             selectedClips = [c]
             open(asset: id, clip: c)
@@ -247,7 +252,7 @@ extension Store {
             guard i < DrumKits.voices.count else { return true }
             heldKeys[k] = (DrumKits.basePitch + i, true)
             playingPitches.insert(DrumKits.basePitch + i)
-            engine.previewNoteOn(DrumKits.basePitch + i, velocity: keyboardVelocity, instrument: p.instrument)
+            previewNoteOn(DrumKits.basePitch + i, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
             return true
         case .notes(let p):
             guard let off = Store.pianoKeys[k] else { return false }
@@ -255,7 +260,7 @@ extension Store {
             if let old = heldKeys[k], !old.isDrum { engine.previewNoteOff(old.pitch); playingPitches.remove(old.pitch) }
             heldKeys[k] = (pitch, false)
             playingPitches.insert(pitch)
-            engine.previewNoteOn(pitch, velocity: keyboardVelocity, instrument: p.instrument)
+            previewNoteOn(pitch, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
             return true
         default:
             return false
@@ -281,10 +286,24 @@ extension Store {
 
     // MARK: - Auditioning while editing
 
+    /// Play a preview note through the effects of the layer (and clip) the pattern lives on,
+    /// so it sounds like it will in the song.
+    func previewNoteOn(_ pitch: Int, velocity: Double = 0.8, instrument: Instrument, asset: AssetID?) {
+        engine.setPreviewEffects(asset.map(layerEffects(for:)) ?? [])
+        engine.previewNoteOn(pitch, velocity: velocity, instrument: instrument)
+    }
+
+    /// Clip effects then layer effects of the clip that best represents `asset` (clip effects run first).
+    func layerEffects(for asset: AssetID) -> [Effect] {
+        guard let c = contextClip(for: asset), let comp = activeComp,
+              let t = comp.tracks.first(where: { $0.clips.contains { $0.id == c.id } }) else { return [] }
+        return c.effects + t.effects
+    }
+
     /// Editors call this when you click/add/move notes. Silent while the song plays, and off unless enabled.
     func audition(_ pitch: Int, instrument: Instrument) {
         guard auditionNotes, !transport.playing else { return }
-        engine.previewNoteOn(pitch, velocity: 0.75, instrument: instrument)
+        previewNoteOn(pitch, velocity: 0.75, instrument: instrument, asset: pianoRollAsset)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.engine.previewNoteOff(pitch) }
     }
 

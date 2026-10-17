@@ -57,6 +57,11 @@ public final class AudioEngine {
     private let limiterParams = LimiterFX.params.resolve(["ceiling": -0.3, "release": 60])
     private var previewSynth: Synth
     private var previewParams = SynthParams.defs.resolve([:])
+    /// Effects the preview synth plays through (a browser preset's own effects), and how long its tail may still ring.
+    private var previewChain: EffectChain?
+    private var previewEffects: [Effect] = []
+    private let previewBuf = StereoBuffer()
+    private var previewTail = 0
     private let previewDrums = DrumPlayer()
 
     // Main-thread only.
@@ -292,6 +297,20 @@ public final class AudioEngine {
         }
     }
 
+    /// Route preview notes through these effects (main thread). Pass [] for a dry preview.
+    public func setPreviewEffects(_ effects: [Effect]) {
+        let same = effects.count == previewEffects.count && zip(effects, previewEffects).allSatisfy { $0.kind == $1.kind && $0.params == $1.params }
+        if same { return }
+        previewEffects = effects
+        let sr = sampleRate
+        let slots = effects.compactMap { e -> EffectSlot? in
+            guard let d = EffectRegistry.descriptor(e.kind) else { return nil }
+            return EffectSlot(processor: d.make(sr), params: d.params.resolve(e.params))
+        }
+        let chain = slots.isEmpty ? nil : EffectChain(slots)
+        locked { previewChain = chain }
+    }
+
     public func previewNoteOff(_ pitch: Int) {
         locked { previewSynth.noteOff(pitch, params: previewParams) }
     }
@@ -365,7 +384,18 @@ public final class AudioEngine {
                 idleFrames += n
             }
         }
-        previewSynth.render(master.l, master.r, frames: n, params: previewParams, bpm: bpm)
+        if let chain = previewChain {
+            if !previewSynth.isSilent { previewTail = Int(sampleRate * 4) }
+            if previewTail > 0 {
+                previewBuf.clear(n)
+                previewSynth.render(previewBuf.l, previewBuf.r, frames: n, params: previewParams, bpm: bpm)
+                chain.process(previewBuf, frames: n, ctx: RenderContext(sampleRate: sampleRate, bpm: bpm), beat: position, time: 0)
+                previewBuf.mix(into: master, n)
+                previewTail -= n
+            }
+        } else {
+            previewSynth.render(master.l, master.r, frames: n, params: previewParams, bpm: bpm)
+        }
         previewDrums.render(master.l, master.r, frames: n)
         if clickFrames > 0 && !metronomeOn { clickFrames = 0 }
         master.scale(n, masterGain)

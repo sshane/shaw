@@ -74,10 +74,15 @@ public struct SVF {
     @inline(__always) public mutating func set(cutoff: Float, resonance: Float, sampleRate: Float) {
         let fc = min(max(cutoff, 15), sampleRate * 0.47)
         g = tanf(Float.pi * fc / sampleRate)
-        k = 2 - 1.98 * min(max(resonance, 0), 1)
+        // Q tops out near 20: screaming, but not a 50x spike when an LFO sweeps through.
+        k = 2 - 1.95 * min(max(resonance, 0), 1)
         a1 = 1 / (1 + g * (g + k))
         a2 = g * a1
         a3 = g * a2
+    }
+
+    @inline(__always) mutating func copyCoefficients(_ o: SVF) {
+        g = o.g; k = o.k; a1 = o.a1; a2 = o.a2; a3 = o.a3
     }
 
     /// Returns (low, band, high).

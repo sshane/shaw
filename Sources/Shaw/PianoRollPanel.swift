@@ -370,7 +370,7 @@ struct Keyboard: View {
                 if pitch != held {
                     if let h = held { store.engine.previewNoteOff(h) }
                     held = pitch
-                    store.engine.previewNoteOn(pitch, velocity: 0.8, instrument: instrument)
+                    store.previewNoteOn(pitch, velocity: 0.8, instrument: instrument, asset: store.pianoRollAsset)
                 }
             }
             .onEnded { _ in
@@ -563,7 +563,7 @@ struct NoteGrid: View {
         guard store.auditionNotes, !store.transport.playing, pitch != previewPitch else { return }
         if let p = previewPitch { store.engine.previewNoteOff(p) }
         previewPitch = pitch
-        store.engine.previewNoteOn(pitch, velocity: 0.75, instrument: pattern.instrument)
+        store.previewNoteOn(pitch, velocity: 0.75, instrument: pattern.instrument, asset: store.pianoRollAsset)
     }
 
     private func changed(_ g: DragGesture.Value) {
