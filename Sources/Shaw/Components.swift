@@ -2,7 +2,7 @@ import AppKit
 import ShawCore
 import SwiftUI
 
-/// After Effects-style "scrubby" number: drag left/right to change, double-click to type.
+/// After Effects-style "scrubby" number: drag left/right to change, click to type.
 struct DragNumber: View {
     let value: Double
     var range: ClosedRange<Double> = -Double.infinity...Double.infinity
@@ -32,14 +32,18 @@ struct DragNumber: View {
                     .onSubmit { commit() }
                     .onExitCommand { editing = false }
                     .onChange(of: focused) { _, f in if !f { commit() } }
-                    .onAppear { focused = true }
+                    .onAppear {
+                        focused = true
+                        // Select the whole number so typing replaces it, like After Effects.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+                    }
             } else {
                 Text(format(value))
                     .font(font)
                     .foregroundStyle(color)
                     .underline(true, pattern: .dot, color: color.opacity(0.5))
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
+                    .onTapGesture {
                         text = format(value).components(separatedBy: " ").first ?? ""
                         editing = true
                     }

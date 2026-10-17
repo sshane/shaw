@@ -159,7 +159,7 @@ struct TransportBar: View {
                            onChange: { v in store.live { $0.bpm = v } }, onEnd: { store.endGesture() })
                 Text("BPM").font(Theme.tiny).foregroundStyle(Theme.textDim)
             }
-            .help("Tempo. Drag it, or double-click to type.")
+            .help("Tempo. Drag it, or click to type.")
             Menu {
                 ForEach([2, 3, 4, 5, 6, 7], id: \.self) { n in
                     Button("\(n)/4") { store.edit { $0.beatsPerBar = n } }
