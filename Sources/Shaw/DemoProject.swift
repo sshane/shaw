@@ -82,7 +82,8 @@ enum DemoProject {
         let bar = 4.0
 
         // Cm9 – Abmaj9 – Fm9 – G7, one bar each. The top voices barely move, which is the garage sound.
-        let voicings: [[Int]] = [[51, 55, 58, 62], [51, 55, 58, 60], [51, 55, 56, 60], [50, 53, 55, 59]]
+        // Cm9 – Abmaj9 – Fm7 – G7, voiced so no two notes sit a half step apart (that rub muddies a pad).
+        let voicings: [[Int]] = [[51, 55, 58, 62], [51, 55, 58, 60], [51, 56, 60, 63], [50, 53, 55, 59]]
         let roots = [36, 32, 29, 31]
 
         /// `gain` turns the preset's own volume up or down (dB), so the parts sit together.
@@ -95,7 +96,7 @@ enum DemoProject {
         // Airy pad under everything.
         var padNotes: [Note] = []
         for (b, v) in voicings.enumerated() {
-            padNotes += (v + [v[0] + 12]).map { Note(pitch: $0 + 12, start: Double(b) * bar, length: 4, velocity: 0.6) }
+            padNotes += v.map { Note(pitch: $0 + 12, start: Double(b) * bar, length: 4, velocity: 0.6) }
         }
         let pad = pattern("Air Pad", 10, "Heaven Pad", padNotes)
 
@@ -117,10 +118,10 @@ enum DemoProject {
         }
         let bass = pattern("Bassline", 1, "Bass House", bassNotes)
 
-        // Vocal chops: short, syncopated, pentatonic. The band-pass Vowel Lead sounds like a voice.
-        let chops = pattern("Vocal Chops", 7, "Vowel Lead", gain: 6, notes([
-            (72, 0, 0.25), (72, 0.5, 0.25), (75, 0.75, 0.5), (74, 1.5, 0.25), (72, 2, 0.5), (70, 2.75, 0.25), (67, 3, 0.75),
-            (72, 4, 0.25), (75, 4.5, 0.25), (77, 4.75, 0.5), (75, 5.5, 0.25), (74, 6, 0.25), (72, 6.5, 1.25),
+        // The hook: short, syncopated, and only notes that sit well over each chord (no half-step rubs with the pad).
+        let chops = pattern("Hook", 7, "Dream Pluck", gain: 4, notes([
+            (72, 0, 0.25), (72, 0.5, 0.25), (77, 0.75, 0.5), (74, 1.5, 0.25), (72, 2, 0.5), (70, 2.75, 0.25), (67, 3, 0.75),
+            (72, 4, 0.25), (75, 4.5, 0.25), (77, 4.75, 0.5), (75, 5.5, 0.25), (72, 6, 0.25), (70, 6.5, 1.25),
             (72, 8, 0.25), (72, 8.5, 0.25), (75, 8.75, 0.5), (77, 9.5, 0.25), (75, 10, 0.5), (72, 10.75, 0.25), (68, 11, 0.75),
             (74, 12, 0.25), (74, 12.5, 0.25), (77, 12.75, 0.5), (74, 13.5, 0.5), (71, 14, 0.5), (74, 14.75, 1),
         ], vel: 0.85))
@@ -172,9 +173,9 @@ enum DemoProject {
         let intro = Asset(name: "Intro", colorIndex: 11, content: .composition(Composition(length: 32, tracks: [
             track("Air Pad", 10, volume: -2, [clip(pad, at: 0, length: 32)],
                   effects: [keyframed("filter", ["resonance": 0.3], "cutoff", [(0, 350), (28, 6000), (32, 14000)])]),
-            track("Vocal Chops", 7, volume: -5, [clip(chops, at: 8, length: 24)],
+            track("Hook", 7, volume: -5, [clip(chops, at: 16, length: 16)],
                   effects: [effect("delay", ["time": 6, "feedback": 0.45, "mix": 0.3]),
-                            keyframed("reverb", ["size": 0.85], "mix", [(8, 0.6), (32, 0.25)])]),
+                            keyframed("reverb", ["size": 0.85], "mix", [(16, 0.6), (32, 0.25)])]),
             track("Sparkle", 6, volume: -14, [clip(sparkle, at: 16, length: 16)], effects: [effect("reverb", ["mix": 0.35, "size": 0.8])]),
             track("Riser", 9, volume: -8, [clip(riser, at: 16, length: 16)], effects: [effect("reverb", ["mix": 0.4, "size": 0.9])]),
         ], effects: [effect("chorus", ["mix": 0.2])])))
@@ -183,22 +184,22 @@ enum DemoProject {
         let delayThrows: [(Double, Double)] = [(0, 0.15), (14.5, 0.15), (15, 0.6), (16, 0.15), (30.5, 0.15), (31, 0.6),
                                           (32, 0.15), (46.5, 0.15), (47, 0.6), (48, 0.15), (62.5, 0.15), (63, 0.7), (64, 0.15)]
         let drop = Asset(name: "Drop", colorIndex: 0, content: .composition(Composition(length: 64, tracks: [
-            track("2-Step", 2, [clip(twoStep, at: 0, length: 64)], effects: [effect("compressor", ["threshold": -16, "ratio": 4, "attack": 12])]),
+            track("2-Step", 2, [clip(twoStep, at: 0, length: 64)]),
             track("Bassline", 1, volume: -3, [clip(bass, at: 0, length: 64)],
                   effects: [effect("saturator", ["drive": 8, "type": 2, "mix": 0.6]), effect("pump", ["depth": 0.55])]),
             track("Garage Stabs", 4, volume: -4, [clip(stabs, at: 0, length: 64)],
                   effects: [effect("pump", ["depth": 0.7]), effect("chorus", ["mix": 0.3]), effect("reverb", ["mix": 0.2])]),
-            track("Vocal Chops", 7, volume: -2, [clip(chops, at: 0, length: 64)],
+            track("Hook", 7, volume: -2, [clip(chops, at: 0, length: 64)],
                   effects: [keyframed("delay", ["time": 6, "feedback": 0.45], "mix", delayThrows), effect("reverb", ["mix": 0.2])]),
             track("Sparkle", 6, volume: -13, [clip(sparkle, at: 32, length: 32)],
                   effects: [effect("delay", ["time": 2, "feedback": 0.3, "mix": 0.2]), effect("reverb", ["mix": 0.3])]),
             track("Zaps", 5, volume: -10, [clip(zaps, at: 0, length: 64)], effects: [effect("delay", ["mix": 0.35]), effect("reverb", ["mix": 0.3])]),
-        ], effects: [effect("compressor", ["threshold": -12, "ratio": 2.5, "attack": 25])])))
+        ])))
 
         // Break: everything sinks under a closing filter, then a snare roll and the riser pull you back up.
         let breakdown = Asset(name: "Break", colorIndex: 7, content: .composition(Composition(length: 16, tracks: [
             track("Air Pad", 10, volume: -4, [clip(pad, at: 0, length: 16)]),
-            track("Vocal Chops", 7, volume: -7, [clip(chops, at: 0, length: 16)],
+            track("Hook", 7, volume: -7, [clip(chops, at: 0, length: 16)],
                   effects: [effect("delay", ["time": 6, "feedback": 0.55, "mix": 0.4]), effect("reverb", ["mix": 0.45, "size": 0.9])]),
             track("Snare Roll", 5, volume: -10, [clip(snareRoll, at: 12, length: 4)], effects: [effect("reverb", ["mix": 0.25])]),
             track("Riser", 9, volume: -8, [clip(riser, at: 0, length: 16)]),
@@ -216,7 +217,7 @@ enum DemoProject {
         // Outro: the pad and chops, fading out on a clip Volume keyframe.
         let outro = Asset(name: "Outro", colorIndex: 11, content: .composition(Composition(length: 16, tracks: [
             track("Air Pad", 10, volume: -5, [clip(pad, at: 0, length: 16)]),
-            track("Vocal Chops", 7, volume: -8, [clip(chops, at: 0, length: 16)],
+            track("Hook", 7, volume: -8, [clip(chops, at: 0, length: 16)],
                   effects: [effect("delay", ["time": 6, "feedback": 0.55, "mix": 0.45]), effect("reverb", ["mix": 0.5, "size": 0.9])]),
         ], effects: [keyframed("volume", [:], "volume", [(0, 0), (8, -2), (16, -60)])])))
 
@@ -229,9 +230,9 @@ enum DemoProject {
                                         clip(downlifter, at: 24 * bar, length: 8)],
                   effects: [effect("reverb", ["mix": 0.35, "size": 0.9])]),
         ]
-        main.effects = [effect("eq", ["lowgain": 1.5, "highgain": 1.5]),
-                        effect("compressor", ["threshold": -14, "ratio": 2, "attack": 30, "release": 150, "makeup": 1]),
-                        effect("limiter", ["gain": 3, "ceiling": -0.5])]
+        // A simple master: gentle glue, then the limiter.
+        main.effects = [effect("compressor", ["threshold": -10, "ratio": 2, "attack": 30, "release": 200]),
+                        effect("limiter", ["gain": 2, "ceiling": -1])]
         p.updateComposition(p.mainCompositionID) { $0 = main }
 
         let sections = Folder(name: "Sections"), pats = Folder(name: "Patterns"), beats = Folder(name: "Beats"), fx = Folder(name: "FX")
