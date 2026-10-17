@@ -217,7 +217,7 @@ extension DemoProject {
             }
             pianoNotes.append(Note(pitch: bassRoots[b] + 12, start: Double(b) * bar, length: 3.9, velocity: 0.6))
         }
-        let keys = synthPattern("Keys", 4, "Electric Piano", gain: 2, pianoNotes)
+        let keys = synthPattern("Keys", 4, "Electric Piano", gain: 0, pianoNotes)
         let strings = synthPattern("Strings", 10, "Strings", gain: 2, padNotes(0, vel: 0.6))
         let musicBox = synthPattern("Music Box", 6, "Music Box", length: 32, gain: 1, notes(hook, vel: 0.7))
         let lead = synthPattern("Lead", 7, "Shimmer Lead", length: 32, gain: 3, notes(hook, vel: 0.85))
@@ -279,7 +279,7 @@ extension DemoProject {
         let crash = kitPattern("Crash", 9, "electro", length: 4, [("crash", 0, 0.8)])
 
         let intro = Asset(name: "Intro", colorIndex: 11, content: .composition(Composition(length: 32, tracks: [
-            track("Keys", 4, volume: -7, [clip(keys, at: 0, length: 32)], effects: [effect("reverb", ["mix": 0.3, "size": 0.75])]),
+            track("Keys", 4, volume: -10, [clip(keys, at: 0, length: 32)], effects: [effect("reverb", ["mix": 0.3, "size": 0.75])]),
             track("Strings", 10, volume: -10, [clip(strings, at: 0, length: 32)],
                   effects: [keyframed("volume", [:], "volume", [(0, -30), (16, -6), (32, 0)])]),
             track("Music Box", 6, volume: -7, [clip(musicBox, at: 16, length: 16)],
