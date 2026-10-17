@@ -102,6 +102,15 @@ public enum DrumKits {
         return cache[key]?[voice]
     }
 
+    /// Already-generated sample, or nil. Never generates, so it's safe on the audio thread
+    /// (the lock is only contended while a kit is being generated).
+    static func cachedSample(kit: String, voice: String, sampleRate: Double) -> SampleData? {
+        let key = "\(kit)@\(Int(sampleRate))"
+        guard lock.try() else { return nil }
+        defer { lock.unlock() }
+        return cache[key]?[voice]
+    }
+
     public static func warm(sampleRate: Double) {
         for k in kits { _ = sample(kit: k.id, voice: "kick", sampleRate: sampleRate) }
     }

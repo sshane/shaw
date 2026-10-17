@@ -1,5 +1,5 @@
 import XCTest
-import ShawCore
+@testable import ShawCore
 @testable import Shaw
 
 final class WorkflowTests: XCTestCase {
@@ -303,5 +303,36 @@ final class MergeTests: XCTestCase {
         trimmed.loops = true
         trimmed.length = 8
         XCTAssertEqual(Store.audibleNotes(of: trimmed, pattern: p).map(\.start), [0, 2, 4, 6], "looping repeats it")
+    }
+}
+
+final class BrowserPreviewTests: XCTestCase {
+    func testEveryInstrumentHasAShortPhraseThatPlays() {
+        for choice in InstrumentChoice.all {
+            let (notes, bpm): ([PhraseNote], Double)
+            switch choice {
+            case .synth(let p): (notes, bpm) = Store.phrase(forPreset: p)
+            case .kit(let k): (notes, bpm) = Store.beat(forKit: k)
+            }
+            XCTAssertFalse(notes.isEmpty, "\(choice.name) has no preview")
+            let seconds = (notes.map { $0.beat + $0.length }.max() ?? 0) * 60 / bpm
+            XCTAssertLessThan(seconds, 3.6, "\(choice.name) preview runs too long")
+            if case .kit = choice {
+                XCTAssertTrue(notes.allSatisfy { DrumKits.voice(atPitch: $0.pitch) != nil }, "\(choice.name) uses a missing sound")
+            }
+        }
+    }
+
+    func testPhrasePlaysThroughTheEngine() {
+        let e = AudioEngine()
+        let (notes, bpm) = Store.beat(forKit: "house")
+        e.playPhrase(notes, instrument: .kit("house"), bpm: bpm)
+        let out = e.renderForTesting(frames: 48000)
+        // Four kicks in the first ~1.9 s; the first lands right at the start.
+        XCTAssertGreaterThan(out[0..<2400].map { abs($0) }.max() ?? 0, 0.1)
+        let (synth, sbpm) = Store.phrase(forPreset: "Future Chords")
+        e.playPhrase(synth, instrument: .preset("Future Chords"), effects: SynthPresets.effects(for: "Future Chords"), bpm: sbpm)
+        let out2 = e.renderForTesting(frames: 24000)
+        XCTAssertGreaterThan(out2.map { abs($0) }.max() ?? 0, 0.02)
     }
 }

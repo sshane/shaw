@@ -62,6 +62,12 @@ public final class AudioEngine {
     private var previewEffects: [Effect] = []
     private let previewBuf = StereoBuffer()
     private var previewTail = 0
+    /// A short phrase the browser plays when you click an instrument, timed to the sample.
+    private var phrase: [PhraseEvent] = []
+    private var phraseIndex = 0
+    private var phraseClock = 0
+    private var phraseKit: String?
+    private var phraseBPM = 120.0
     private let previewDrums = DrumPlayer()
 
     // Main-thread only.
@@ -292,7 +298,39 @@ public final class AudioEngine {
         let p = SynthParams.defs.resolve(instrument.params)
         locked {
             previewParams = p
+            // Notes played by hand follow the song's tempo (a phrase uses its own).
+            phrase = []
+            phraseBPM = bpm
             previewSynth.noteOn(pitch, velocity: Float(velocity), params: p)
+            idleFrames = 0
+        }
+    }
+
+    /// Play a short phrase on `instrument` (main thread). Replaces any phrase still playing.
+    public func playPhrase(_ notes: [PhraseNote], instrument: Instrument, effects: [Effect] = [], bpm tempo: Double) {
+        setPreviewEffects(instrument.isDrumKit ? [] : effects)
+        let spb = sampleRate * 60 / tempo
+        var ev: [PhraseEvent] = []
+        for n in notes {
+            let on = Int(n.beat * spb)
+            ev.append(PhraseEvent(frame: on, on: true, pitch: n.pitch, velocity: Float(n.velocity)))
+            if instrument.kit == nil {
+                ev.append(PhraseEvent(frame: on + max(1, Int(n.length * spb)), on: false, pitch: n.pitch, velocity: 0))
+            }
+        }
+        // Note-offs first at the same frame, so repeated notes retrigger.
+        ev.sort { $0.frame != $1.frame ? $0.frame < $1.frame : (!$0.on && $1.on) }
+        let p = SynthParams.defs.resolve(instrument.params)
+        let kit = instrument.kit
+        if let kit { _ = DrumKits.sample(kit: kit, voice: "kick", sampleRate: sampleRate) } // generate off the audio thread
+        locked {
+            previewSynth.allNotesOff()
+            previewParams = p
+            phrase = ev
+            phraseIndex = 0
+            phraseClock = 0
+            phraseKit = kit
+            phraseBPM = tempo
             idleFrames = 0
         }
     }
@@ -330,6 +368,52 @@ public final class AudioEngine {
     }
 
     // MARK: Render (audio thread)
+
+    /// Preview synth and drums, splitting the block at phrase events so they land on the exact sample.
+    private func renderPreview(_ n: Int) {
+        let chain = previewChain
+        if !previewSynth.isSilent || phraseIndex < phrase.count { previewTail = Int(sampleRate * 4) }
+        let wet = chain != nil && previewTail > 0
+        if wet { previewBuf.clear(n) }
+        let outL = wet ? previewBuf.l : master.l, outR = wet ? previewBuf.r : master.r
+        // Stopped, previews keep their own clock at the phrase tempo, so a sidechain pump or a
+        // synced wobble moves instead of freezing at the paused song position.
+        let pbpm = playing ? bpm : phraseBPM
+        let bpf = pbpm / 60 / sampleRate
+        let beat0 = playing ? position : Double(phraseClock) * bpf
+        var f = 0
+        while phraseIndex < phrase.count && phrase[phraseIndex].frame < phraseClock + n {
+            let e = phrase[phraseIndex]
+            let ef = min(n, max(f, e.frame - phraseClock))
+            if ef > f {
+                previewSynth.render(outL + f, outR + f, frames: ef - f, params: previewParams, bpm: pbpm, beat: beat0 + Double(f) * bpf)
+                previewDrums.render(master.l + f, master.r + f, frames: ef - f)
+                f = ef
+            }
+            if let kit = phraseKit {
+                if e.on, let v = DrumKits.voice(atPitch: e.pitch),
+                   let smp = DrumKits.cachedSample(kit: kit, voice: v.id, sampleRate: sampleRate) {
+                    previewDrums.trigger(DrumRowInfo(sample: smp, gainL: 1, gainR: 1, rate: 1, choke: v.choke),
+                                         velocity: e.velocity, outputRate: sampleRate)
+                }
+            } else if e.on {
+                previewSynth.noteOn(e.pitch, velocity: e.velocity, params: previewParams)
+            } else {
+                previewSynth.noteOff(e.pitch, params: previewParams)
+            }
+            phraseIndex += 1
+        }
+        if f < n {
+            previewSynth.render(outL + f, outR + f, frames: n - f, params: previewParams, bpm: pbpm, beat: beat0 + Double(f) * bpf)
+            previewDrums.render(master.l + f, master.r + f, frames: n - f)
+        }
+        phraseClock += n
+        if wet, let chain {
+            chain.process(previewBuf, frames: n, ctx: RenderContext(sampleRate: sampleRate, bpm: pbpm), beat: beat0, time: 0)
+            previewBuf.mix(into: master, n)
+            previewTail -= n
+        }
+    }
 
     private func render(_ total: Int, _ abl: UnsafeMutablePointer<AudioBufferList>) {
         let buffers = UnsafeMutableAudioBufferListPointer(abl)
@@ -384,19 +468,7 @@ public final class AudioEngine {
                 idleFrames += n
             }
         }
-        if let chain = previewChain {
-            if !previewSynth.isSilent { previewTail = Int(sampleRate * 4) }
-            if previewTail > 0 {
-                previewBuf.clear(n)
-                previewSynth.render(previewBuf.l, previewBuf.r, frames: n, params: previewParams, bpm: bpm)
-                chain.process(previewBuf, frames: n, ctx: RenderContext(sampleRate: sampleRate, bpm: bpm), beat: position, time: 0)
-                previewBuf.mix(into: master, n)
-                previewTail -= n
-            }
-        } else {
-            previewSynth.render(master.l, master.r, frames: n, params: previewParams, bpm: bpm)
-        }
-        previewDrums.render(master.l, master.r, frames: n)
+        renderPreview(n)
         if clickFrames > 0 && !metronomeOn { clickFrames = 0 }
         master.scale(n, masterGain)
         limiter.process(master, frames: n, params: limiterParams, ctx: ctx, beat: position)
@@ -544,4 +616,18 @@ extension AudioEngine {
     }
 
     func sessionStateForTesting(_ track: UUID) -> SessionInfo? { snapshot().sessions[track] }
+}
+
+public struct PhraseNote {
+    public var beat: Double, length: Double, pitch: Int, velocity: Double
+    public init(_ beat: Double, _ length: Double, _ pitch: Int, _ velocity: Double = 0.8) {
+        self.beat = beat; self.length = length; self.pitch = pitch; self.velocity = velocity
+    }
+}
+
+struct PhraseEvent {
+    let frame: Int
+    let on: Bool
+    let pitch: Int
+    let velocity: Float
 }

@@ -64,27 +64,131 @@ extension Store {
 
     // MARK: - Instruments
 
-    /// Short audition when you click an instrument in the browser.
+    /// Short audition when you click an instrument in the browser: a little beat or phrase that
+    /// shows off what the sound is for, through the preset's own effects.
     func previewInstrument(_ choice: InstrumentChoice) {
         switch choice {
         case .synth(let p):
-            let inst = Instrument.preset(p)
-            engine.setPreviewEffects(SynthPresets.effects(for: p))
-            let notes = p == "Noise Riser" ? [60] : [48, 55, 60]
-            for (i, n) in notes.enumerated() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.09) {
-                    self.engine.previewNoteOn(n, velocity: 0.8, instrument: inst)
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.09 + 0.35) { self.engine.previewNoteOff(n) }
-            }
+            let (notes, bpm) = Store.phrase(forPreset: p)
+            engine.playPhrase(notes, instrument: .preset(p), effects: SynthPresets.effects(for: p), bpm: bpm)
         case .kit(let k):
-            // Kick, hat, snare, hat: quick, under half a second.
-            for (i, sound) in ["kick", "chat", "snare", "chat"].enumerated() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.11) {
-                    self.engine.previewDrum(kit: k, sound: sound, velocity: sound == "chat" ? 0.6 : 0.9)
-                }
-            }
+            let (notes, bpm) = Store.beat(forKit: k)
+            engine.playPhrase(notes, instrument: .kit(k), bpm: bpm)
         }
+    }
+
+    /// One bar in the style the kit is made for. Beats are quarter notes; pitches are kit sounds.
+    static func beat(forKit kit: String) -> ([PhraseNote], Double) {
+        func d(_ sound: String) -> Int { DrumKits.pitch(of: sound) }
+        var n: [PhraseNote] = []
+        func hit(_ sound: String, _ sixteenths: [Double], _ vel: Double = 0.85) {
+            for s in sixteenths { n.append(PhraseNote(s / 4, 0.25, d(sound), vel)) }
+        }
+        switch kit {
+        case "house", "techno":
+            // Four on the floor, clap on 2 and 4, open hats on the offbeats.
+            hit("kick", [0, 4, 8, 12], 0.95)
+            hit(kit == "house" ? "clap" : "snare", [4, 12])
+            hit("ohat", [2, 6, 10, 14], 0.6)
+            hit("chat", [1, 3, 5, 7, 9, 11, 13, 15], 0.4)
+            if kit == "techno" { hit("perc", [7, 15], 0.5); hit("rim", [11], 0.6) }
+            return (n, kit == "house" ? 124 : 132)
+        case "boombap", "lofi":
+            // Laid-back hip-hop: kick, snare on 2 and 4, swung eighth hats.
+            hit("kick", [0, 7, 10], 0.9)
+            hit("snare", [4, 12], 0.9)
+            for (i, s) in [0.0, 2.33, 4, 6.33, 8, 10.33, 12, 14.33].enumerated() {
+                n.append(PhraseNote(s / 4, 0.25, d("chat"), i % 2 == 0 ? 0.6 : 0.4))
+            }
+            return (n, kit == "lofi" ? 82 : 90)
+        case "electro":
+            hit("kick", [0, 6, 10], 0.95)
+            hit("snare", [4, 12], 0.9)
+            hit("chat", [0, 2, 4, 6, 8, 10, 12, 14], 0.5)
+            hit("chat", [1, 3, 5, 7, 9, 11, 13, 15], 0.3)
+            hit("tomlo", [14.5], 0.6)
+            return (n, 118)
+        default:
+            // Trap and drill: half-time snare on 3, rolling hats with a fast roll at the end.
+            let drill = kit == "drill"
+            hit("kick", drill ? [0, 6, 11] : [0, 7, 10], 0.95)
+            hit("snare", drill ? [4, 13] : [8], 0.9)
+            hit("chat", drill ? [0, 3, 6, 8, 11, 14] : [0, 2, 4, 6, 8, 10], 0.5)
+            for i in 0..<6 { n.append(PhraseNote((12 + Double(i) * 0.667) / 4, 0.1, d("chat"), 0.35 + Double(i) * 0.06)) }
+            hit("ohat", [drill ? 9 : 14], 0.5)
+            return (n, drill ? 142 : 140)
+        }
+    }
+
+    /// A short musical phrase suited to the preset: riffs for basses, chords for pads,
+    /// arpeggios for plucks, melodies for leads. Mostly in A minor, beats are quarter notes.
+    static func phrase(forPreset name: String) -> ([PhraseNote], Double) {
+        let cat = SynthPresets.categories[name] ?? "Synth"
+        let p = SynthPresets.params(for: name)
+        func chord(_ at: Double, _ len: Double, _ pitches: [Int], _ vel: Double = 0.8) -> [PhraseNote] {
+            pitches.map { PhraseNote(at, len, $0, vel) }
+        }
+        let am = [57, 60, 64, 67], f = [53, 57, 60, 64], c = [55, 60, 64, 67], g = [55, 59, 62, 67]
+        let wobbles = (p["lfocut"] ?? 0) > 0 || (p["lfofm"] ?? 0) > 0 || (p["lfoamp"] ?? 0) > 0.3
+        let mono = (p["mode"] ?? 0) > 0
+
+        switch name {
+        case "Noise Riser": return ([PhraseNote(0, 6, 60)], 120)
+        case "Downlifter": return ([PhraseNote(0, 3, 60)], 120)
+        case "Impact Boom": return ([PhraseNote(0, 2, 36, 0.9)], 120)
+        case "Laser Zap": return ([PhraseNote(0, 0.25, 72), PhraseNote(0.5, 0.25, 76), PhraseNote(1, 0.25, 79), PhraseNote(1.75, 0.5, 84)], 120)
+        case "808 Bass", "Distorted 808", "Bubble Bass":
+            // 808 pattern with an overlapping slide up and back.
+            return ([PhraseNote(0, 1.5, 33, 0.9), PhraseNote(1.75, 0.5, 33), PhraseNote(2.5, 1.0, 40), PhraseNote(3.25, 0.75, 45, 0.85)], 140)
+        default: break
+        }
+
+        let bass = cat == "Bass" || name.contains("Bass") || name.contains("Reese")
+        if bass && wobbles {
+            // Long notes so you hear the wobble move, with a quick pickup.
+            return ([PhraseNote(0, 1.5, 33, 0.9), PhraseNote(1.5, 0.5, 36), PhraseNote(2, 1.75, 31, 0.9)], 140)
+        }
+        if bass {
+            // Octave-bouncing riff.
+            let riff: [(Double, Double, Int)] = [(0, 0.5, 33), (0.75, 0.25, 33), (1, 0.5, 45), (1.5, 0.5, 33),
+                                                (2, 0.5, 41), (2.5, 0.25, 41), (3, 0.5, 43), (3.5, 0.5, 45)]
+            return (riff.map { PhraseNote($0.0, $0.1, $0.2, 0.85) }, 124)
+        }
+        switch cat {
+        case "Pad", "Strings & Brass" where name != "Pizzicato" && name != "Brass":
+            return (chord(0, 2, am, 0.7) + chord(2, 2, f, 0.7), 90)
+        case "Future Bass" where ["Future Chords", "Wub Chords", "Heaven Pad"].contains(name):
+            if name == "Heaven Pad" { return (chord(0, 2, am, 0.7) + chord(2, 2, f, 0.7), 90) }
+            // Future bass chord stabs: Am then F, with the classic 3-3-2 rhythm.
+            var n: [PhraseNote] = []
+            for (at, len) in [(0.0, 0.7), (0.75, 0.7), (1.5, 0.45)] { n += chord(at, len, am + [72]) }
+            for (at, len) in [(2.0, 0.7), (2.75, 0.7), (3.5, 0.45)] { n += chord(at, len, f + [69]) }
+            return (n, 150)
+        case "Keys":
+            return (chord(0, 1.5, am, 0.75) + chord(1.5, 0.5, g, 0.7) + chord(2, 2, f + [69], 0.75), 100)
+        default: break
+        }
+        if ["Supersaw", "Stab", "Hyper Saw", "Hoover"].contains(name) {
+            var n: [PhraseNote] = []
+            let shift = name == "Hoover" ? -12 : 0
+            for (at, len, ch) in [(0.0, 0.4, am), (0.75, 0.4, am), (1.5, 0.4, c), (2.25, 0.4, g), (3.0, 0.9, f)] {
+                n += chord(at, len, ch.map { $0 + shift })
+            }
+            return (n, 128)
+        }
+        let plucky = cat == "Pluck" || ["Bell", "Music Box", "Pizzicato", "Dream Pluck", "Glitter Pluck", "Digi Bell", "Chip Arp",
+                                        "Electric Piano", "Init"].contains(name)
+        if plucky {
+            // Rising and falling arpeggio over Am then F.
+            let up = [57, 60, 64, 69, 72, 69, 64, 60, 53, 57, 60, 65, 69, 65, 60, 57]
+            let lift = ["Glitter Pluck", "Music Box", "Digi Bell", "Bell"].contains(name) ? 12 : 0
+            return (up.enumerated().map { PhraseNote(Double($0.offset) * 0.25, 0.22, $0.element + lift, $0.offset % 4 == 0 ? 0.9 : 0.7) }, 128)
+        }
+        // Leads: a short hook that steps and leaps, with overlaps so mono presets glide.
+        let hook: [(Double, Double, Int)] = [(0, 0.5, 69), (0.5, 0.5, 72), (1, 0.75, 76), (1.75, 0.25, 74),
+                                             (2, 0.5, 72), (2.5, 0.5, 71), (3, 1, 69)]
+        let down = ["Screech Lead", "Brass", "Vowel Lead"].contains(name) ? -12 : 0
+        return (hook.map { PhraseNote($0.0, $0.1 + (mono ? 0.05 : 0), $0.2 + down, 0.85) }, 128)
     }
 
     /// Add an instrument: a new track with an empty one-bar pattern (or beat), looped and open for editing.
