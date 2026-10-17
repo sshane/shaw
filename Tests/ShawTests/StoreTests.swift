@@ -160,7 +160,9 @@ final class ExportTests: XCTestCase {
     func testExportDemoSongToWav() throws {
         let p = DemoProject.firstLight()
         let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] ?? NSTemporaryDirectory()
-        let url = URL(fileURLWithPath: dir).appendingPathComponent("First Light.wav")
+        // A unique name, so two test runs at once (worktrees, CI) never read each other's file.
+        let url = URL(fileURLWithPath: dir).appendingPathComponent("First Light \(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
         try? FileManager.default.removeItem(at: url)
         try OfflineRenderer.export(project: p, composition: p.mainCompositionID, to: url)
         let file = try AVAudioFile(forReading: url)

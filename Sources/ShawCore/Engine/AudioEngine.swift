@@ -53,7 +53,7 @@ public final class AudioEngine {
     private var clickPhase = 0.0
 
     private let master = StereoBuffer()
-    private let limiter: LimiterFX
+    private var limiter: LimiterFX
     private let limiterParams = LimiterFX.params.resolve(["ceiling": -0.3, "release": 60])
     private var previewSynth: Synth
     private var previewParams = SynthParams.defs.resolve([:])
@@ -112,10 +112,12 @@ public final class AudioEngine {
         let hw = engine.outputNode.inputFormat(forBus: 0)
         sampleRate = hw.sampleRate > 0 ? hw.sampleRate : 48000
         let sampler = Sampler(sampleRate: sampleRate), filePlayer = Sampler(sampleRate: sampleRate)
+        let masterLimiter = LimiterFX(sampleRate: sampleRate)
         locked {
             previewSynth = Synth(sampleRate: sampleRate)
             previewSampler = sampler
             previewFilePlayer = filePlayer
+            limiter = masterLimiter
         }
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
         let node = AVAudioSourceNode(format: fmt) { [unowned self] _, _, frameCount, abl -> OSStatus in
@@ -595,8 +597,12 @@ public enum OfflineRenderer {
         let gain = Float(dbToGain(project.masterVolume))
         var done = 0
         let bps = ctx.beatsPerSample
-        while done < lengthFrames + tailFrames {
-            let n = min(block, lengthFrames + tailFrames - done)
+        // The limiter's lookahead delays its output, so render that much longer and drop the
+        // start: the file begins exactly on beat 1.
+        var skip = limiter.latency
+        let total = lengthFrames + tailFrames + skip
+        while done < total {
+            let n = min(block, total - done)
             buf.clear(n)
             let beat = Double(done) * bps
             if done < lengthFrames {
@@ -608,12 +614,16 @@ public enum OfflineRenderer {
             }
             buf.scale(n, gain)
             limiter.process(buf, frames: n, params: lp, ctx: ctx, beat: beat)
-            pcm.frameLength = AVAudioFrameCount(n)
-            pcm.floatChannelData![0].update(from: buf.l, count: n)
-            pcm.floatChannelData![1].update(from: buf.r, count: n)
-            try file.write(from: pcm)
+            let s = min(skip, n)
+            skip -= s
+            if s < n {
+                pcm.frameLength = AVAudioFrameCount(n - s)
+                pcm.floatChannelData![0].update(from: buf.l + s, count: n - s)
+                pcm.floatChannelData![1].update(from: buf.r + s, count: n - s)
+                try file.write(from: pcm)
+            }
             done += n
-            progress?(Double(done) / Double(lengthFrames + tailFrames))
+            progress?(Double(done) / Double(total))
         }
     }
 }

@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 
 /// Audio-thread half of an effect: owns DSP state only. Parameter values arrive
@@ -447,34 +448,75 @@ final class CompressorFX: EffectProcessor {
         ParamDef("makeup", "Makeup", 0, 24, 0, .db),
         ParamDef("mix", "Dry/Wet", 0, 1, 1, .percent),
     ]
-    var env: Float = -96
+    // How it works (feed-forward, stereo-linked, gain smoothed in dB):
+    // 1. Detector: the short-term RMS of both channels, or the peak 9 dB down, whichever is
+    //    higher. Steady tones and full mixes read as their RMS; sharp hits register at once,
+    //    so fast attacks can catch them.
+    // 2. A short hold (a running maximum over up to 15 ms) keeps the reading flat between the
+    //    peaks of a bass note, so the gain doesn't wobble at the note's frequency.
+    // 3. Soft-knee gain computer (6 dB knee), then attack/release smoothing of the gain
+    //    reduction itself.
+    // Dry/Wet is a plain gain blend (no added delay), so parallel compression stays in phase.
     let sr: Double
-    init(sampleRate: Double) { sr = sampleRate }
+    let hold: SlidingMinimum
+    var ms: Float = 0
+    var gr: Float = 0
+    var wet = Smoother(1), dry = Smoother(0)
+    var primed = false
 
-    func process(_ buf: StereoBuffer, frames: Int, params p: [Double], ctx: RenderContext, beat: Double) {
-        let th = f(p, 0), ratio = f(p, 1)
-        let att = Float(exp(-1 / (p[2] / 1000 * sr))), rel = Float(exp(-1 / (p[3] / 1000 * sr)))
-        let makeup = Float(dbToGain(p[4])), mix = f(p, 5)
-        let knee: Float = 6
-        for i in 0..<frames {
-            let l = buf.l[i], r = buf.r[i]
-            let lvl = max(abs(l), abs(r))
-            let db = lvl > 1e-6 ? 20 * log10f(lvl) : -120
-            env = db > env ? att * env + (1 - att) * db : rel * env + (1 - rel) * db
-            let over = env - th
-            var gr: Float = 0
-            if over > knee / 2 { gr = over * (1 - 1 / ratio) }
-            else if over > -knee / 2 { let k = over + knee / 2; gr = (1 - 1 / ratio) * k * k / (2 * knee) }
-            let g = powf(10, -gr / 20) * makeup
-            buf.l[i] = l * (1 - mix) + l * g * mix
-            buf.r[i] = r * (1 - mix) + r * g * mix
-        }
+    init(sampleRate: Double) {
+        sr = sampleRate
+        hold = SlidingMinimum(maxWindow: Int(0.015 * sampleRate) + 1)
     }
 
-    func reset() { env = -96 }
+    func process(_ buf: StereoBuffer, frames: Int, params p: [Double], ctx: RenderContext, beat: Double) {
+        let th = f(p, 0), slope = 1 - 1 / max(1, f(p, 1))
+        let attack = max(p[2], 0.01) / 1000, release = max(p[3], 1) / 1000
+        let aA = Float(exp(-1 / (attack * sr))), aR = Float(exp(-1 / (release * sr)))
+        // RMS window follows the attack between 1 and 10 ms: fast settings react fast.
+        let rmsCoef = Float(1 - exp(-1 / (min(max(attack, 0.001), 0.01) * sr)))
+        let holdFrames = Int(min(0.015, release * 0.25) * sr)
+        let knee: Float = 6, halfKnee = knee / 2
+        // Below this mean-square level the gain computer is at 0 dB, so skip the logs.
+        let quiet = powf(10, (th - halfKnee) / 10)
+        let mix = f(p, 5)
+        let wetTarget = Float(dbToGain(p[4])) * mix, dryTarget = 1 - mix
+        if primed {
+            wet.set(wetTarget, frames: max(frames, 1)); dry.set(dryTarget, frames: max(frames, 1))
+        } else {
+            wet.snap(wetTarget); dry.snap(dryTarget); primed = true
+        }
+        for i in 0..<frames {
+            let l = buf.l[i], r = buf.r[i]
+            ms += ((l * l + r * r) * 0.5 - ms) * rmsCoef
+            let pk = max(abs(l), abs(r))
+            let det = max(ms, pk * pk * 0.125)
+            let held = -hold.push(-det, window: holdFrames)
+            var target: Float = 0
+            if held > quiet {
+                let over = 4.3429448 * logf(held) - th
+                if over >= halfKnee {
+                    target = over * slope
+                } else if over > -halfKnee {
+                    let k = over + halfKnee
+                    target = slope * k * k / (2 * knee)
+                }
+            }
+            gr = target > gr ? target + (gr - target) * aA : target + (gr - target) * aR
+            if gr < 1e-6 { gr = 0 }
+            let g: Float = gr > 0 ? expf(-gr * 0.11512925) : 1
+            let gain = dry.next() + g * wet.next()
+            buf.l[i] = l * gain
+            buf.r[i] = r * gain
+        }
+        if !ms.isFinite { ms = 0 }
+        if !gr.isFinite { gr = 0 }
+    }
+
+    func reset() { ms = 0; gr = 0; hold.reset(); primed = false }
 }
 
-// MARK: - Limiter (lookahead peak limiter)
+// MARK: - Limiter (lookahead true-peak limiter)
 
 final class LimiterFX: EffectProcessor {
     static let params = [
@@ -482,36 +524,149 @@ final class LimiterFX: EffectProcessor {
         ParamDef("ceiling", "Ceiling", -12, 0, -0.3, .db),
         ParamDef("release", "Release", 10, 500, 80, .ms, .log),
     ]
-    let look: Int
-    let dl: DelayLine, dr: DelayLine
-    var gain: Float = 1
+    // How it works (stereo-linked, true-peak aware, never clips):
+    // 1. Peaks: each sample, plus three points between samples (a 4x windowed-sinc
+    //    interpolator), so the ceiling holds for the analog signal, not only the samples.
+    // 2. The gain each sample needs is ceiling / peak. A running minimum over the attack (4 ms)
+    //    plus a short hold (up to 10 ms) finds the loudest peak coming up and holds the gain
+    //    there, so a steady bass note gets a steady gain instead of one that wobbles at the
+    //    note's frequency (that wobble is distortion).
+    // 3. Release from two envelopes: a fast one set by Release, and a slow one (the average
+    //    gain over 6x the Release time) that follows sustained gain reduction. The lower gain
+    //    wins, so dense passages pump less while single hits still recover quickly.
+    // 4. A smoothing filter (three stacked moving averages: an S-curve exactly as long as the
+    //    attack) fades the gain down before each peak. Every value in its window is at or below
+    //    the gain the delayed sample needs, so the output can't overshoot. The clip at the
+    //    end only ever catches float rounding.
+    static let tpTaps = 48, tpPhases = 4
+    static let tpCoefficients = TruePeakTaps.make(taps: tpTaps, phases: tpPhases)
+    static let chunk = 256
+
     let sr: Double
+    /// Length of the gain fade before a peak, in samples (4 ms).
+    let attack: Int
+    /// How far the output lags the input, in samples (about 4.5 ms).
+    let latency: Int
+    let center = LimiterFX.tpTaps / 2
+    let taps: UnsafeMutablePointer<Float>
+    let histL: UnsafeMutablePointer<Float>, histR: UnsafeMutablePointer<Float>
+    let interp: UnsafeMutablePointer<Float>
+    let delayL: UnsafeMutablePointer<Float>, delayR: UnsafeMutablePointer<Float>
+    let delaySize: Int
+    var dw = 0
+    let minimum: SlidingMinimum
+    let box1: MovingAverage, box2: MovingAverage, box3: MovingAverage
+    var prevPeak: Float = 0
+    var fast: Float = 1, slow: Float = 1
+    var pre = Smoother(1)
+    var primed = false
+    /// Output samples the last-resort clip had to pull in by more than 0.001 dB (for tests).
+    var safetyClips = 0
 
     init(sampleRate: Double) {
         sr = sampleRate
-        look = Int(sampleRate * 0.0015)
-        dl = DelayLine(maxSamples: look + 4)
-        dr = DelayLine(maxSamples: look + 4)
+        attack = max(8, Int((0.004 * sampleRate).rounded()))
+        latency = center + attack - 1
+        let t = LimiterFX.tpTaps, phases = LimiterFX.tpPhases - 1, chunk = LimiterFX.chunk
+        taps = .allocate(capacity: phases * t)
+        for (k, h) in LimiterFX.tpCoefficients.enumerated() {
+            // vDSP_conv correlates, so store the taps reversed.
+            for j in 0..<t { (taps + k * t + j).initialize(to: h[t - 1 - j]) }
+        }
+        histL = .allocate(capacity: t - 1 + chunk); histL.initialize(repeating: 0, count: t - 1 + chunk)
+        histR = .allocate(capacity: t - 1 + chunk); histR.initialize(repeating: 0, count: t - 1 + chunk)
+        interp = .allocate(capacity: 2 * phases * chunk); interp.initialize(repeating: 0, count: 2 * phases * chunk)
+        delaySize = attack + 1
+        delayL = .allocate(capacity: delaySize); delayL.initialize(repeating: 0, count: delaySize)
+        delayR = .allocate(capacity: delaySize); delayR.initialize(repeating: 0, count: delaySize)
+        minimum = SlidingMinimum(maxWindow: attack + Int(0.01 * sampleRate) + 1)
+        let b = (attack + 2) / 3
+        box1 = MovingAverage(length: b, initial: 1)
+        box2 = MovingAverage(length: b, initial: 1)
+        box3 = MovingAverage(length: attack + 2 - 2 * b, initial: 1)
+    }
+
+    deinit {
+        taps.deallocate(); histL.deallocate(); histR.deallocate(); interp.deallocate()
+        delayL.deallocate(); delayR.deallocate()
     }
 
     func process(_ buf: StereoBuffer, frames: Int, params p: [Double], ctx: RenderContext, beat: Double) {
-        let pre = Float(dbToGain(p[0])), ceil = Float(dbToGain(p[1]))
-        let rel = Float(exp(-1 / (p[2] / 1000 * sr)))
-        let att = Float(exp(-1 / Double(max(look, 1)) * 2.5))
-        for i in 0..<frames {
-            let l = buf.l[i] * pre, r = buf.r[i] * pre
-            dl.write(l); dr.write(r)
-            let pk = max(abs(l), abs(r))
-            let target: Float = pk > ceil ? ceil / pk : 1
-            gain = target < gain ? att * gain + (1 - att) * target : rel * gain + (1 - rel) * target
-            var ol = dl.read(int: look + 1) * gain, or = dr.read(int: look + 1) * gain
-            // Safety clip in case the envelope has not fully caught a transient.
-            ol = max(-ceil, min(ceil, ol)); or = max(-ceil, min(ceil, or))
-            buf.l[i] = ol; buf.r[i] = or
+        let ceil = Float(dbToGain(p[1]))
+        let release = max(p[2], 1) / 1000
+        let aFast = Float(exp(-1 / (release * sr)))
+        let aSlow = Float(exp(-1 / (min(2, max(0.15, release * 6)) * sr)))
+        let window = attack + Int(min(0.01, release * 0.2) * sr)
+        let gainTarget = Float(dbToGain(p[0]))
+        if primed { pre.set(gainTarget, frames: max(frames, 1)) } else { pre.snap(gainTarget); primed = true }
+
+        let t = LimiterFX.tpTaps, phases = LimiterFX.tpPhases - 1, chunk = LimiterFX.chunk
+        let c = center
+        var off = 0
+        while off < frames {
+            let n = min(chunk, frames - off)
+            for i in 0..<n {
+                let g = pre.next()
+                var l = buf.l[off + i] * g, r = buf.r[off + i] * g
+                // NaN or inf would poison the gain; silence it instead (this guards the speakers).
+                if !(abs(l) < 1e9) { l = 0 }
+                if !(abs(r) < 1e9) { r = 0 }
+                histL[t - 1 + i] = l
+                histR[t - 1 + i] = r
+            }
+            for k in 0..<phases {
+                vDSP_conv(histL, 1, taps + k * t, 1, interp + (2 * k) * chunk, 1, vDSP_Length(n), vDSP_Length(t))
+                vDSP_conv(histR, 1, taps + k * t, 1, interp + (2 * k + 1) * chunk, 1, vDSP_Length(n), vDSP_Length(t))
+            }
+            for i in 0..<n {
+                // The interpolator is centered `c` samples back; everything below is for that sample.
+                let xl = histL[t - 1 + i - c], xr = histR[t - 1 + i - c]
+                var seg = max(abs(xl), abs(xr))
+                for j in 0..<(2 * phases) { seg = max(seg, abs(interp[j * chunk + i])) }
+                // Count the stretch on both sides of the sample.
+                let pk = max(seg, prevPeak)
+                prevPeak = seg
+                let need: Float = pk > ceil ? ceil / pk : 1
+                let held = minimum.push(need, window: window)
+                // Both envelopes drop to `held` (fast) or toward it (slow) and recover in gain
+                // terms, like an analog release. `fast` never exceeds `held`.
+                fast = held <= fast ? held : held + (fast - held) * aFast
+                slow = held + (slow - held) * aSlow
+                let gain = box3.process(box2.process(box1.process(min(fast, slow))))
+                delayL[dw] = xl
+                delayR[dw] = xr
+                var rd = dw - (attack - 1)
+                if rd < 0 { rd += delaySize }
+                dw += 1
+                if dw == delaySize { dw = 0 }
+                var ol = delayL[rd] * gain, or = delayR[rd] * gain
+                if abs(ol) > ceil || abs(or) > ceil {
+                    if max(abs(ol), abs(or)) > ceil * 1.0001 { safetyClips += 1 }
+                    ol = max(-ceil, min(ceil, ol))
+                    or = max(-ceil, min(ceil, or))
+                }
+                buf.l[off + i] = ol
+                buf.r[off + i] = or
+            }
+            // Keep the newest t - 1 inputs as history for the next chunk.
+            memmove(histL, histL + n, (t - 1) * MemoryLayout<Float>.stride)
+            memmove(histR, histR + n, (t - 1) * MemoryLayout<Float>.stride)
+            off += n
         }
     }
 
-    func reset() { dl.reset(); dr.reset(); gain = 1 }
+    func reset() {
+        let t = LimiterFX.tpTaps, chunk = LimiterFX.chunk
+        histL.update(repeating: 0, count: t - 1 + chunk)
+        histR.update(repeating: 0, count: t - 1 + chunk)
+        delayL.update(repeating: 0, count: delaySize)
+        delayR.update(repeating: 0, count: delaySize)
+        dw = 0
+        minimum.reset()
+        box1.reset(to: 1); box2.reset(to: 1); box3.reset(to: 1)
+        prevPeak = 0; fast = 1; slow = 1
+        primed = false
+    }
 }
 
 // MARK: - EQ Three
@@ -620,36 +775,130 @@ final class SaturatorFX: EffectProcessor {
         ParamDef("output", "Output", -24, 12, 0, .db),
         ParamDef("mix", "Dry/Wet", 0, 1, 1, .percent),
     ]
-    var lpL = OnePole(), lpR = OnePole()
-    var lastTone = -1.0
-    let sr: Double
-    init(sampleRate: Double) { sr = sampleRate }
+    // How it works: everything runs at 4x the sample rate (two half-band stages), so the
+    // harmonics the curve adds have room above the audible range and get filtered out instead
+    // of folding back as inharmonic aliasing. Hard, Tube, and Fold also use first-order
+    // antiderivative antialiasing (ADAA), which tames the sharp corners even 4x can't hold.
+    // Soft (tanh) is smooth enough that 4x alone is clean. The wet signal is DC-blocked (Tube
+    // is asymmetric) and goes through Tone, then Dry/Wet mixes at 4x, so dry and wet pass
+    // through the same filters and stay in phase.
+    static let stage1 = HalfbandDesign.coefficients(count: 8, transition: 0.05)
+    static let stage2 = HalfbandDesign.coefficients(count: 4, transition: 0.275)
 
-    @inline(__always) func shape(_ x: Float, _ t: Int) -> Float {
+    let hb1: Halfband2x, hb2: Halfband2x
+    var prev = SIMD2<Float>(0, 0)
+    var dcIn = SIMD2<Float>(0, 0), dcOut = SIMD2<Float>(0, 0)
+    var lp = SIMD2<Float>(0, 0)
+    var toneB: Float = 1
+    var lastTone = -1.0
+    let dcR: Float
+    var drive = Smoother(1), wet = Smoother(1), dry = Smoother(0)
+    var primed = false
+    let sr: Double
+
+    init(sampleRate: Double) {
+        sr = sampleRate
+        hb1 = Halfband2x(coefficients: SaturatorFX.stage1)
+        hb2 = Halfband2x(coefficients: SaturatorFX.stage2)
+        dcR = Float(exp(-2 * Double.pi * 5 / (4 * sampleRate)))
+    }
+
+    // MARK: Curves. Each ADAA form is (F(x1) - F(x0)) / (x1 - x0), F the curve's antiderivative,
+    // rearranged so it stays accurate when x1 and x0 are close.
+
+    @inline(__always) static func hard(_ x1: Float, _ x0: Float) -> Float {
+        let d = x1 - x0
+        if abs(x1) <= 1 && abs(x0) <= 1 { return (x1 + x0) * 0.5 }
+        if x1 >= 1 && x0 >= 1 { return 1 }
+        if x1 <= -1 && x0 <= -1 { return -1 }
+        if abs(d) < 1e-6 { return max(-1, min(1, (x1 + x0) * 0.5)) }
+        func F(_ x: Double) -> Double { abs(x) <= 1 ? x * x * 0.5 : abs(x) - 0.5 }
+        return Float((F(Double(x1)) - F(Double(x0))) / Double(d))
+    }
+
+    /// expm1(u) / u, which tends to 1 as u tends to 0.
+    @inline(__always) static func phi(_ u: Float) -> Float {
+        abs(u) < 1e-4 ? 1 + u * (0.5 + u * (1.0 / 6)) : expm1f(u) / u
+    }
+
+    /// Asymmetric: 1 - e^-x above zero, 0.8 (e^(x / 0.8) - 1) below. Same slope on both sides
+    /// of zero (no kink), but the negative side flattens sooner, which adds even harmonics.
+    @inline(__always) static func tube(_ x1: Float, _ x0: Float) -> Float {
+        let d = x1 - x0
+        // Factoring out the smaller exponential keeps both terms bounded (no overflow on big jumps).
+        if x1 >= 0 && x0 >= 0 { return 1 - expf(-min(x0, x1)) * phi(-abs(d)) }
+        if x1 <= 0 && x0 <= 0 { return -0.8 + 0.8 * expf(max(x0, x1) * 1.25) * phi(-abs(d) * 1.25) }
+        if abs(d) < 1e-7 { return 0 }
+        func F(_ x: Double) -> Double { x >= 0 ? x + expm1(-x) : -0.8 * x + 0.64 * expm1(x * 1.25) }
+        return Float((F(Double(x1)) - F(Double(x0))) / Double(d))
+    }
+
+    /// Wavefolder sin(x pi / 2). Its ADAA works out to sin(mid) * sinc(half the step).
+    @inline(__always) static func fold(_ x1: Float, _ x0: Float) -> Float {
+        let h = (x1 - x0) * (Float.pi / 4)
+        let sinc: Float = abs(h) < 1e-3 ? 1 - h * h * (1.0 / 6) : sinf(h) / h
+        return sinf((x1 + x0) * (Float.pi / 4)) * sinc
+    }
+
+    @inline(__always) func shape(_ x: SIMD2<Float>, _ t: Int) -> SIMD2<Float> {
+        let p = prev
+        prev = x
         switch t {
-        case 1: return max(-1, min(1, x))
-        case 2: return x >= 0 ? 1 - expf(-x) : -(1 - expf(x)) * 0.8 // asymmetric = even harmonics
-        case 3: return sinf(x * 0.5 * .pi) // wavefolder
-        default: return tanhf(x)
+        case 1: return SIMD2(SaturatorFX.hard(x.x, p.x), SaturatorFX.hard(x.y, p.y))
+        case 2: return SIMD2(SaturatorFX.tube(x.x, p.x), SaturatorFX.tube(x.y, p.y))
+        case 3: return SIMD2(SaturatorFX.fold(x.x, p.x), SaturatorFX.fold(x.y, p.y))
+        default: return SIMD2(tanhf(x.x), tanhf(x.y))
         }
+    }
+
+    /// One sample at 4x: shape, DC block, Tone, then mix with the dry signal.
+    @inline(__always) func oversampled(_ v: SIMD2<Float>, _ d: Float, _ wg: Float, _ dg: Float, _ t: Int) -> SIMD2<Float> {
+        let w = shape(v * d, t)
+        let hp = w - dcIn + dcOut * dcR
+        dcIn = w
+        dcOut = hp
+        lp += (hp - lp) * toneB
+        return v * dg + lp * wg
     }
 
     func process(_ buf: StereoBuffer, frames: Int, params p: [Double], ctx: RenderContext, beat: Double) {
-        if p[2] != lastTone { lastTone = p[2]; lpL.setLowpass(p[2], sampleRate: sr); lpR.a = lpL.a }
-        let drive = Float(dbToGain(p[0])), t = Int(p[1])
-        // Rough loudness compensation so turning up drive is not just turning up volume.
-        let comp = 1 / max(1, sqrtf(drive))
-        let out = Float(dbToGain(p[3])) * comp, mix = f(p, 4)
-        for i in 0..<frames {
-            let inL = buf.l[i], inR = buf.r[i]
-            let wl = lpL.lowpass(shape(inL * drive, t)) * out
-            let wr = lpR.lowpass(shape(inR * drive, t)) * out
-            buf.l[i] = inL * (1 - mix) + wl * mix
-            buf.r[i] = inR * (1 - mix) + wr * mix
+        if p[2] != lastTone {
+            lastTone = p[2]
+            // Tone at the top of its range means fully open.
+            toneB = p[2] >= 19999 ? 1 : Float(1 - exp(-2 * Double.pi * p[2] / (4 * sr)))
         }
+        let t = Int(p[1])
+        let driveTarget = Float(dbToGain(p[0]))
+        // Rough loudness compensation so turning up drive is not just turning up volume.
+        let comp = 1 / max(1, sqrtf(driveTarget))
+        let mix = f(p, 4)
+        let wetTarget = Float(dbToGain(p[3])) * comp * mix, dryTarget = 1 - mix
+        if primed {
+            let n = max(frames, 1)
+            drive.set(driveTarget, frames: n); wet.set(wetTarget, frames: n); dry.set(dryTarget, frames: n)
+        } else {
+            drive.snap(driveTarget); wet.snap(wetTarget); dry.snap(dryTarget); primed = true
+        }
+        for i in 0..<frames {
+            let d = drive.next(), wg = wet.next(), dg = dry.next()
+            let (a, b) = hb1.up(SIMD2(buf.l[i], buf.r[i]))
+            let (a0, a1) = hb2.up(a)
+            let (b0, b1) = hb2.up(b)
+            let m0 = oversampled(a0, d, wg, dg, t), m1 = oversampled(a1, d, wg, dg, t)
+            let m2 = oversampled(b0, d, wg, dg, t), m3 = oversampled(b1, d, wg, dg, t)
+            let y = hb1.down(hb2.down(m0, m1), hb2.down(m2, m3))
+            buf.l[i] = y.x
+            buf.r[i] = y.y
+        }
+        // A NaN in would stick in the filters forever; start clean instead.
+        if !(lp.x.isFinite && lp.y.isFinite && prev.x.isFinite && prev.y.isFinite) { reset() }
     }
 
-    func reset() { lpL.reset(); lpR.reset() }
+    func reset() {
+        hb1.reset(); hb2.reset()
+        prev = .zero; dcIn = .zero; dcOut = .zero; lp = .zero
+        primed = false
+    }
 }
 
 // MARK: - Bitcrusher

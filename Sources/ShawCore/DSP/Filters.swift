@@ -143,6 +143,92 @@ public struct Smoother {
     public mutating func snap(_ t: Float) { value = t; target = t; remaining = 0 }
 }
 
+/// Running minimum of the last `window` values in O(1) amortized time (a monotonic deque in a
+/// ring), for peak-hold envelopes. Negate the input and the result for a running maximum.
+/// The window can change from call to call, up to the `maxWindow` given at init.
+public final class SlidingMinimum {
+    let cap: Int
+    let vals: UnsafeMutablePointer<Float>
+    let idx: UnsafeMutablePointer<Int>
+    var head = 0, count = 0, n = 0
+
+    public init(maxWindow: Int) {
+        cap = max(3, maxWindow + 2)
+        vals = .allocate(capacity: cap)
+        vals.initialize(repeating: 0, count: cap)
+        idx = .allocate(capacity: cap)
+        idx.initialize(repeating: 0, count: cap)
+    }
+
+    deinit { vals.deallocate(); idx.deallocate() }
+
+    /// Adds `v` and returns the minimum of the last `window` values, `v` included.
+    @inline(__always) public func push(_ v: Float, window: Int) -> Float {
+        let w = min(max(window, 1), cap - 2)
+        // Values at or above the new one can never be the minimum again.
+        while count > 0 {
+            var b = head + count - 1
+            if b >= cap { b -= cap }
+            if vals[b] >= v { count -= 1 } else { break }
+        }
+        var t = head + count
+        if t >= cap { t -= cap }
+        vals[t] = v
+        idx[t] = n
+        count += 1
+        // Drop values that have left the window (the newest one never has).
+        let oldest = n - w + 1
+        while idx[head] < oldest {
+            head += 1
+            if head == cap { head = 0 }
+            count -= 1
+        }
+        n += 1
+        return vals[head]
+    }
+
+    public func reset() { head = 0; count = 0; n = 0 }
+}
+
+/// Moving average of the last `length` values. The running sum is recomputed exactly each
+/// time the ring wraps, so rounding error never builds up.
+public final class MovingAverage {
+    let length: Int
+    let ring: UnsafeMutablePointer<Float>
+    let scale: Double
+    var pos = 0
+    var sum: Double
+
+    public init(length: Int, initial: Float = 0) {
+        self.length = max(1, length)
+        ring = .allocate(capacity: self.length)
+        ring.initialize(repeating: initial, count: self.length)
+        scale = 1 / Double(self.length)
+        sum = Double(initial) * Double(self.length)
+    }
+
+    deinit { ring.deallocate() }
+
+    @inline(__always) public func process(_ v: Float) -> Float {
+        sum += Double(v) - Double(ring[pos])
+        ring[pos] = v
+        pos += 1
+        if pos == length {
+            pos = 0
+            var s = 0.0
+            for i in 0..<length { s += Double(ring[i]) }
+            sum = s
+        }
+        return Float(sum * scale)
+    }
+
+    public func reset(to v: Float) {
+        ring.update(repeating: v, count: length)
+        sum = Double(v) * Double(length)
+        pos = 0
+    }
+}
+
 /// Circular delay line with fractional read.
 public final class DelayLine {
     let buf: UnsafeMutablePointer<Float>
