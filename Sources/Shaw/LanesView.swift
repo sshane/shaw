@@ -234,6 +234,8 @@ struct ClipView: View {
         let L = store.project.sourceLength(of: clip.assetID)
         let segs = clipSegments(offset: clip.offset, length: clip.length, loops: clip.loops, sourceLength: L)
         let uses = store.project.usageCount(of: clip.assetID)
+        // Linked copies light up when one of them is selected, or while you hover a clip's link icon.
+        let showLink = uses > 1 && (LinkHover.shared.asset == clip.assetID || (!selected && isLinkedToSelection))
         let isComp = asset?.kind == .composition
         let drawer = SourceDrawer(project: store.project)
 
@@ -271,7 +273,14 @@ struct ClipView: View {
                 HStack(spacing: 3) {
                     if isComp { Image(systemName: "square.stack.3d.up.fill").font(.system(size: 8)) }
                     Text(asset?.name ?? "Missing").font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                    if uses > 1 { Image(systemName: "link").font(.system(size: 8)).help("Linked: used \(uses) times") }
+                    if uses > 1 {
+                        Image(systemName: "link").font(.system(size: 8))
+                            .padding(2).contentShape(Rectangle())
+                            .onHover { inside in
+                                if inside { LinkHover.shared.asset = clip.assetID } else if LinkHover.shared.asset == clip.assetID { LinkHover.shared.asset = nil }
+                            }
+                            .help("Linked: used \(uses) times. Select it to see the other copies.")
+                    }
                     if clip.loops { Image(systemName: "repeat").font(.system(size: 8)) }
                     if !clip.effects.isEmpty { Image(systemName: "fx").font(.system(size: 8)) }
                     if clip.mute { Image(systemName: "speaker.slash.fill").font(.system(size: 8)) }
@@ -286,6 +295,13 @@ struct ClipView: View {
             .overlay(RoundedRectangle(cornerRadius: 3).stroke(selected ? Theme.selection : (dropTarget ? Theme.accent : Color.black.opacity(0.5)),
                                                               lineWidth: selected || dropTarget ? 1.5 : 1))
             .opacity(clip.mute ? 0.45 : 1)
+            .overlay {
+                if showLink {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(Theme.selection.opacity(0.85), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay {
                 // Only at an edge: a small grip showing it can be dragged to resize.
                 if let z = hoverZone, z != .move {
@@ -330,6 +346,12 @@ struct ClipView: View {
             },
             onHover: { dropTarget = $0 != nil }))
         .help(clip.loops ? "Looping clip. Option-drag the right edge to extend." : "Drag to move, drag edges to trim, Option-drag right edge to loop, double-click to open")
+    }
+
+    /// True when another clip of the same source is selected in this composition.
+    private var isLinkedToSelection: Bool {
+        guard !store.selectedClips.isEmpty, let comp = store.activeComp else { return false }
+        return comp.tracks.contains { t in t.clips.contains { $0.id != clip.id && $0.assetID == clip.assetID && store.selectedClips.contains($0.id) } }
     }
 
     /// Edge grab zones shrink on narrow (zoomed-out) clips so the middle stays draggable.
@@ -510,3 +532,8 @@ struct EmptyTimelineCard: View {
     }
 }
 
+/// Which source's link icon the pointer is over, so every linked copy can outline itself.
+@Observable final class LinkHover {
+    static let shared = LinkHover()
+    var asset: AssetID?
+}

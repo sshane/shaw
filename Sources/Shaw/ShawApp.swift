@@ -279,6 +279,10 @@ enum DebugSnapshot {
             store.addFade(clip: c.id, fadeIn: false)
             store.seek(2)
         }
+        if env["SHAW_SELECT_LINKED"] != nil, let comp = store.activeComp,
+           let c = comp.tracks.flatMap(\.clips).first(where: { store.project.usageCount(of: $0.assetID) > 2 }) {
+            store.selectedClips = [c.id]
+        }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,
            let t = comp.tracks.first(where: { !$0.slots.isEmpty }), let scene = t.slots.keys.min() {
