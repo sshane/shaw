@@ -156,7 +156,7 @@ struct TransportBar: View {
                 DragNumber(value: store.project.bpm, range: 40...300, step: 0.1, sensitivity: 0.2,
                            format: { String(format: "%.1f", $0) },
                            font: .system(size: 13, weight: .semibold, design: .monospaced),
-                           onChange: { v in store.live { $0.bpm = v } }, onEnd: { store.endGesture() })
+                           onChange: { v in store.live { $0.bpm = v } }, onEnd: { store.endGesture() }, editSize: 13)
                 Text("BPM").font(Theme.tiny).foregroundStyle(Theme.textDim)
             }
             .help("Tempo. Drag it, or click to type.")

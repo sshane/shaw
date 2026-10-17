@@ -1,5 +1,7 @@
 #!/bin/bash
 # Builds Shaw.app into ./build. Usage: scripts/build-app.sh [debug|release]
+# Debug builds go to build/debug/Shaw.app so they never replace the app you play music with:
+# unoptimized DSP runs several times slower and stutters.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG="${1:-release}"
@@ -8,6 +10,7 @@ if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode-beta.app ] && ! xcode
 fi
 swift build -c "$CONFIG"
 APP=build/Shaw.app
+[ "$CONFIG" = debug ] && APP=build/debug/Shaw.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp ".build/$CONFIG/Shaw" "$APP/Contents/MacOS/Shaw"

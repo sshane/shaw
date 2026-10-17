@@ -41,7 +41,7 @@ swift test                # runs the tests
 
 New projects start empty with one button: **Add an instrument**. Pick drums or a synth in the Browser on the left. Click one to hear it, and double-click it to add it. Shaw makes a layer with a one-bar pattern, opens it in the piano roll, and loops it. Press Space and start adding notes.
 
-To hear what a full song looks like, open **File → Open Demo Song**. "Neon Drive" is an 80-bar track in F minor that uses keyframes everywhere: the intro's filter sweeps open while the strings fade in, the drop's lead gets delay throws at the end of each phrase, the breakdown's reverb blooms as the beat gets crunchier, and Drop 2 puts the whole Drop inside it with a wobble bass that gets dirtier as it goes. "First Light", a simpler house track, is in the same menu.
+To hear what a full song looks like, open **File → Open Demo Song**. "Starlight FM" is a short UK garage and future house track in C minor at 134 BPM. It has a skippy 2-step beat, a bouncy bassline, pumping garage chords, and vocal chops that get delay throws at the end of each phrase. The intro's pad opens up with filter keyframes, the break sinks under a closing filter, and Drop 2 puts the first drop inside it with a four-on-the-floor beat and a new topline. "Neon Drive" and "First Light" are in the same menu.
 
 ![Starting a new project](docs/images/start.png)
 

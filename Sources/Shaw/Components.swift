@@ -15,28 +15,22 @@ struct DragNumber: View {
     let onChange: (Double) -> Void
     var onEnd: () -> Void = {}
 
+    /// Point size of the text while typing a value.
+    var editSize: CGFloat = 11
+
     @State private var dragStart: Double?
     @State private var editing = false
     @State private var text = ""
-    @FocusState private var focused: Bool
 
     var body: some View {
         Group {
             if editing {
-                TextField("", text: $text)
-                    .textFieldStyle(.plain)
-                    .font(font)
-                    .foregroundStyle(Theme.text)
+                // A real NSTextField that takes focus and selects its text itself. SwiftUI focus
+                // sometimes failed here, and the select-all then hit another field (Project search).
+                SelectAllField(text: text, fontSize: editSize,
+                               onCommit: { t in text = t; commit() },
+                               onCancel: { editing = false })
                     .frame(minWidth: 40)
-                    .focused($focused)
-                    .onSubmit { commit() }
-                    .onExitCommand { editing = false }
-                    .onChange(of: focused) { _, f in if !f { commit() } }
-                    .onAppear {
-                        focused = true
-                        // Select the whole number so typing replaces it, like After Effects.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
-                    }
             } else {
                 Text(format(value))
                     .font(font)
@@ -66,6 +60,68 @@ struct DragNumber: View {
     private func commit() {
         if let v = parse(text) { onChange(min(range.upperBound, max(range.lowerBound, v))); onEnd() }
         editing = false
+    }
+}
+
+/// Text field for typing a number: focused with its text selected the moment it appears.
+/// Enter or clicking away commits; Esc cancels.
+struct SelectAllField: NSViewRepresentable {
+    let text: String
+    var fontSize: CGFloat = 11
+    let onCommit: (String) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let f = NSTextField(string: text)
+        f.isBordered = false
+        f.drawsBackground = false
+        f.focusRingType = .none
+        f.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        f.textColor = .white
+        f.delegate = context.coordinator
+        f.cell?.usesSingleLineMode = true
+        f.cell?.isScrollable = true
+        DispatchQueue.main.async {
+            guard let w = f.window else { return }
+            w.makeFirstResponder(f)
+            f.currentEditor()?.selectAll(nil)
+        }
+        return f
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: SelectAllField
+        var done = false
+        init(_ parent: SelectAllField) { self.parent = parent }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.cancelOperation(_:)) {
+                done = true
+                parent.onCancel()
+                return true
+            }
+            if selector == #selector(NSResponder.insertNewline(_:)) {
+                finish(control)
+                return true
+            }
+            return false
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            if let c = obj.object as? NSControl { finish(c) }
+        }
+
+        private func finish(_ control: NSControl) {
+            guard !done else { return }
+            done = true
+            parent.onCommit(control.stringValue)
+            // Hand the keyboard back to Shaw (Space plays again).
+            control.window?.makeFirstResponder(nil)
+        }
     }
 }
 

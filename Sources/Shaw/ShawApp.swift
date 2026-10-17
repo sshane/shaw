@@ -52,7 +52,8 @@ struct ShawCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Project") { store.newProject() }.keyboardShortcut("n", modifiers: [.command, .option])
-            Button("Open Demo Song (Neon Drive)") { store.openDemo() }
+            Button("Open Demo Song (Starlight FM)") { store.openDemo() }
+            Button("Open Demo Song (Neon Drive)") { store.openNeonDriveDemo() }
             Button("Open Demo Song (First Light)") { store.openFirstLightDemo() }
             Button("Open…") { store.openDialog() }.keyboardShortcut("o")
             Menu("Open Recent") {

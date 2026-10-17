@@ -849,6 +849,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         load(DemoProject.make(), url: nil)
     }
 
+    func openNeonDriveDemo() {
+        guard confirmDiscard() else { return }
+        load(DemoProject.neonDrive(), url: nil)
+    }
+
     func openFirstLightDemo() {
         guard confirmDiscard() else { return }
         load(DemoProject.firstLight(), url: nil)
