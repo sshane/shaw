@@ -20,7 +20,7 @@ enum EffectHost: Equatable {
     case clip(AssetID, UUID)
 }
 
-enum FocusArea { case timeline, session, pianoRoll, beatMaker, project, inspector, other }
+enum FocusArea { case timeline, session, pianoRoll, beatMaker, project, inspector, browser, other }
 
 enum SnapSetting: String, CaseIterable, Identifiable {
     case auto = "Auto", bar = "1 Bar", beat = "1/4", eighth = "1/8", sixteenth = "1/16", thirtysecond = "1/32", off = "Off"
@@ -210,7 +210,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         UserInstruments.items = library
         customInstruments = library
         if !self.isolated { sampleFolders = UserDefaults.standard.stringArray(forKey: Store.sampleFoldersKey) ?? [] }
-        if !headless { engine.start() }
+        // SHAW_SILENT keeps a snapshot run from making sound (it still renders previews, just to nowhere).
+        if !headless && !(self.isolated && ProcessInfo.processInfo.environment["SHAW_SILENT"] != nil) { engine.start() }
         SampleLibrary.shared.onLoad = { [weak self] _ in
             self?.samplesLoaded += 1
             self?.refreshEngine()

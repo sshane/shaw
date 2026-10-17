@@ -151,6 +151,8 @@ final class KeyRouter {
     weak var store: Store?
     /// Set by the piano roll so arrow keys / delete act on notes when it has focus.
     var pianoRollHandler: ((NSEvent) -> Bool)?
+    /// Set by the Browser so up and down walk its list (and play each sound) when it has focus.
+    var browserHandler: ((NSEvent) -> Bool)?
 
     func install(_ store: Store) {
         self.store = store
@@ -182,6 +184,7 @@ final class KeyRouter {
     private func handle(_ e: NSEvent, _ store: Store) -> Bool {
         let mods = e.modifierFlags.intersection([.command, .option, .control])
         if store.focus == .pianoRoll, let h = pianoRollHandler, h(e) { return true }
+        if store.focus == .browser, let h = browserHandler, h(e) { return true }
         guard mods.isEmpty else { return false }
         let chars = (e.charactersIgnoringModifiers ?? "").lowercased()
         if chars == "b" && store.focus == .pianoRoll {
@@ -337,6 +340,21 @@ enum DebugSnapshot {
             }
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
+        // SHAW_KEYS=down,down,up,return presses keys in the Browser, through the normal key handling.
+        if let keys = env["SHAW_KEYS"] {
+            store.focus = .browser
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                for k in keys.split(separator: ",") {
+                    let (code, ch): (UInt16, Int) = k == "up" ? (126, 0xF700) : k == "down" ? (125, 0xF701) : (36, 13)
+                    let s = String(UnicodeScalar(ch).map(Character.init) ?? " ")
+                    if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                windowNumber: NSApp.windows.first { $0.isVisible }?.windowNumber ?? 0, context: nil,
+                                                characters: s, charactersIgnoringModifiers: s, isARepeat: false, keyCode: code) {
+                        NSApp.postEvent(e, atStart: false)
+                    }
+                }
+            }
+        }
         if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,
            let t = comp.tracks.first(where: { !$0.slots.isEmpty }), let scene = t.slots.keys.min() {
             store.updateTrack(t.id) { $0.effects.append(EffectRegistry.descriptor("reverb")!.makeEffect()) }

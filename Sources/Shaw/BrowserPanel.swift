@@ -7,7 +7,8 @@ struct BrowserPanel: View {
     @Environment(Store.self) private var store
     @State private var search = ""
     @State private var selected: String?
-    @FocusState private var searchFocused: Bool
+    /// Set by the arrow keys so the list scrolls to keep the selection in view.
+    @State private var reveal: String?
     @State private var pulse = false
     @State private var collapsedFolders: Set<String> = []
 
@@ -25,8 +26,9 @@ struct BrowserPanel: View {
             tabs(empty: empty)
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Theme.textDim)
-                TextField(placeholder, text: $search)
-                    .textFieldStyle(.plain).font(Theme.small).focused($searchFocused)
+                BrowserSearchField(text: $search, placeholder: placeholder, focusRequest: store.focusBrowserSearch,
+                                   onFocus: { store.focus = .browser },
+                                   onMove: move, onSubmit: { _ = activateSelection() })
                 if !search.isEmpty {
                     Button { search = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)) }
                         .buttonStyle(.plain).foregroundStyle(Theme.textDim)
@@ -34,23 +36,29 @@ struct BrowserPanel: View {
             }
             .padding(.horizontal, 8).frame(height: 26)
             .background(Color.black.opacity(0.15))
-            if store.browserTab == .samples {
-                // Lazy, since a sample library can hold thousands of files.
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) { samples }
-                }
-                .onAppear { store.scanSampleFoldersIfNeeded() }
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        switch store.browserTab {
-                        case .instruments: instruments(empty: empty)
-                        default: effects
+            ScrollViewReader { proxy in
+                Group {
+                    if store.browserTab == .samples {
+                        // Lazy, since a sample library can hold thousands of files.
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) { samples }
+                        }
+                        .onAppear { store.scanSampleFoldersIfNeeded() }
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                switch store.browserTab {
+                                case .instruments: instruments(empty: empty)
+                                default: effects
+                                }
+                            }
                         }
                     }
                 }
+                .onChange(of: reveal) { _, id in if let id { proxy.scrollTo(id) } }
             }
         }
+        .onAppear { KeyRouter.shared.browserHandler = { e in handleKey(e) } }
         .overlay {
             // When the project is empty, this is the one place to start, so make it obvious.
             if empty && store.browserTab == .instruments {
@@ -61,10 +69,10 @@ struct BrowserPanel: View {
                     .onAppear { withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { pulse = true } }
             }
         }
-        .onChange(of: store.focusBrowserSearch) { _, _ in searchFocused = true }
         .onChange(of: store.browserTab) { old, _ in
             search = ""
             selected = nil
+            reveal = nil
             if old == .samples { store.stopSamplePreview() }
         }
     }
@@ -76,6 +84,7 @@ struct BrowserPanel: View {
                 let active = store.browserTab == tab
                 Button {
                     store.browserTab = tab
+                    store.focus = .browser
                 } label: {
                     Text(tab.rawValue)
                         .font(.system(size: 11, weight: active ? .semibold : .regular))
@@ -103,11 +112,10 @@ struct BrowserPanel: View {
             }
             .padding(10)
         }
-        let all = InstrumentChoice.all.filter { matches($0.name) || matches($0.category) }
         // Re-read when the library changes (InstrumentChoice.all reads the engine's copy).
         let _ = store.customInstruments
         ForEach(InstrumentChoice.categoryOrder, id: \.self) { cat in
-            let items = all.filter { $0.category == cat }
+            let items = instrumentItems(cat)
             if cat == "My Instruments" {
                 if search.isEmpty || !items.isEmpty { myInstruments(items) }
             } else if !items.isEmpty {
@@ -122,9 +130,15 @@ struct BrowserPanel: View {
                    selected: selected == item.id, actionLabel: "Add",
                    onSelect: {
                        selected = item.id
+                       store.focus = .browser
                        store.previewInstrument(item)
                    },
                    onActivate: { store.addInstrument(item) })
+        .id(item.id)
+    }
+
+    private func instrumentItems(_ category: String) -> [InstrumentChoice] {
+        InstrumentChoice.all.filter { $0.category == category && (matches($0.name) || matches($0.category)) }
     }
 
     /// Your saved instruments, with a + to build one from scratch.
@@ -192,7 +206,7 @@ struct BrowserPanel: View {
 
     @ViewBuilder private func sampleFolder(_ folder: String) -> some View {
         let files = (store.sampleIndex[folder] ?? []).filter { matches($0.name) || matches($0.folder) }
-        let open = !collapsedFolders.contains(folder) || !search.isEmpty
+        let open = isOpen(folder)
         HStack(spacing: 4) {
             Image(systemName: open ? "chevron.down" : "chevron.right")
                 .font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.textFaint).frame(width: 10)
@@ -231,14 +245,24 @@ struct BrowserPanel: View {
                 SampleRow(file: file, selected: selected == file.id,
                           onSelect: {
                               selected = file.id
+                              store.focus = .browser
                               store.previewSampleFile(file.path)
                           },
                           onActivate: {
                               store.stopSamplePreview()
                               store.addSampler(file.path)
                           })
+                .id(file.id)
             }
         }
+    }
+
+    private func isOpen(_ folder: String) -> Bool { !collapsedFolders.contains(folder) || !search.isEmpty }
+
+    /// The files a folder shows right now (none while it's collapsed).
+    private func visibleFiles(_ folder: String) -> [SampleFile] {
+        guard isOpen(folder) else { return [] }
+        return (store.sampleIndex[folder] ?? []).filter { matches($0.name) || matches($0.folder) }
     }
 
     // MARK: Effects
@@ -249,17 +273,74 @@ struct BrowserPanel: View {
         Text(hostDescription(host))
             .font(Theme.tiny).foregroundStyle(Theme.textDim)
             .padding(10)
-        ForEach(["Space", "Modulation", "Dynamics", "EQ & Filter", "Distortion", "Utility"], id: \.self) { cat in
+        ForEach(Self.effectCategories, id: \.self) { cat in
             let items = fx.filter { $0.category == cat }
             if !items.isEmpty {
                 SectionHeader(title: cat)
                 ForEach(items) { d in
                     BrowserRow(icon: icon(for: d.category), title: d.name, subtitle: d.summary, payload: .effect(d.id),
                                selected: selected == d.id, actionLabel: "Add",
-                               onSelect: { selected = d.id },
+                               onSelect: { selected = d.id; store.focus = .browser },
                                onActivate: { if let host { store.addEffect(d.id, to: host) } })
+                    .id(d.id)
                 }
             }
+        }
+    }
+
+    private static let effectCategories = ["Space", "Modulation", "Dynamics", "EQ & Filter", "Distortion", "Utility"]
+
+    // MARK: Keyboard
+
+    /// One row of the current tab, in the order shown, so the arrow keys can walk the list.
+    private struct Entry { let id: String; let select: () -> Void; let activate: () -> Void }
+
+    private var entries: [Entry] {
+        switch store.browserTab {
+        case .instruments:
+            return InstrumentChoice.categoryOrder.flatMap(instrumentItems).map { item in
+                Entry(id: item.id, select: { store.previewInstrument(item) }, activate: { store.addInstrument(item) })
+            }
+        case .effects:
+            let fx = EffectRegistry.search(search), host = store.currentEffectHost
+            return Self.effectCategories.flatMap { cat in fx.filter { $0.category == cat } }.map { d in
+                Entry(id: d.id, select: {}, activate: { if let host { store.addEffect(d.id, to: host) } })
+            }
+        case .samples:
+            return store.sampleFolders.flatMap(visibleFiles).map { file in
+                Entry(id: file.id, select: { store.previewSampleFile(file.path) },
+                      activate: { store.stopSamplePreview(); store.addSampler(file.path) })
+            }
+        }
+    }
+
+    /// Up and down select the next or previous row and play it, just like clicking it.
+    private func move(_ delta: Int) {
+        let list = entries
+        guard !list.isEmpty else { return }
+        let i = selected.flatMap { s in list.firstIndex { $0.id == s } }
+        let next = i.map { min(max($0 + delta, 0), list.count - 1) } ?? (delta > 0 ? 0 : list.count - 1)
+        store.focus = .browser
+        guard list[next].id != selected else { return }
+        selected = list[next].id
+        reveal = list[next].id
+        list[next].select()
+    }
+
+    /// Return adds the selected row, like double-clicking it.
+    private func activateSelection() -> Bool {
+        guard let s = selected, let entry = entries.first(where: { $0.id == s }) else { return false }
+        entry.activate()
+        return true
+    }
+
+    private func handleKey(_ e: NSEvent) -> Bool {
+        guard e.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return false }
+        switch e.keyCode {
+        case 125: move(1); return true // down
+        case 126: move(-1); return true // up
+        case 36, 76: return activateSelection() // return, enter
+        default: return false
         }
     }
 
@@ -357,5 +438,79 @@ struct BrowserRow: View {
         .onTapGesture(count: 2, perform: onActivate)
         .simultaneousGesture(TapGesture().onEnded(onSelect))
         .shawDraggable(payload, preview: title)
+    }
+}
+
+/// The Browser's search box. Up and down move through the results and Return adds the selected
+/// one, so you can type a few letters and pick a sound without reaching for the mouse.
+struct BrowserSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let focusRequest: Int
+    let onFocus: () -> Void
+    let onMove: (Int) -> Void
+    let onSubmit: () -> Void
+
+    final class Field: NSTextField {
+        var onFocus: (() -> Void)?
+        override func becomeFirstResponder() -> Bool {
+            let ok = super.becomeFirstResponder()
+            if ok { onFocus?() }
+            return ok
+        }
+    }
+
+    func makeNSView(context: Context) -> Field {
+        let f = Field(string: text)
+        f.isBordered = false
+        f.drawsBackground = false
+        f.focusRingType = .none
+        f.font = .systemFont(ofSize: 11)
+        f.textColor = NSColor(Theme.text)
+        f.delegate = context.coordinator
+        f.cell?.usesSingleLineMode = true
+        f.cell?.isScrollable = true
+        f.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        f.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        context.coordinator.lastFocusRequest = focusRequest
+        return f
+    }
+
+    func updateNSView(_ f: Field, context: Context) {
+        context.coordinator.parent = self
+        f.onFocus = onFocus
+        if f.stringValue != text { f.stringValue = text }
+        if context.coordinator.placeholder != placeholder {
+            context.coordinator.placeholder = placeholder
+            f.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
+                .foregroundColor: NSColor(Theme.textFaint), .font: NSFont.systemFont(ofSize: 11),
+            ])
+        }
+        if focusRequest != context.coordinator.lastFocusRequest {
+            context.coordinator.lastFocusRequest = focusRequest
+            DispatchQueue.main.async { f.window?.makeFirstResponder(f) }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: BrowserSearchField
+        var lastFocusRequest = 0
+        var placeholder = ""
+        init(_ parent: BrowserSearchField) { self.parent = parent }
+
+        func controlTextDidChange(_ obj: Notification) {
+            if let f = obj.object as? NSTextField { parent.text = f.stringValue }
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            switch selector {
+            case #selector(NSResponder.moveDown(_:)): parent.onMove(1); return true
+            case #selector(NSResponder.moveUp(_:)): parent.onMove(-1); return true
+            case #selector(NSResponder.insertNewline(_:)): parent.onSubmit(); return true
+            default: return false
+            }
+        }
     }
 }
