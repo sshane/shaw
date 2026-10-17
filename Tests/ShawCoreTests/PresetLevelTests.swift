@@ -79,3 +79,27 @@ final class OscillatorTests: XCTestCase {
         XCTAssertGreaterThan(e2, e1 * 1.3, "osc 3 should add energy")
     }
 }
+
+final class VoiceStealTests: XCTestCase {
+    /// Past 16 notes, the oldest fades out in a few milliseconds instead of jumping to the new pitch.
+    func testStolenVoicesFadeInsteadOfSwitching() {
+        let s = Synth(sampleRate: 48000)
+        var params = SynthPresets.params(for: "Heaven Pad")
+        params["a"] = 0.001
+        let p = SynthParams.defs.resolve(params)
+        let l = UnsafeMutablePointer<Float>.allocate(capacity: 4800); defer { l.deallocate() }
+        let r = UnsafeMutablePointer<Float>.allocate(capacity: 4800); defer { r.deallocate() }
+        for n in 0..<17 {
+            s.noteOn(40 + n, velocity: 0.8, params: p)
+            l.initialize(repeating: 0, count: 480); r.initialize(repeating: 0, count: 480)
+            s.render(l, r, frames: 480, params: p)
+        }
+        // The first note was stolen: it's fading, and the 17th note got its own slot.
+        XCTAssertTrue(s.voices.contains { $0.note == 40 && $0.quickFade })
+        XCTAssertTrue(s.voices.contains { $0.note == 56 && !$0.quickFade && $0.isActive })
+        l.initialize(repeating: 0, count: 4800); r.initialize(repeating: 0, count: 4800)
+        s.render(l, r, frames: 4800, params: p)
+        XCTAssertFalse(s.voices.contains { $0.note == 40 && $0.isActive }, "faded out within 100 ms")
+        XCTAssertEqual(s.voices.filter(\.isActive).count, 16)
+    }
+}

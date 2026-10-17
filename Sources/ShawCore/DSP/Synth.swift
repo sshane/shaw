@@ -351,6 +351,8 @@ struct SynthVoice {
     var dzL: Float = 0, dzR: Float = 0
     /// DC blocker state after the drive.
     var dcxL: Float = 0, dcyL: Float = 0, dcxR: Float = 0, dcyR: Float = 0
+    /// Stolen to make room for a new note: release over a few milliseconds.
+    var quickFade = false
     /// Slow random pitch wander, in semitones, like an analog oscillator.
     var drift = 0.0, driftTarget = 0.0
     var held = false
@@ -360,7 +362,9 @@ struct SynthVoice {
 
 /// Polyphonic subtractive synth. Owned by one pattern instance (or the preview channel).
 public final class Synth {
-    var voices = [SynthVoice](repeating: SynthVoice(), count: 16)
+    /// 16 notes at once, plus spare slots so a stolen note can fade out instead of being cut.
+    var voices = [SynthVoice](repeating: SynthVoice(), count: Synth.polyphony + 8)
+    static let polyphony = 16
     var counter = 0
     var noiseSeed: UInt32 = 22222
     var lastNote = -1
@@ -436,17 +440,36 @@ public final class Synth {
             lastNote = note
             return
         }
-        // Poly: prefer a free voice, else steal the oldest (released voices first).
-        var idx = voices.firstIndex { !$0.isActive } ?? -1
-        if idx < 0 {
-            var best = 0, bestScore = Int.max
-            for (i, v) in voices.enumerated() {
-                let score = v.order - (v.held ? 0 : 1_000_000)
-                if score < bestScore { bestScore = score; best = i }
-            }
-            idx = best
+        // Poly: up to 16 notes. Past that, the oldest note (released ones first) fades out over a few
+        // milliseconds in its own slot while the new note starts fresh in a spare one. Switching a
+        // sounding voice straight to a new pitch clicked, which long pads and big chords hit constantly.
+        // Plain loops: this runs on the audio thread, so nothing that allocates.
+        var sounding = 0, victim = -1, bestScore = Int.max
+        for i in voices.indices where voices[i].isActive && !voices[i].quickFade {
+            sounding += 1
+            let score = voices[i].order - (voices[i].held ? 0 : 1_000_000)
+            if score < bestScore { bestScore = score; victim = i }
         }
+        if sounding >= Synth.polyphony, victim >= 0 {
+            voices[victim].held = false
+            voices[victim].quickFade = true
+            voices[victim].amp.gate(on: false)
+            voices[victim].fenv.gate(on: false)
+        } else {
+            victim = -1
+        }
+        // A free slot, else the quietest fading one, else (never expected) the victim itself.
+        var idx = -1
+        for i in voices.indices where !voices[i].isActive { idx = i; break }
+        if idx < 0 {
+            var quietest: Float = .infinity
+            for i in voices.indices where voices[i].quickFade && i != victim && voices[i].amp.level < quietest {
+                quietest = voices[i].amp.level; idx = i
+            }
+        }
+        if idx < 0 { idx = max(victim, 0) }
         var v = voices[idx]
+        v.quickFade = false
         v.note = note
         v.velocity = velocity
         v.freq = Synth.freq(note)
@@ -501,6 +524,7 @@ public final class Synth {
             voices[i].amp = ADSR()
             voices[i].fenv = ADSR()
             voices[i].held = false
+            voices[i].quickFade = false
             voices[i].fL.reset(); voices[i].fR.reset()
             voices[i].fL2.reset(); voices[i].fR2.reset()
             voices[i].dzL = 0; voices[i].dzR = 0
@@ -564,6 +588,7 @@ public final class Synth {
         let vol = Float(dbToGain(p[SynthParams.volume]))
         let srF = Float(sr)
         let dcR = Float(exp(-2 * Double.pi * 10 / sr))
+        let quickFadeCoef = Float(exp(-4.6 / (0.006 * sr)))
         // One LFO shared by every voice, so chords wobble together.
         let syncBeats = SynthParams.lfoSyncBeats[min(SynthParams.lfoSyncBeats.count - 1, max(0, Int(p[SynthParams.lfoSync])))]
         let lfoHz = syncBeats > 0 ? bpm / 60 / syncBeats : p[SynthParams.lfoRate]
@@ -610,6 +635,7 @@ public final class Synth {
             // Refresh envelope rates every block so knob moves affect held notes.
             v.amp.configure(a: p[SynthParams.a], d: p[SynthParams.d], s: p[SynthParams.s], r: p[SynthParams.r], sr: sr)
             v.fenv.configure(a: p[SynthParams.fa], d: p[SynthParams.fd], s: p[SynthParams.fs], r: p[SynthParams.fr], sr: sr)
+            if v.quickFade { v.amp.rCoef = quickFadeCoef }
             if driftAmt > 0 {
                 if abs(v.drift - v.driftTarget) < 0.01 || noise() > 0.97 { v.driftTarget = noise() * 0.08 }
                 v.drift = v.driftTarget + (v.drift - v.driftTarget) * driftCoef

@@ -131,7 +131,7 @@ public enum DrumKits {
 
     static func generate(kit: String, sampleRate sr: Double) -> [String: SampleData] {
         var kick: KickSpec, snare: SnareSpec, hat: HatSpec
-        var clapTail = 0.12, tomDecay = 0.35, crashDecay = 0.55
+        var clapTail = 0.12, tomDecay = 0.35, crashDecay = 0.42
         var post: ([Float]) -> [Float] = { $0 }
         switch kit {
         case "house":
@@ -155,7 +155,7 @@ public enum DrumKits {
             snare = SnareSpec(tone: 170, toneDecay: 0.05, noiseDecay: 0.12, noiseLevel: 0.9, hp: 2000, length: 0.3)
             hat = HatSpec(closed: 0.035, open: 0.15, hp: 8000, metal: 0.75)
             clapTail = 0.25
-            crashDecay = 0.45
+            crashDecay = 0.3
         case "electro":
             kick = KickSpec(start: 210, end: 50, pitchDecay: 0.025, ampDecay: 0.42, click: 0.55, drive: 1.8, length: 0.6)
             snare = SnareSpec(tone: 220, toneDecay: 0.04, noiseDecay: 0.11, noiseLevel: 0.95, hp: 2500, length: 0.3)
@@ -191,7 +191,7 @@ public enum DrumKits {
         current = "tomhi"; out["tomhi"] = make(synthTom(freq: 165, decay: tomDecay * 0.85, sr))
         current = "rim"; out["rim"] = make(synthRim(sr))
         current = "perc"; out["perc"] = make(synthPerc(sr))
-        current = "crash"; out["crash"] = make(synthHat(decay: crashDecay, hp: 4000, metal: 0.9, sr, seed: 13, wide: true))
+        current = "crash"; out["crash"] = make(synthCrash(decay: crashDecay, sr))
         return out
     }
 
@@ -308,6 +308,39 @@ public enum DrumKits {
             let hit = wide ? 0.6 * exp(-t / 0.03) : 0.3 * exp(-t / 0.006)
             let env = Float(min(1, body + hit) * min(1, t / 0.0004))
             return bp.process(h2.process(h1.process(src))) * env
+        }
+    }
+
+    /// Crash cymbal: mostly bright noise, with ring-modulated square pairs for the dense metallic
+    /// shimmer (pure square banks sound like a gong). The body dies faster than the sizzle on top.
+    static func synthCrash(decay: Double, _ sr: Double) -> [Float] {
+        let n = Int((decay * 6 + 0.02) * sr)
+        var rng = Rng(s: 13)
+        let freqs = [205.3, 369.6, 304.4, 522.7, 540.0, 800.0].map { $0 * 1.31 }
+        var phases = [Double](repeating: 0, count: 6)
+        var bodyBP = Biquad(), sizzleHP = Biquad(), sizzleHP2 = Biquad(), lowCut = Biquad()
+        bodyBP.set(.bandpass, freq: 4200, q: 0.9, sampleRate: sr)
+        sizzleHP.set(.highpass, freq: 7500, q: 0.7, sampleRate: sr)
+        sizzleHP2.set(.highpass, freq: 7500, q: 0.7, sampleRate: sr)
+        lowCut.set(.highpass, freq: 2500, q: 0.7, sampleRate: sr)
+        return (0..<n).map { i in
+            let t = Double(i) / sr
+            func sq(_ j: Int) -> Double {
+                let dt = freqs[j] / sr
+                let v = oscillator(3, phases[j], dt)
+                phases[j] += dt
+                if phases[j] >= 1 { phases[j] -= 1 }
+                return v
+            }
+            // Ring modulation: sum and difference tones make a dense, inharmonic spread.
+            let metal = Float((sq(0) * sq(1) + sq(2) * sq(3) + sq(4) * sq(5)) / 3)
+            let noise = rng.next()
+            let src = noise * 0.75 + metal * 0.45
+            let body = bodyBP.process(src) * Float(exp(-t / (decay * 0.45)))
+            let sizzle = sizzleHP2.process(sizzleHP.process(src)) * Float(exp(-t / decay))
+            let hit = Float(exp(-t / 0.012)) * noise * 0.6
+            let attack = Float(min(1, t / 0.0006))
+            return lowCut.process(body * 1.2 + sizzle + hit) * attack
         }
     }
 

@@ -420,13 +420,15 @@ final class PumpFX: EffectProcessor {
         let period = LFORates.beats[Int(p[0])]
         let depth = p[1], rel = p[2], curve = p[3]
         let bps = ctx.beatsPerSample
+        // The duck takes about 4 ms, like a sidechained compressor's attack. Faster than that
+        // clicks on held chords and pads every beat.
+        let slew = Float(1 - exp(-1 / (0.004 * ctx.sampleRate)))
         for i in 0..<frames {
             let ph = (beat + Double(i) * bps) / period
             let x = ph - floor(ph)
             let r = min(1, x / rel)
             let target = Float(1 - depth * (1 - pow(r, 1 / curve)))
-            // A ~1 ms slew keeps the duck from clicking at each beat.
-            g.value += (target - g.value) * 0.05
+            g.value += (target - g.value) * slew
             buf.l[i] *= g.value; buf.r[i] *= g.value
         }
     }
