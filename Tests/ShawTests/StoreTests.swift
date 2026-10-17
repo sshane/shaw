@@ -170,33 +170,50 @@ final class ExportTests: XCTestCase {
     }
 }
 
-final class NeonDriveTests: XCTestCase {
-    /// Set SHAW_EXPORT_DIR to write the demo to a WAV you can listen to.
-    func testExportNeonDrive() throws {
-        guard let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] else { return }
-        let p = DemoProject.neonDrive()
-        try OfflineRenderer.export(project: p, composition: p.mainCompositionID,
-                                   to: URL(fileURLWithPath: dir).appendingPathComponent("Neon Drive.wav"))
-    }
-
+final class DemoSongTests: XCTestCase {
     func rms(_ x: ArraySlice<Float>) -> Double { sqrt(Double(x.reduce(0) { $0 + $1 * $1 }) / Double(max(1, x.count))) }
 
-    func testNeonDriveMix() {
-        let p = DemoProject.neonDrive()
-        let (l, r) = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: 320)
+    /// Section levels: nothing silent, nothing clipping, and the drops hit harder than the quiet parts.
+    func check(_ p: Project, _ sections: [(String, Double, Double)], louder: [(String, String)]) {
+        let total = sections.map(\.2).max()!
+        let (l, r) = OfflineRenderer.renderToMemory(project: p, composition: p.mainCompositionID, beats: total)
         let fpb = 48000.0 * 60 / p.bpm
         var levels: [String: Double] = [:]
-        for (name, b0, b1) in [("Intro", 0.0, 32.0), ("Build", 32, 64), ("Drop", 64, 128), ("Breakdown", 128, 160),
-                               ("Build 2", 160, 192), ("Drop 2", 192, 256), ("Last Drop", 256, 288), ("Outro", 288, 320)] {
-            let a = Int(b0 * fpb), b = Int(b1 * fpb)
+        for (name, b0, b1) in sections {
+            let a = Int(b0 * fpb), b = min(l.count, Int(b1 * fpb))
             let level = 20 * log10(max(rms(l[a..<b]), 1e-9))
             let peak = max(l[a..<b].map(abs).max() ?? 0, r[a..<b].map(abs).max() ?? 0)
             levels[name] = level
-            print(String(format: "NEON %-10@ rms %6.1f dBFS  peak %.2f", name as NSString, level, peak))
-            XCTAssertGreaterThan(level, -40, "\(name) is nearly silent")
-            XCTAssertLessThan(peak, 1.0, "\(name) clips")
+            print(String(format: "%@ %-12@ rms %6.1f dBFS  peak %.2f", p.name as NSString, name as NSString, level, peak))
+            XCTAssertGreaterThan(level, -40, "\(p.name): \(name) is nearly silent")
+            XCTAssertLessThan(peak, 1.0, "\(p.name): \(name) clips")
         }
-        XCTAssertGreaterThan(levels["Drop"]!, levels["Intro"]! + 6, "the drop should hit harder than the intro")
-        XCTAssertGreaterThan(levels["Drop 2"]!, levels["Breakdown"]! + 3, "drop 2 should hit harder than the breakdown")
+        for (loud, quiet) in louder {
+            XCTAssertGreaterThan(levels[loud]!, levels[quiet]! + 4, "\(p.name): \(loud) should hit harder than \(quiet)")
+        }
+    }
+
+    func testStarlightFM() {
+        check(DemoProject.starlightFM(), [("Intro", 0, 32), ("Drop", 32, 96), ("Break", 96, 112), ("Drop 2", 112, 144), ("Outro", 144, 160)],
+              louder: [("Drop", "Intro"), ("Drop 2", "Break")])
+    }
+
+    func testAfterburn() {
+        check(DemoProject.afterburn(), [("Intro", 0, 32), ("Drop", 32, 96), ("Switch-Up", 96, 128), ("Last Drop", 128, 160)],
+              louder: [("Drop", "Intro")])
+    }
+
+    func testLanterns() {
+        check(DemoProject.lanterns(), [("Intro", 0, 32), ("Build", 32, 48), ("Drop", 48, 112), ("Bridge", 112, 128), ("Last Drop", 128, 160)],
+              louder: [("Drop", "Intro"), ("Last Drop", "Bridge")])
+    }
+
+    /// Set SHAW_EXPORT_DIR to write every demo to a WAV you can listen to.
+    func testExportDemos() throws {
+        guard let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] else { return }
+        for p in [DemoProject.starlightFM(), DemoProject.afterburn(), DemoProject.lanterns()] {
+            try OfflineRenderer.export(project: p, composition: p.mainCompositionID,
+                                       to: URL(fileURLWithPath: dir).appendingPathComponent("\(p.name).wav"))
+        }
     }
 }

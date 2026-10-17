@@ -844,19 +844,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         load(DemoProject.empty(), url: nil)
     }
 
-    func openDemo() {
+    /// Open a demo song (Starlight FM unless you pick another one).
+    func openDemo(_ song: () -> Project = DemoProject.make) {
         guard confirmDiscard() else { return }
-        load(DemoProject.make(), url: nil)
-    }
-
-    func openNeonDriveDemo() {
-        guard confirmDiscard() else { return }
-        load(DemoProject.neonDrive(), url: nil)
-    }
-
-    func openFirstLightDemo() {
-        guard confirmDiscard() else { return }
-        load(DemoProject.firstLight(), url: nil)
+        load(song(), url: nil)
     }
 
     func openDialog() {

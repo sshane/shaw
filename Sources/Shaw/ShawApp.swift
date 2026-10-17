@@ -52,9 +52,11 @@ struct ShawCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Project") { store.newProject() }.keyboardShortcut("n", modifiers: [.command, .option])
-            Button("Open Demo Song (Starlight FM)") { store.openDemo() }
-            Button("Open Demo Song (Neon Drive)") { store.openNeonDriveDemo() }
-            Button("Open Demo Song (First Light)") { store.openFirstLightDemo() }
+            Menu("Open Demo Song") {
+                Button("Starlight FM (UK garage)") { store.openDemo(DemoProject.starlightFM) }
+                Button("Afterburn (bass house)") { store.openDemo(DemoProject.afterburn) }
+                Button("Lanterns (melodic dubstep)") { store.openDemo(DemoProject.lanterns) }
+            }
             Button("Open…") { store.openDialog() }.keyboardShortcut("o")
             Menu("Open Recent") {
                 ForEach(store.recentFiles, id: \.self) { url in
