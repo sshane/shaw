@@ -97,7 +97,7 @@ The first time you open Shaw, a short three-page guide walks through what's diff
 
 ## What's inside
 
-- **Shaw Synth**, a polyphonic synth with up to four oscillators, a sub, noise, unison, FM, drift, four filter types, envelopes, a tempo-synced LFO with six shapes, glide, and drive. It comes with 53 presets, including Future Bass, Dubstep & Bass House, and Hyperpop sounds. Presets bring their own effects, like a sidechain pump and reverb on Future Chords.
+- **Shaw Synth**, a polyphonic synth with up to four oscillators, a sub, noise, supersaw-style unison, FM with its own envelope, analog drift, four filter types, envelopes, a tempo-synced LFO with six shapes, glide, and drive. It comes with 55 presets, including FM electric pianos and bells, plus Future Bass, Dubstep & Bass House, and Hyperpop sounds. Presets bring their own effects, like a sidechain pump and reverb on Future Chords.
 - **Instrument Editor and My Instruments.** Click Edit Instrument to see a sound as cards you can stack: sine, triangle, saw, and square waves, plus pictures of the filter and envelope. Change a preset and save it as your own, or click + under My Instruments to build one from scratch. Your instruments show up in the Browser in every project.
 - **Seven drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi, Techno, Electro, and Drill. Shaw generates every sound in code, so there are no samples to download or license.
 - **14 effects**: Reverb, Delay, Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter, Saturator, Bitcrusher, Volume, and Utility.

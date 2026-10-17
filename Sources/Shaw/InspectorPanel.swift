@@ -450,7 +450,7 @@ struct InstrumentInspector: View {
     @State private var showAll = false
 
     static let groups: [(String, [String])] = [
-        ("Oscillators", ["osc1", "semi1", "lvl1", "on2", "osc2", "semi2", "fine2", "lvl2", "mix", "fm",
+        ("Oscillators", ["osc1", "semi1", "lvl1", "on2", "osc2", "semi2", "fine2", "lvl2", "mix", "fm", "fmenv", "fmdecay",
                          "on3", "osc3", "semi3", "fine3", "lvl3", "on4", "osc4", "semi4", "fine4", "lvl4",
                          "osclevel", "sub", "noise", "unison", "spread", "drift"]),
         ("Filter", ["ftype", "cutoff", "resonance", "fenv", "keytrack"]),

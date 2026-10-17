@@ -95,6 +95,26 @@ public struct SVF {
         return (v2, v1, v0 - k * v1 - v2)
     }
 
+    /// Like `process`, but the resonance can't build up past a few times the signal level: it rounds
+    /// off like a driven analog filter instead of whistling louder and louder. Below that it's identical,
+    /// so normal settings sound exactly the same.
+    @inline(__always) public mutating func processLimited(_ v0: Float) -> (Float, Float, Float) {
+        let v3 = v0 - ic2
+        let v1 = a1 * ic1 + a2 * v3
+        let v2 = ic2 + a2 * ic1 + a3 * v3
+        ic1 = SVF.soften(2 * v1 - ic1)
+        ic2 = 2 * v2 - ic2
+        return (v2, v1, v0 - k * v1 - v2)
+    }
+
+    /// Exactly linear up to 3, then a smooth tanh knee that tops out at 6.
+    @inline(__always) static func soften(_ x: Float) -> Float {
+        let a = abs(x)
+        if a <= 3 { return x }
+        let y = 3 + 3 * tanhf((a - 3) / 3)
+        return x < 0 ? -y : y
+    }
+
     public mutating func reset() { ic1 = 0; ic2 = 0 }
 }
 
