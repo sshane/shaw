@@ -1,7 +1,7 @@
 import ShawCore
 import SwiftUI
 
-enum BrowserTab: String, CaseIterable { case instruments = "Instruments", effects = "Effects" }
+enum BrowserTab: String, CaseIterable { case instruments = "Instruments", effects = "Effects", samples = "Samples" }
 
 struct BrowserPanel: View {
     @Environment(Store.self) private var store
@@ -9,6 +9,15 @@ struct BrowserPanel: View {
     @State private var selected: String?
     @FocusState private var searchFocused: Bool
     @State private var pulse = false
+    @State private var collapsedFolders: Set<String> = []
+
+    private var placeholder: String {
+        switch store.browserTab {
+        case .instruments: return "Search instruments (drums, bass, pad…)"
+        case .effects: return "Search effects (reverb, delay…)"
+        case .samples: return "Search samples (kick, vocal…)"
+        }
+    }
 
     var body: some View {
         let empty = !store.hasContent
@@ -16,8 +25,7 @@ struct BrowserPanel: View {
             tabs(empty: empty)
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Theme.textDim)
-                TextField(store.browserTab == .instruments ? "Search instruments (drums, bass, pad…)" : "Search effects (reverb, delay…)",
-                          text: $search)
+                TextField(placeholder, text: $search)
                     .textFieldStyle(.plain).font(Theme.small).focused($searchFocused)
                 if !search.isEmpty {
                     Button { search = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)) }
@@ -26,11 +34,19 @@ struct BrowserPanel: View {
             }
             .padding(.horizontal, 8).frame(height: 26)
             .background(Color.black.opacity(0.15))
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch store.browserTab {
-                    case .instruments: instruments(empty: empty)
-                    case .effects: effects
+            if store.browserTab == .samples {
+                // Lazy, since a sample library can hold thousands of files.
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) { samples }
+                }
+                .onAppear { store.scanSampleFoldersIfNeeded() }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch store.browserTab {
+                        case .instruments: instruments(empty: empty)
+                        default: effects
+                        }
                     }
                 }
             }
@@ -46,7 +62,11 @@ struct BrowserPanel: View {
             }
         }
         .onChange(of: store.focusBrowserSearch) { _, _ in searchFocused = true }
-        .onChange(of: store.browserTab) { _, _ in search = ""; selected = nil }
+        .onChange(of: store.browserTab) { old, _ in
+            search = ""
+            selected = nil
+            if old == .samples { store.stopSamplePreview() }
+        }
     }
 
     private func tabs(empty: Bool) -> some View {
@@ -147,6 +167,80 @@ struct BrowserPanel: View {
         }
     }
 
+    // MARK: Samples
+
+    @ViewBuilder private var samples: some View {
+        if store.sampleFolders.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Use your own sounds").font(Theme.header).foregroundStyle(Theme.text)
+                Text("Add a folder of samples, like drum hits, vocal chops, or loops. Click one to hear it. Double-click to add it as a new layer, or drag it onto the timeline or the piano roll.")
+                    .font(Theme.tiny).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Add Folder…") { store.addSampleFolderDialog() }
+                    .controlSize(.small).padding(.top, 2)
+            }
+            .padding(10)
+        } else {
+            ForEach(store.sampleFolders, id: \.self) { folder in sampleFolder(folder) }
+            Button { store.addSampleFolderDialog() } label: {
+                Label("Add Folder…", systemImage: "plus").font(Theme.tiny)
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .padding(.horizontal, 8).padding(.vertical, 8)
+        }
+    }
+
+    @ViewBuilder private func sampleFolder(_ folder: String) -> some View {
+        let files = (store.sampleIndex[folder] ?? []).filter { matches($0.name) || matches($0.folder) }
+        let open = !collapsedFolders.contains(folder) || !search.isEmpty
+        HStack(spacing: 4) {
+            Image(systemName: open ? "chevron.down" : "chevron.right")
+                .font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.textFaint).frame(width: 10)
+            Text(URL(fileURLWithPath: folder).lastPathComponent.uppercased())
+                .font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint).lineLimit(1)
+            Spacer()
+            if store.scanningFolders.contains(folder) {
+                ProgressView().controlSize(.mini)
+            } else if !FileManager.default.fileExists(atPath: folder) {
+                Text("Missing").font(Theme.tiny).foregroundStyle(Theme.textFaint)
+            }
+        }
+        .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if collapsedFolders.contains(folder) { collapsedFolders.remove(folder) } else { collapsedFolders.insert(folder) }
+        }
+        .contextMenu {
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder)]) }
+            Button("Look for New Files") { store.rescanSamples(folder) }
+            Divider()
+            Button("Remove from Browser") { store.removeSampleFolder(folder) }
+        }
+        .help(folder)
+        if open {
+            if files.isEmpty, store.sampleIndex[folder] != nil {
+                Text(search.isEmpty ? "No audio files in this folder." : "No matches.")
+                    .font(Theme.tiny).foregroundStyle(Theme.textFaint)
+                    .padding(.horizontal, 20).padding(.vertical, 2)
+            }
+            ForEach(Array(files.enumerated()), id: \.element.id) { i, file in
+                if !file.folder.isEmpty, i == 0 || files[i - 1].folder != file.folder {
+                    Text(file.folder).font(Theme.tiny).foregroundStyle(Theme.textFaint).lineLimit(1)
+                        .padding(.leading, 22).padding(.trailing, 8).padding(.top, 5).padding(.bottom, 1)
+                }
+                SampleRow(file: file, selected: selected == file.id,
+                          onSelect: {
+                              selected = file.id
+                              store.previewSampleFile(file.path)
+                          },
+                          onActivate: {
+                              store.stopSamplePreview()
+                              store.addSampler(file.path)
+                          })
+            }
+        }
+    }
+
     // MARK: Effects
 
     @ViewBuilder private var effects: some View {
@@ -196,6 +290,38 @@ struct BrowserPanel: View {
         case "Distortion": return "flame"
         default: return "dial.medium"
         }
+    }
+}
+
+/// One file in the Samples tab. It drags like a file from Finder: onto the timeline for an
+/// audio clip, onto the piano roll for a sampler, or onto a drum sound to replace it.
+struct SampleRow: View {
+    let file: SampleFile
+    var selected = false
+    let onSelect: () -> Void
+    let onActivate: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "waveform").font(.system(size: 10)).foregroundStyle(Theme.accent).frame(width: 14)
+            Text(file.name).font(Theme.small).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 4)
+            if hover || selected {
+                Button("Add", action: onActivate)
+                    .controlSize(.mini)
+                    .buttonStyle(.bordered)
+                    .help("Add a new layer that plays this sample")
+            }
+        }
+        .padding(.leading, 12).padding(.trailing, 8)
+        .frame(height: 21)
+        .background(selected ? Theme.accent.opacity(0.22) : (hover ? Color.white.opacity(0.05) : Color.clear))
+        .contentShape(Rectangle())
+        .onHover { hover = $0 }
+        .onTapGesture(count: 2, perform: onActivate)
+        .simultaneousGesture(TapGesture().onEnded(onSelect))
+        .fileDraggable(file.path, preview: file.name)
     }
 }
 

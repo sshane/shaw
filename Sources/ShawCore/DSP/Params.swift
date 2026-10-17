@@ -2,6 +2,8 @@ import Foundation
 
 public enum ParamUnit: Equatable {
     case none, db, hz, ms, percent, ratio, semitones, cents, seconds
+    /// A MIDI note number, shown as a name ("C4" is 60, like the piano roll).
+    case note
     case choice([String])
 }
 
@@ -74,8 +76,29 @@ public struct ParamDef: Identifiable, Equatable {
         case .ratio: return String(format: "%.1f:1", v)
         case .semitones: return String(format: "%+.0f st", v)
         case .cents: return String(format: "%+.0f ct", v)
+        case .note: return ParamDef.noteName(Int(v.rounded()))
         case .none: return String(format: "%.2f", v)
         }
+    }
+
+    static let noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+    /// 60 → "C4".
+    public static func noteName(_ pitch: Int) -> String {
+        let p = Swift.max(0, Swift.min(127, pitch))
+        return "\(noteNames[p % 12])\(p / 12 - 1)"
+    }
+
+    /// "C4", "f#2", "Db3", or a plain number ("60") → MIDI note.
+    public static func parseNote(_ text: String) -> Double? {
+        let s = text.trimmingCharacters(in: .whitespaces).uppercased()
+        if let n = Double(s) { return n }
+        guard let letter = s.first, let base = ["C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11][String(letter)] else { return nil }
+        var rest = s.dropFirst()
+        var semi = base
+        if rest.first == "#" { semi += 1; rest = rest.dropFirst() } else if rest.first == "B" && rest.count > 1 { semi -= 1; rest = rest.dropFirst() }
+        guard let octave = Int(rest) else { return nil }
+        return Double((octave + 1) * 12 + semi)
     }
 }
 

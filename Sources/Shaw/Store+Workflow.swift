@@ -430,26 +430,37 @@ extension Store {
     @discardableResult
     func replaceInstrument(ofAsset id: AssetID, with choice: InstrumentChoice) -> Bool {
         // Any pattern can take any instrument: drums and synths are both piano-roll patterns.
+        guard case .notes(let pat)? = project.asset(id)?.content else { NSSound.beep(); return false }
+        switch choice {
+        case .synth(let preset): return setSound(of: id, to: .preset(preset))
+        case .kit(let kit):
+            var new = Instrument.kit(kit)
+            // Your own drum sounds stay when you try another kit; only the built-in ones change.
+            if pat.instrument.isDrumKit { new.kitSamples = pat.instrument.kitSamples }
+            return setSound(of: id, to: new)
+        }
+    }
+
+    /// Give a pattern a new instrument, keeping its notes. Names that still follow the old sound
+    /// ("Pluck", "Pluck 2", "Trap 808 Beat") follow the new one; names you typed yourself are left alone.
+    @discardableResult
+    func setSound(of id: AssetID, to new: Instrument) -> Bool {
         guard let asset = project.asset(id), case .notes(let pat) = asset.content else { NSSound.beep(); return false }
-        // Names that still follow the instrument ("Pluck", "Pluck 2", "Trap 808 Beat") follow the new one;
-        // names you typed yourself are left alone.
-        let oldSound = pat.instrument.kit.map { DrumKits.kitName($0) } ?? pat.instrument.preset.replacingOccurrences(of: "*", with: "")
+        func sound(_ i: Instrument) -> String { i.kit.map { DrumKits.kitName($0) } ?? i.preset.replacingOccurrences(of: "*", with: "") }
+        let oldSound = sound(pat.instrument), newSound = sound(new)
         let oldAssetBase = pat.instrument.isDrumKit ? "\(oldSound) Beat" : oldSound
-        let newAssetBase = choice.isKit ? "\(choice.name) Beat" : choice.name
+        let newAssetBase = new.isDrumKit ? "\(newSound) Beat" : newSound
         let renameAsset = Store.baseName(asset.name) == oldAssetBase
         let newAssetName = renameAsset ? project.uniqueName(newAssetBase, excluding: id) : asset.name
         let cid = activeCompID
         edit { p in
-            switch choice {
-            case .synth(let preset): p.updateNotes(id) { $0.instrument = .preset(preset) }
-            case .kit(let kit): p.updateNotes(id) { $0.instrument = .kit(kit) }
-            }
+            p.updateNotes(id) { $0.instrument = new }
             p.updateAsset(id) { $0.name = newAssetName }
             // Layers named after the old sound follow too.
             p.updateComposition(cid) { c in
                 for ti in c.tracks.indices where c.tracks[ti].clips.contains(where: { $0.assetID == id })
                     && (c.tracks[ti].name == oldSound || c.tracks[ti].name == oldAssetBase) {
-                    c.tracks[ti].name = choice.name
+                    c.tracks[ti].name = newSound
                 }
             }
         }

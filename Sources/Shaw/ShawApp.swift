@@ -288,9 +288,28 @@ enum DebugSnapshot {
         }
         if let add = env["SHAW_ADD"] {
             for item in add.split(separator: ",") {
-                if let c = InstrumentChoice.all.first(where: { $0.id == item }) { store.addInstrument(c) }
+                if item.hasPrefix("sample:") {
+                    store.addSampler(String(item.dropFirst("sample:".count)))
+                } else if let c = InstrumentChoice.all.first(where: { $0.id == item }) {
+                    store.addInstrument(c)
+                }
             }
         }
+        // SHAW_SAMPLES=/folder,/other lists sample folders in the Samples tab (never saved: snapshots are isolated).
+        if let folders = env["SHAW_SAMPLES"], store.isolated {
+            store.sampleFolders = folders.split(separator: ",").map(String.init)
+            store.browserTab = .samples
+            store.rescanSamples()
+        }
+        // SHAW_KITSAMPLE=kick=/a.wav,snare=/b.wav gives the open drum pattern your own sounds.
+        if let pairs = env["SHAW_KITSAMPLE"], let id = store.pianoRollAsset {
+            for pair in pairs.split(separator: ",") {
+                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                if kv.count == 2 { store.setKitSample(kv[1], voice: kv[0], pattern: id) }
+            }
+        }
+        // SHAW_INSPECT_PATTERN shows the open pattern itself in Effect Controls (not its clip).
+        if env["SHAW_INSPECT_PATTERN"] != nil, let id = store.pianoRollAsset { store.inspector = .asset(id) }
         if env["SHAW_FADE"] != nil, let c = store.activeComp?.tracks.first?.clips.first {
             store.updateClip(c.id) { $0.length = 16; $0.loops = true }
             store.addFade(clip: c.id, fadeIn: true)
@@ -312,7 +331,7 @@ enum DebugSnapshot {
                     } }
                 }
             } else if let a = store.project.assets.last(where: {
-                if case .notes(let p) = $0.content { return !p.instrument.isDrumKit } else { return false }
+                if case .notes(let p) = $0.content { return p.instrument.isSynth } else { return false }
             }) {
                 store.openInstrumentEditor(a.id)
             }

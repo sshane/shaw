@@ -481,14 +481,80 @@ final class NoteState {
     init(sampleRate: Double) { synth = Synth(sampleRate: sampleRate) }
 }
 
+final class SamplerState {
+    let sampler: Sampler
+    var expected = -1.0
+    init(sampleRate: Double) { sampler = Sampler(sampleRate: sampleRate) }
+}
+
+/// What a note pattern plays: the synth or the sampler. Built fresh with each graph (cheap);
+/// the voices live in the persistent state object, so notes keep ringing across edits.
+protocol NotePlayer: AnyObject {
+    var expected: Double { get set }
+    func noteOn(_ pitch: Int, velocity: Float)
+    /// A note that started before a jump (seek or loop wrap) and is still held at the new position.
+    func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double)
+    func noteOff(_ pitch: Int)
+    func allNotesOff()
+    func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?)
+    func reset()
+}
+
+final class SynthNotePlayer: NotePlayer {
+    let state: NoteState
+    let params: [Double]
+    init(state: NoteState, params: [Double]) { self.state = state; self.params = params }
+
+    var expected: Double {
+        get { state.expected }
+        set { state.expected = newValue }
+    }
+    func noteOn(_ pitch: Int, velocity: Float) { state.synth.noteOn(pitch, velocity: velocity, params: params) }
+    func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double) { noteOn(pitch, velocity: velocity) }
+    func noteOff(_ pitch: Int) { state.synth.noteOff(pitch, params: params) }
+    func allNotesOff() { state.synth.allNotesOff() }
+    func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?) {
+        state.synth.render(l, r, frames: frames, params: params, bpm: bpm, beat: beat)
+    }
+    func reset() { state.synth.reset() }
+}
+
+final class SamplerNotePlayer: NotePlayer {
+    let state: SamplerState
+    let params: [Double]
+    /// Nil while the file is still loading (or missing): notes are silent until it arrives.
+    let sample: MipSample?
+    init(state: SamplerState, params: [Double], sample: MipSample?) {
+        self.state = state
+        self.params = params
+        self.sample = sample
+    }
+
+    var expected: Double {
+        get { state.expected }
+        set { state.expected = newValue }
+    }
+    func noteOn(_ pitch: Int, velocity: Float) { state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: sample) }
+    func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double) {
+        // One-Shots are hits: like drums, they don't restart halfway through after a jump.
+        guard params[SamplerParams.playmode] < 0.5 else { return }
+        state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: sample, offset: elapsedSeconds)
+    }
+    func noteOff(_ pitch: Int) { state.sampler.noteOff(pitch) }
+    func allNotesOff() { state.sampler.allNotesOff() }
+    func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?) {
+        state.sampler.render(l, r, frames: frames, params: params)
+    }
+    func reset() { state.sampler.reset() }
+}
+
 final class NoteSourceNode: SourceNode {
     let events: [NoteEvent]
     let notes: [Note]
     let length: Double
-    let params: [Double]
-    let state: NoteState
+    let player: NotePlayer
 
-    init(pattern: NotePattern, state: NoteState) {
+    init(pattern: NotePattern, player: NotePlayer) {
         let len = pattern.length
         var ev: [NoteEvent] = []
         for n in pattern.notes where n.start < len {
@@ -500,8 +566,7 @@ final class NoteSourceNode: SourceNode {
         events = ev
         notes = pattern.notes
         length = len
-        params = SynthParams.defs.resolve(pattern.instrument.params)
-        self.state = state
+        self.player = player
     }
 
     var hasTail: Bool { true }
@@ -518,20 +583,19 @@ final class NoteSourceNode: SourceNode {
 
     func render(beat: Double, frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>,
                 ctx: RenderContext, songBeat: Double) {
-        let synth = state.synth
         let bps = ctx.beatsPerSample
         // Events are collected from a window shifted one sample early. Loop wraps and clip
         // starts land up to a sample *after* the exact beat (frame rounding), and without
         // this a note sitting on beat 1 would count as already past and be skipped.
         let w0 = beat - bps, w1 = beat + Double(frames) * bps - bps
-        if abs(beat - state.expected) > bps * 1.5 {
+        if abs(beat - player.expected) > bps * 1.5 {
             // Jumped (seek, loop wrap): release what was playing and pick up notes already in progress.
-            synth.allNotesOff()
+            player.allNotesOff()
             for n in notes where n.start < w0 && min(n.end, length) > beat + bps {
-                synth.noteOn(n.pitch, velocity: Float(n.velocity), params: params)
+                player.resume(n.pitch, velocity: Float(n.velocity), elapsedSeconds: (beat - n.start) * 60 / ctx.bpm)
             }
         }
-        state.expected = beat + Double(frames) * bps
+        player.expected = beat + Double(frames) * bps
         var idx = firstEvent(atOrAfter: w0)
         var f = 0
         while idx < events.count {
@@ -539,26 +603,26 @@ final class NoteSourceNode: SourceNode {
             if e.beat >= w1 { break }
             let ef = min(frames - 1, max(0, Int(((e.beat - beat) / bps).rounded(.down))))
             if ef > f {
-                synth.render(l + f, r + f, frames: ef - f, params: params, bpm: ctx.bpm, beat: songBeat + Double(f) * bps)
+                player.render(l + f, r + f, frames: ef - f, bpm: ctx.bpm, beat: songBeat + Double(f) * bps)
                 f = ef
             }
-            if e.on { synth.noteOn(e.pitch, velocity: e.velocity, params: params) } else { synth.noteOff(e.pitch, params: params) }
+            if e.on { player.noteOn(e.pitch, velocity: e.velocity) } else { player.noteOff(e.pitch) }
             idx += 1
         }
-        if f < frames { synth.render(l + f, r + f, frames: frames - f, params: params, bpm: ctx.bpm, beat: songBeat + Double(f) * bps) }
+        if f < frames { player.render(l + f, r + f, frames: frames - f, bpm: ctx.bpm, beat: songBeat + Double(f) * bps) }
     }
 
     func renderTail(frames: Int, l: UnsafeMutablePointer<Float>, r: UnsafeMutablePointer<Float>, ctx: RenderContext, songBeat: Double) {
-        if state.expected >= 0 {
-            state.synth.allNotesOff()
-            state.expected = -1
+        if player.expected >= 0 {
+            player.allNotesOff()
+            player.expected = -1
         }
-        state.synth.render(l, r, frames: frames, params: params, bpm: ctx.bpm)
+        player.render(l, r, frames: frames, bpm: ctx.bpm, beat: nil)
     }
 
     func stop() {
-        state.synth.reset()
-        state.expected = -1
+        player.reset()
+        player.expected = -1
     }
 }
 
@@ -624,19 +688,23 @@ final class DrumPlayer {
         for vi in voices.indices {
             guard let s = voices[vi].sample else { continue }
             var v = voices[vi]
-            let last = s.frames - 1
+            let n = s.frames, last = n - 1
+            // Your own drum samples are often stereo; the built-in kits are mono.
+            let stereo = s.channels > 1
             for i in 0..<frames {
                 let idx = Int(v.pos)
                 if idx >= last { v.sample = nil; break }
                 let fr = Float(v.pos - Double(idx))
-                var x = s.l[idx] + (s.l[idx + 1] - s.l[idx]) * fr
+                var xl = hermite(s.l, n, idx, fr)
+                var xr = stereo ? hermite(s.r, n, idx, fr) : xl
                 if v.fading {
                     v.fade -= 1 / 200
                     if v.fade <= 0 { v.sample = nil; break }
-                    x *= v.fade
+                    xl *= v.fade
+                    xr *= v.fade
                 }
-                l[i] += x * v.gainL
-                r[i] += x * v.gainR
+                l[i] += xl * v.gainL
+                r[i] += xr * v.gainR
                 v.pos += v.rate
             }
             voices[vi] = v
@@ -717,9 +785,12 @@ final class KitNoteSourceNode: SourceNode {
     let rows: [DrumRowInfo]
     let player: DrumPlayer
 
-    init(pattern: NotePattern, kit: String, sampleRate: Double, player: DrumPlayer) {
+    /// - Parameter custom: your own files for some sounds (voice id → decoded sample, nil while loading).
+    init(pattern: NotePattern, kit: String, custom: [String: SampleData?] = [:], sampleRate: Double, player: DrumPlayer) {
         rows = DrumKits.voices.map { v in
-            DrumRowInfo(sample: DrumKits.sample(kit: kit, voice: v.id, sampleRate: sampleRate), gainL: 1, gainR: 1, rate: 1, choke: v.choke)
+            let s: SampleData?
+            if let mine = custom[v.id] { s = mine } else { s = DrumKits.sample(kit: kit, voice: v.id, sampleRate: sampleRate) }
+            return DrumRowInfo(sample: s, gainL: 1, gainR: 1, rate: 1, choke: v.choke)
         }
         hits = pattern.notes
             .filter { $0.start < pattern.length && DrumKits.voice(atPitch: $0.pitch) != nil }

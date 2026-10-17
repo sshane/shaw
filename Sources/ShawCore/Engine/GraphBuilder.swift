@@ -118,10 +118,21 @@ struct GraphBuilder {
         case .audio(let ref):
             source = AudioSourceNode(data: samples.data(for: ref.path), state: state(sp) { AudioState() })
         case .notes(let p):
-            if let kit = p.instrument.kit {
-                source = KitNoteSourceNode(pattern: p, kit: kit, sampleRate: sr, player: state("\(sp):kit") { DrumPlayer() })
+            let inst = p.instrument
+            if let kit = inst.kit {
+                var custom: [String: SampleData?] = [:]
+                for (voice, file) in inst.kitSamples ?? [:] { custom[voice] = samples.data(for: file) }
+                source = KitNoteSourceNode(pattern: p, kit: kit, custom: custom, sampleRate: sr,
+                                           player: state("\(sp):kit") { DrumPlayer() })
+            } else if let file = inst.sample {
+                let player = SamplerNotePlayer(state: state("\(sp):sampler") { SamplerState(sampleRate: sr) },
+                                               params: SamplerParams.defs.resolve(inst.params),
+                                               sample: samples.mipmapped(for: file))
+                source = NoteSourceNode(pattern: p, player: player)
             } else {
-                source = NoteSourceNode(pattern: p, state: state("\(sp):notes") { NoteState(sampleRate: sr) })
+                let player = SynthNotePlayer(state: state("\(sp):notes") { NoteState(sampleRate: sr) },
+                                             params: SynthParams.defs.resolve(inst.params))
+                source = NoteSourceNode(pattern: p, player: player)
             }
         case .drums(let p):
             source = DrumSourceNode(pattern: p, sampleRate: sr, player: state("\(sp):drums") { DrumPlayer() })

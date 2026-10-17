@@ -69,6 +69,15 @@ public final class AudioEngine {
     private var phraseKit: String?
     private var phraseBPM = 120.0
     private let previewDrums = DrumPlayer()
+    /// Notes played by hand on a sampler pattern (through the layer's effects, like the synth).
+    private var previewSampler: Sampler
+    private var previewSamplerParams = SamplerParams.defs.resolve([:])
+    /// A file clicked in the Samples browser, played once as is.
+    private var previewFilePlayer: Sampler
+    private let previewFileParams = SamplerParams.defs.resolve(["playmode": 1, "root": 60, "a": 0.0005])
+    /// Main thread only: browser previews aren't in the sample cache, so keep each one alive until
+    /// it has surely finished, and the audio thread never frees one.
+    private var previewKeepAlive: [(sample: MipSample, until: Date)] = []
 
     // Main-thread only.
     private var meters: [UUID: LevelMeter] = [:]
@@ -81,6 +90,8 @@ public final class AudioEngine {
     public init() {
         limiter = LimiterFX(sampleRate: 48000)
         previewSynth = Synth(sampleRate: 48000)
+        previewSampler = Sampler(sampleRate: 48000)
+        previewFilePlayer = Sampler(sampleRate: 48000)
         _ = TrackNode.scratch
     }
 
@@ -100,8 +111,11 @@ public final class AudioEngine {
     public func start() {
         let hw = engine.outputNode.inputFormat(forBus: 0)
         sampleRate = hw.sampleRate > 0 ? hw.sampleRate : 48000
+        let sampler = Sampler(sampleRate: sampleRate), filePlayer = Sampler(sampleRate: sampleRate)
         locked {
             previewSynth = Synth(sampleRate: sampleRate)
+            previewSampler = sampler
+            previewFilePlayer = filePlayer
         }
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
         let node = AVAudioSourceNode(format: fmt) { [unowned self] _, _, frameCount, abl -> OSStatus in
@@ -292,7 +306,22 @@ public final class AudioEngine {
 
     public func previewNoteOn(_ pitch: Int, velocity: Double = 0.8, instrument: Instrument) {
         if let kit = instrument.kit {
-            if let v = DrumKits.voice(atPitch: pitch) { previewDrum(kit: kit, sound: v.id, velocity: velocity) }
+            if let v = DrumKits.voice(atPitch: pitch) {
+                previewDrum(kit: kit, sound: v.id, velocity: velocity, file: instrument.kitSamples?[v.id])
+            }
+            return
+        }
+        if let file = instrument.sample {
+            // Still loading the first time: silent until it's ready (the pattern asked for it already).
+            guard let sample = SampleLibrary.shared.mipmapped(for: file) else { return }
+            let p = SamplerParams.defs.resolve(instrument.params)
+            locked {
+                previewSamplerParams = p
+                phrase = []
+                phraseBPM = bpm
+                previewSampler.noteOn(pitch, velocity: Float(velocity), params: p, sample: sample)
+                idleFrames = 0
+            }
             return
         }
         let p = SynthParams.defs.resolve(instrument.params)
@@ -308,6 +337,7 @@ public final class AudioEngine {
 
     /// Play a short phrase on `instrument` (main thread). Replaces any phrase still playing.
     public func playPhrase(_ notes: [PhraseNote], instrument: Instrument, effects: [Effect] = [], bpm tempo: Double) {
+        guard !instrument.isSampler else { return } // phrases are for synth presets and kits
         setPreviewEffects(instrument.isDrumKit ? [] : effects)
         let spb = sampleRate * 60 / tempo
         var ev: [PhraseEvent] = []
@@ -350,15 +380,40 @@ public final class AudioEngine {
     }
 
     public func previewNoteOff(_ pitch: Int) {
-        locked { previewSynth.noteOff(pitch, params: previewParams) }
+        locked {
+            previewSynth.noteOff(pitch, params: previewParams)
+            previewSampler.noteOff(pitch)
+        }
     }
 
     public func previewAllOff() {
-        locked { previewSynth.allNotesOff() }
+        locked {
+            previewSynth.allNotesOff()
+            previewSampler.allNotesOff()
+        }
     }
 
-    public func previewDrum(kit: String, sound: String, velocity: Double = 0.9, pitch: Double = 0, volume: Double = 0) {
-        let s = DrumKits.sample(kit: kit, voice: sound, sampleRate: sampleRate)
+    /// Play an audio file once, as it is (clicking a file in the Samples browser). Main thread.
+    /// Replaces the file preview that's still playing.
+    public func previewSample(_ sample: MipSample) {
+        let now = Date()
+        previewKeepAlive.removeAll { $0.until < now }
+        previewKeepAlive.append((sample, now.addingTimeInterval(sample.duration + 2)))
+        locked {
+            previewFilePlayer.cutAll()
+            previewFilePlayer.noteOn(60, velocity: 1, params: previewFileParams, sample: sample)
+            idleFrames = 0
+        }
+    }
+
+    public func stopSamplePreview() {
+        locked { previewFilePlayer.cutAll() }
+    }
+
+    /// - Parameter file: your own sample for this drum sound (`Instrument.kitSamples`); silent while it loads.
+    public func previewDrum(kit: String, sound: String, velocity: Double = 0.9, pitch: Double = 0, volume: Double = 0,
+                            file: String? = nil) {
+        let s = file.map { SampleLibrary.shared.data(for: $0) } ?? DrumKits.sample(kit: kit, voice: sound, sampleRate: sampleRate)
         let g = Float(dbToGain(volume))
         let row = DrumRowInfo(sample: s, gainL: g, gainR: g, rate: pow(2, pitch / 12), choke: DrumKits.choke(sound))
         locked {
@@ -372,7 +427,7 @@ public final class AudioEngine {
     /// Preview synth and drums, splitting the block at phrase events so they land on the exact sample.
     private func renderPreview(_ n: Int) {
         let chain = previewChain
-        if !previewSynth.isSilent || phraseIndex < phrase.count { previewTail = Int(sampleRate * 4) }
+        if !previewSynth.isSilent || !previewSampler.isSilent || phraseIndex < phrase.count { previewTail = Int(sampleRate * 4) }
         let wet = chain != nil && previewTail > 0
         if wet { previewBuf.clear(n) }
         let outL = wet ? previewBuf.l : master.l, outR = wet ? previewBuf.r : master.r
@@ -407,6 +462,9 @@ public final class AudioEngine {
             previewSynth.render(outL + f, outR + f, frames: n - f, params: previewParams, bpm: pbpm, beat: beat0 + Double(f) * bpf)
             previewDrums.render(master.l + f, master.r + f, frames: n - f)
         }
+        // Sampler notes played by hand go through the layer's effects; browser file previews stay dry.
+        previewSampler.render(outL, outR, frames: n, params: previewSamplerParams)
+        previewFilePlayer.render(master.l, master.r, frames: n, params: previewFileParams)
         phraseClock += n
         if wet, let chain {
             chain.process(previewBuf, frames: n, ctx: RenderContext(sampleRate: sampleRate, bpm: pbpm), beat: beat0, time: 0)
@@ -515,10 +573,8 @@ public enum OfflineRenderer {
     /// Renders a composition to a 24-bit WAV file. Runs synchronously; call from a background queue.
     public static func export(project: Project, composition id: AssetID, to url: URL, sampleRate: Double = 48000,
                               tailSeconds: Double = 2, progress: ((Double) -> Void)? = nil) throws {
-        // Make sure every audio file is decoded before rendering.
-        for a in project.assets {
-            if case .audio(let ref) = a.content { _ = SampleLibrary.shared.loadSync(ref.path) }
-        }
+        // Make sure every audio file (clips, samplers, and drum sounds) is decoded before rendering.
+        SampleLibrary.shared.preload(project)
         var builder = GraphBuilder(project: project, sampleRate: sampleRate, previous: [:], samples: SampleLibrary.shared)
         let graph = builder.build(root: id)
         guard let root = graph.root else { return }
@@ -566,11 +622,36 @@ extension SampleLibrary {
     /// Decode synchronously (used by export).
     public func loadSync(_ path: String) -> SampleData? {
         if let d = data(for: path) { return d }
-        for _ in 0..<200 {
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        for _ in 0..<500 {
             Thread.sleep(forTimeInterval: 0.02)
             if let d = data(for: path) { return d }
         }
         return nil
+    }
+
+    /// Prepare a sampler file synchronously (used by export).
+    public func mipmappedSync(_ path: String) -> MipSample? {
+        if let m = mipmapped(for: path) { return m }
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        for _ in 0..<500 {
+            Thread.sleep(forTimeInterval: 0.02)
+            if let m = mipmapped(for: path) { return m }
+        }
+        return nil
+    }
+
+    /// Load every file a project plays before an offline render: audio clips, samplers, and custom drum sounds.
+    public func preload(_ project: Project) {
+        for a in project.assets {
+            switch a.content {
+            case .audio(let ref): _ = loadSync(ref.path)
+            case .notes(let p):
+                if p.instrument.isSampler, let file = p.instrument.sample { _ = mipmappedSync(file) }
+                if p.instrument.isDrumKit { for file in p.instrument.samplePaths { _ = loadSync(file) } }
+            default: break
+            }
+        }
     }
 }
 
@@ -578,6 +659,7 @@ extension OfflineRenderer {
     /// Render a composition into memory (left channel + right channel). Used by tests and bouncing.
     public static func renderToMemory(project: Project, composition id: AssetID, beats: Double,
                                       sampleRate: Double = 48000) -> ([Float], [Float]) {
+        SampleLibrary.shared.preload(project)
         var builder = GraphBuilder(project: project, sampleRate: sampleRate, previous: [:], samples: SampleLibrary.shared)
         let graph = builder.build(root: id)
         let ctx = RenderContext(sampleRate: sampleRate, bpm: project.bpm)

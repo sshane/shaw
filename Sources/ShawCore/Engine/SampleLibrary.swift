@@ -2,12 +2,18 @@ import AVFoundation
 import Foundation
 
 /// Decoded audio files plus waveform overviews for drawing.
+///
+/// Everything it hands out stays cached for the life of the app, so the audio thread can hold
+/// references to it without ever being the one that frees the memory.
 public final class SampleLibrary {
     public static let shared = SampleLibrary()
 
     private var data: [String: SampleData] = [:]
     private var peaks: [String: [Float]] = [:]
     private var loading: Set<String> = []
+    /// Sampler files, with their half-rate copies (built off the main thread).
+    private var mips: [String: MipSample] = [:]
+    private var mipLoading: Set<String> = []
     private let lock = NSLock()
     /// Frames per peak bucket in waveform overviews.
     public static let peakBucket = 256
@@ -39,11 +45,25 @@ public final class SampleLibrary {
         return data[path]?.sampleRate
     }
 
+    /// The file ready for the sampler, or nil while it loads (`onLoad` fires when it's ready).
+    public func mipmapped(for path: String) -> MipSample? {
+        lock.lock()
+        if let m = mips[path] { lock.unlock(); return m }
+        let start = !mipLoading.contains(path)
+        // Decoding here too: mark it, so asking for its data or waveform meanwhile doesn't decode it twice.
+        let decodes = start && data[path] == nil && !loading.contains(path)
+        if start { mipLoading.insert(path) }
+        if decodes { loading.insert(path) }
+        lock.unlock()
+        if start { DispatchQueue.global(qos: .userInitiated).async { self.buildMips(path, decodes: decodes) } }
+        return nil
+    }
+
     private func load(_ path: String) {
         let decoded = try? SampleLibrary.decode(URL(fileURLWithPath: path))
         lock.lock()
         loading.remove(path)
-        if let d = decoded {
+        if let d = decoded, data[path] == nil {
             data[path] = d
             peaks[path] = SampleLibrary.computePeaks(d)
         }
@@ -53,14 +73,73 @@ public final class SampleLibrary {
         }
     }
 
-    public static func decode(_ url: URL) throws -> SampleData {
+    private func buildMips(_ path: String, decodes: Bool) {
+        lock.lock()
+        var base = data[path]
+        lock.unlock()
+        if base == nil {
+            if !decodes {
+                // Someone else is decoding it already: wait for that rather than doing it twice.
+                for _ in 0..<1500 {
+                    Thread.sleep(forTimeInterval: 0.02)
+                    lock.lock()
+                    base = data[path]
+                    let busy = loading.contains(path)
+                    lock.unlock()
+                    if base != nil || !busy { break }
+                }
+            }
+            if base == nil, let d = try? SampleLibrary.decode(URL(fileURLWithPath: path)) {
+                lock.lock()
+                if let existing = data[path] { base = existing } else {
+                    data[path] = d
+                    peaks[path] = SampleLibrary.computePeaks(d)
+                    base = d
+                }
+                lock.unlock()
+            }
+            if decodes {
+                lock.lock()
+                loading.remove(path)
+                lock.unlock()
+            }
+        }
+        let m = base.map { MipSample($0) }
+        lock.lock()
+        mipLoading.remove(path)
+        if let m { mips[path] = m }
+        lock.unlock()
+        if m != nil {
+            DispatchQueue.main.async { self.onLoad?(path) }
+        }
+    }
+
+    /// A file for a quick listen (the Samples browser): at most `maxSeconds`, and not kept in the
+    /// cache unless something already loaded it. Calls back on the main queue.
+    public func loadForPreview(_ path: String, maxSeconds: Double = 30, completion: @escaping (MipSample?) -> Void) {
+        lock.lock()
+        let cached = data[path]
+        lock.unlock()
+        if let cached {
+            completion(MipSample(cached, maxLevels: 0))
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let d = try? SampleLibrary.decode(URL(fileURLWithPath: path), maxSeconds: maxSeconds)
+            let m = d.map { MipSample($0, maxLevels: 0) }
+            DispatchQueue.main.async { completion(m) }
+        }
+    }
+
+    public static func decode(_ url: URL, maxSeconds: Double? = nil) throws -> SampleData {
         let file = try AVAudioFile(forReading: url)
         let fmt = file.processingFormat
-        let count = AVAudioFrameCount(file.length)
+        var count = AVAudioFrameCount(file.length)
+        if let maxSeconds { count = min(count, AVAudioFrameCount(max(1, maxSeconds * fmt.sampleRate))) }
         guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: max(count, 1)) else {
             throw NSError(domain: "Shaw", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not allocate buffer"])
         }
-        try file.read(into: buf)
+        try file.read(into: buf, frameCount: max(count, 1))
         let n = Int(buf.frameLength)
         guard let ch = buf.floatChannelData else {
             throw NSError(domain: "Shaw", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unsupported audio format"])
@@ -90,4 +169,9 @@ public final class SampleLibrary {
         }
         return out
     }
+
+    /// File types the Samples browser lists (anything AVFoundation can usually open).
+    public static let audioExtensions: Set<String> = ["wav", "wave", "aif", "aiff", "aifc", "caf", "mp3", "m4a", "aac", "flac", "mp4"]
+
+    public static func isAudioFile(_ url: URL) -> Bool { audioExtensions.contains(url.pathExtension.lowercased()) }
 }

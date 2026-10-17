@@ -118,6 +118,15 @@ public struct Project: Codable, Equatable {
     }
 
     public var secondsPerBeat: Double { 60 / bpm }
+
+    /// Audio files played by samplers and custom drum sounds (not audio clips).
+    public var instrumentSamplePaths: Set<String> {
+        var out: Set<String> = []
+        for a in assets {
+            if case .notes(let p) = a.content { out.formUnion(p.instrument.samplePaths) }
+        }
+        return out
+    }
 }
 
 public struct Folder: Codable, Equatable, Identifiable {
@@ -402,18 +411,40 @@ public struct NotePattern: Codable, Equatable {
     }
 }
 
-/// What a pattern sounds like: the Shaw Synth with a preset, or a drum kit.
+/// What a pattern sounds like: the Shaw Synth with a preset, a drum kit, or a sampler.
 /// With a kit, each note pitch is a drum sound (see `DrumKits.pitch(of:)`), like Ableton's Drum Rack.
+/// With a sampler, every note plays one audio file, pitched from its root note (like Ableton's Simpler).
 public struct Instrument: Codable, Equatable {
+    /// Synth preset name, kit name, or (sampler) the sample's file name.
     public var preset: String
+    /// Synth parameters (`SynthParams`), or sampler parameters (`SamplerParams`) when `sample` is set.
     public var params: [String: Double]
-    /// Drum kit id; nil means the synth.
+    /// Drum kit id; nil means the synth (or the sampler).
     public var kit: String?
+    /// Sampler: path of the audio file every note plays. Ignored when `kit` is set.
+    public var sample: String?
+    /// Drum kits: your own audio files that replace built-in sounds, by voice id ("kick").
+    public var kitSamples: [String: String]?
 
-    public init(preset: String = "Init", params: [String: Double] = [:], kit: String? = nil) {
+    public init(preset: String = "Init", params: [String: Double] = [:], kit: String? = nil,
+                sample: String? = nil, kitSamples: [String: String]? = nil) {
         self.preset = preset
         self.params = params
         self.kit = kit
+        self.sample = sample
+        self.kitSamples = kitSamples
+    }
+
+    enum CodingKeys: String, CodingKey { case preset, params, kit, sample, kitSamples }
+
+    // Written out so projects saved before the sampler existed keep loading.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        preset = try c.decodeIfPresent(String.self, forKey: .preset) ?? "Init"
+        params = try c.decodeIfPresent([String: Double].self, forKey: .params) ?? [:]
+        kit = try c.decodeIfPresent(String.self, forKey: .kit)
+        sample = try c.decodeIfPresent(String.self, forKey: .sample)
+        kitSamples = try c.decodeIfPresent([String: String].self, forKey: .kitSamples)
     }
 
     public static func preset(_ name: String) -> Instrument {
@@ -424,7 +455,37 @@ public struct Instrument: Codable, Equatable {
         Instrument(preset: DrumKits.kitName(id), params: [:], kit: id)
     }
 
+    /// A sampler playing `path`. Short sounds (hits, chops) play whole; longer ones follow the note length.
+    public static func sampler(_ path: String, duration: Double? = nil) -> Instrument {
+        var p = SamplerParams.defs.defaults()
+        if let duration, duration > SamplerParams.oneShotLimit { p["playmode"] = 0 }
+        return Instrument(preset: sampleName(path), params: p, sample: path)
+    }
+
+    /// "/Samples/Vox Chop.wav" → "Vox Chop".
+    public static func sampleName(_ path: String) -> String {
+        URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+    }
+
     public var isDrumKit: Bool { kit != nil }
+    public var isSampler: Bool { kit == nil && sample != nil }
+    /// The Shaw Synth (not a kit, not a sampler).
+    public var isSynth: Bool { kit == nil && sample == nil }
+    /// True when at least one drum sound plays your own file.
+    public var hasCustomKitSamples: Bool { isDrumKit && !(kitSamples ?? [:]).isEmpty }
+
+    /// Name for menus: "Trap 808", "Trap 808 (custom)", "Vox Chop", or a synth preset.
+    public var displayName: String {
+        if let kit { return DrumKits.kitName(kit) + (hasCustomKitSamples ? " (custom)" : "") }
+        if isSampler { return preset }
+        return preset.hasSuffix("*") ? String(preset.dropLast()) : preset
+    }
+
+    /// Every audio file this instrument plays (sampler file and custom drum sounds).
+    public var samplePaths: [String] {
+        if isDrumKit { return (kitSamples ?? [:]).values.sorted() }
+        return sample.map { [$0] } ?? []
+    }
 }
 
 // MARK: - Drum patterns (beat maker)
