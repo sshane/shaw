@@ -150,7 +150,7 @@ extension DemoProject {
         ]
         // A simple master: gentle glue, then the limiter.
         main.effects = [effect("compressor", ["threshold": -10, "ratio": 2, "attack": 30, "release": 200]),
-                        effect("limiter", ["gain": 0, "ceiling": -1])]
+                        effect("limiter", ["gain": 1.5, "ceiling": -1])]
         p.updateComposition(p.mainCompositionID) { $0 = main }
         filed(&p, sections: [intro, drop, switchUp, lastDrop], patterns: [riff, stabs, chops, screech, growl, riddim],
               beats: [bangers, trap, roll, crash], fx: [riser, boom, zaps])
@@ -279,7 +279,7 @@ extension DemoProject {
         let crash = kitPattern("Crash", 9, "electro", length: 4, [("crash", 0, 0.8)])
 
         let intro = Asset(name: "Intro", colorIndex: 11, content: .composition(Composition(length: 32, tracks: [
-            track("Keys", 4, volume: -4, [clip(keys, at: 0, length: 32)], effects: [effect("reverb", ["mix": 0.3, "size": 0.75])]),
+            track("Keys", 4, volume: -7, [clip(keys, at: 0, length: 32)], effects: [effect("reverb", ["mix": 0.3, "size": 0.75])]),
             track("Strings", 10, volume: -10, [clip(strings, at: 0, length: 32)],
                   effects: [keyframed("volume", [:], "volume", [(0, -30), (16, -6), (32, 0)])]),
             track("Music Box", 6, volume: -7, [clip(musicBox, at: 16, length: 16)],
@@ -332,7 +332,7 @@ extension DemoProject {
         ]
         // A simple master: gentle glue, then the limiter. No compressors stacked on every section.
         main.effects = [effect("compressor", ["threshold": -10, "ratio": 2, "attack": 30, "release": 200]),
-                        effect("limiter", ["gain": 2, "ceiling": -1])]
+                        effect("limiter", ["gain": 3.5, "ceiling": -1])]
         p.updateComposition(p.mainCompositionID) { $0 = main }
         filed(&p, sections: [intro, build, dropA, dropB, bridge],
               patterns: [keys, strings, musicBox, lead, shimmer, arp, saws, sub, growlA, growlB, growlC],

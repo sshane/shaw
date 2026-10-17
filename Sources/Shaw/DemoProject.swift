@@ -232,7 +232,7 @@ enum DemoProject {
         ]
         // A simple master: gentle glue, then the limiter.
         main.effects = [effect("compressor", ["threshold": -10, "ratio": 2, "attack": 30, "release": 200]),
-                        effect("limiter", ["gain": 2, "ceiling": -1])]
+                        effect("limiter", ["gain": 4, "ceiling": -1])]
         p.updateComposition(p.mainCompositionID) { $0 = main }
 
         let sections = Folder(name: "Sections"), pats = Folder(name: "Patterns"), beats = Folder(name: "Beats"), fx = Folder(name: "FX")
