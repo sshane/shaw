@@ -63,6 +63,14 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         }
     }
     static let fileURLKey = "ShawProjectFile"
+
+    /// File → Open Recent, newest first.
+    var recentFiles: [URL] = (UserDefaults.standard.stringArray(forKey: Store.recentFilesKey) ?? []).map { URL(fileURLWithPath: $0) }
+    static let recentFilesKey = "ShawRecentFiles"
+    static let maxRecentFiles = 10
+
+    /// Window title: the file's name, like any Mac document, so a project renamed or copied in Finder shows its real name.
+    var displayName: String { fileURL?.deletingPathExtension().lastPathComponent ?? project.name }
     static let welcomeKey = "ShawSeenWelcome.v1"
 
     func dismissWelcome() {
@@ -170,6 +178,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             // The autosave belongs to this file: keep saving there, and only flag it edited if it differs.
             let url = URL(fileURLWithPath: path)
             fileURL = url
+            if recentFiles.isEmpty { noteRecent(url) }
             var saved = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Project.self, from: $0) }
             saved?.migrateDrumPatterns()
             dirty = saved != p
@@ -843,6 +852,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             let data = try Data(contentsOf: url)
             let p = try JSONDecoder().decode(Project.self, from: data)
             load(p, url: url)
+            noteRecent(url)
         } catch {
             showAlert("Couldn't open project", error.localizedDescription)
         }
@@ -877,12 +887,48 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     func saveAs() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [Store.shawType]
-        panel.nameFieldStringValue = project.name + ".shaw"
+        panel.nameFieldStringValue = displayName + ".shaw"
         if panel.runModal() == .OK, let url = panel.url {
             project.name = url.deletingPathExtension().lastPathComponent
             write(to: url)
             fileURL = url
+            noteRecent(url)
         }
+    }
+
+    // MARK: - Recent files
+
+    /// Move `url` to the top of File → Open Recent (and the Dock menu).
+    func noteRecent(_ url: URL) {
+        guard !isolated else { return }
+        let u = url.standardizedFileURL
+        recentFiles = Array(([u] + recentFiles.filter { $0.standardizedFileURL != u }).prefix(Store.maxRecentFiles))
+        UserDefaults.standard.set(recentFiles.map(\.path), forKey: Store.recentFilesKey)
+        NSDocumentController.shared.noteNewRecentDocumentURL(u)
+    }
+
+    func clearRecentFiles() {
+        recentFiles = []
+        if !isolated { UserDefaults.standard.set([String](), forKey: Store.recentFilesKey) }
+        NSDocumentController.shared.clearRecentDocuments(nil)
+    }
+
+    func openRecent(_ url: URL) {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            showAlert("Couldn't open project", "\(url.lastPathComponent) was moved or deleted.")
+            recentFiles.removeAll { $0 == url }
+            if !isolated { UserDefaults.standard.set(recentFiles.map(\.path), forKey: Store.recentFilesKey) }
+            return
+        }
+        guard confirmDiscard() else { return }
+        open(url: url)
+    }
+
+    /// Menu title for a recent file: its name, plus the folder when two recent files share a name.
+    func recentTitle(_ url: URL) -> String {
+        let name = url.deletingPathExtension().lastPathComponent
+        let clash = recentFiles.filter { $0.deletingPathExtension().lastPathComponent == name }.count > 1
+        return clash ? "\(name) (\(url.deletingLastPathComponent().lastPathComponent))" : name
     }
 
     private func write(to url: URL) {
@@ -900,7 +946,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.wav]
         let compName = activeAsset?.name ?? "Mix"
-        panel.nameFieldStringValue = "\(project.name) - \(compName).wav"
+        panel.nameFieldStringValue = "\(displayName) - \(compName).wav"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let p = project, cid = activeCompID
         DispatchQueue.global(qos: .userInitiated).async {

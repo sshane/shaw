@@ -47,6 +47,13 @@ struct ShawCommands: Commands {
             Button("Open Demo Song (Neon Drive)") { store.openDemo() }
             Button("Open Demo Song (First Light)") { store.openFirstLightDemo() }
             Button("Open…") { store.openDialog() }.keyboardShortcut("o")
+            Menu("Open Recent") {
+                ForEach(store.recentFiles, id: \.self) { url in
+                    Button(store.recentTitle(url)) { store.openRecent(url) }
+                }
+                Divider()
+                Button("Clear Menu") { store.clearRecentFiles() }.disabled(store.recentFiles.isEmpty)
+            }
             Divider()
             Button("Import Audio…") { store.importAudioDialog() }.keyboardShortcut("i")
         }
