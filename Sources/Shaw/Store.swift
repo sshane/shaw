@@ -104,6 +104,18 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var browserTab: BrowserTab = .instruments
     /// Bumped to move keyboard focus into the browser's search field.
     var focusBrowserSearch = 0
+    /// Folders the Samples tab lists, remembered across launches (never in isolated runs).
+    var sampleFolders: [String] = [] {
+        didSet { if !isolated && sampleFolders != oldValue { UserDefaults.standard.set(sampleFolders, forKey: Store.sampleFoldersKey) } }
+    }
+    static let sampleFoldersKey = "ShawSampleFolders"
+    /// Audio files found in each sample folder (scanned in the background).
+    var sampleIndex: [String: [SampleFile]] = [:]
+    var scanningFolders: Set<String> = []
+    /// Bumped whenever an audio file finishes loading, so waveforms redraw.
+    var samplesLoaded = 0
+    /// The latest browser preview request; older ones that finish loading late stay quiet.
+    @ObservationIgnored var samplePreviewToken = 0
     /// The timeline clip whose pattern is open in an editor (drives looping and variations).
     var editingClip: UUID?
     /// The instrument the computer keyboard plays when no editor has focus.
@@ -197,8 +209,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         let library = self.isolated ? [] : Store.loadLibrary()
         UserInstruments.items = library
         customInstruments = library
+        if !self.isolated { sampleFolders = UserDefaults.standard.stringArray(forKey: Store.sampleFoldersKey) ?? [] }
         if !headless { engine.start() }
-        SampleLibrary.shared.onLoad = { [weak self] _ in self?.refreshEngine() }
+        SampleLibrary.shared.onLoad = { [weak self] _ in
+            self?.samplesLoaded += 1
+            self?.refreshEngine()
+        }
         refreshEngine()
         syncLoop()
         if !headless {
@@ -382,7 +398,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     // MARK: - Assets
 
-    private func nextColor() -> Int { project.assets.count % Theme.labels.count }
+    func nextColor() -> Int { project.assets.count % Theme.labels.count }
 
     @discardableResult
     func newComposition(name: String? = nil, lengthBars: Int = 16) -> AssetID {

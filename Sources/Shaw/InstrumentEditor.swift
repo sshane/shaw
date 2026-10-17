@@ -13,7 +13,7 @@ struct InstrumentEditorView: View {
     var body: some View {
         Group {
             if let id = store.instrumentEditorAsset, let a = store.project.asset(id),
-               case .notes(let pat) = a.content, !pat.instrument.isDrumKit {
+               case .notes(let pat) = a.content, pat.instrument.isSynth {
                 editor(id, a, pat.instrument)
             } else {
                 VStack(spacing: 8) {

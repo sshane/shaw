@@ -468,7 +468,7 @@ struct InstrumentInspector: View {
                 InspectorTitle(icon: "circle.grid.3x3.fill", kind: "Drum Pattern", name: a.name, color: Theme.label(a.colorIndex))
             }
             PropertyRow(label: "Kit") {
-                Menu(DrumKits.kitName(kit)) {
+                Menu(p.instrument.displayName) {
                     ForEach(DrumKits.kits) { k in
                         Button(k.name) {
                             store.replaceInstrument(ofAsset: assetID, with: .kit(k.id))
@@ -478,6 +478,9 @@ struct InstrumentInspector: View {
                 }
                 .menuStyle(.borderlessButton).fixedSize()
             }
+            KitSamplesSection(assetID: assetID, kit: kit, files: p.instrument.kitSamples ?? [:])
+        } else if let a = store.project.asset(assetID), case .notes(let p) = a.content, p.instrument.isSampler {
+            SamplerInspector(assetID: assetID, asset: a, pattern: p, compact: compact)
         } else if let a = store.project.asset(assetID), case .notes(let p) = a.content {
             if compact {
                 SectionHeader(title: "Sound · Shaw Synth")

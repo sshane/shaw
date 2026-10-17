@@ -159,6 +159,7 @@ struct ParamRow: View {
                            sensitivity: (def.max - def.min) / 300,
                            format: { def.format($0) },
                            parse: { s in
+                               if def.unit == .note { return ParamDef.parseNote(s) }
                                let d = Double(s.filter { "0123456789.-".contains($0) })
                                if def.unit == .percent, let d { return d / 100 }
                                if case .hz = def.unit, s.lowercased().contains("k"), let d { return d * 1000 }
@@ -370,20 +371,28 @@ struct ShawDropDelegate: DropDelegate {
     var onFiles: (([URL], CGPoint) -> Void)? = nil
     var onHover: ((CGPoint?) -> Void)? = nil
     var accepts: ((DragPayload) -> Bool)? = nil
+    /// Like `onHover`, but only while the drag carries files (nil otherwise and on exit).
+    var onHoverFile: ((CGPoint?) -> Void)? = nil
 
     func validateDrop(info: DropInfo) -> Bool {
         info.hasItemsConforming(to: [.utf8PlainText, .plainText]) || (onFiles != nil && info.hasItemsConforming(to: [.fileURL]))
     }
 
-    func dropEntered(info: DropInfo) { onHover?(info.location) }
-    func dropUpdated(info: DropInfo) -> DropProposal? {
+    private func hover(_ info: DropInfo) {
         onHover?(info.location)
+        onHoverFile?(onFiles != nil && info.hasItemsConforming(to: [.fileURL]) ? info.location : nil)
+    }
+
+    func dropEntered(info: DropInfo) { hover(info) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        hover(info)
         return DropProposal(operation: .copy)
     }
-    func dropExited(info: DropInfo) { onHover?(nil) }
+    func dropExited(info: DropInfo) { onHover?(nil); onHoverFile?(nil) }
 
     func performDrop(info: DropInfo) -> Bool {
         onHover?(nil)
+        onHoverFile?(nil)
         let loc = info.location
         if let onFiles, info.hasItemsConforming(to: [.fileURL]) {
             let providers = info.itemProviders(for: [.fileURL])
@@ -409,6 +418,18 @@ struct ShawDropDelegate: DropDelegate {
 }
 
 extension View {
+    /// Drag an audio file the way Finder does, so everything that takes files from Finder takes it too.
+    func fileDraggable(_ path: String, preview: String) -> some View {
+        onDrag {
+            NSItemProvider(object: URL(fileURLWithPath: path) as NSURL)
+        } preview: {
+            Text(preview)
+                .font(Theme.small)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Theme.accent.opacity(0.8)))
+        }
+    }
+
     func shawDraggable(_ payload: DragPayload, preview: String) -> some View {
         onDrag {
             NSItemProvider(object: payload.string as NSString)

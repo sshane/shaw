@@ -25,7 +25,7 @@ extension Store {
     // MARK: Status
 
     func instrument(of asset: AssetID) -> Instrument? {
-        guard case .notes(let p)? = project.asset(asset)?.content, !p.instrument.isDrumKit else { return nil }
+        guard case .notes(let p)? = project.asset(asset)?.content, p.instrument.isSynth else { return nil }
         return p.instrument
     }
 

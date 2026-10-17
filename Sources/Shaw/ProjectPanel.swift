@@ -95,7 +95,7 @@ struct ProjectPanel: View {
         let len = formatLength(store.project.sourceLength(of: a.id), beatsPerBar: store.project.beatsPerBar)
         switch a.content {
         case .composition(let c): return "Composition · \(len) · \(c.tracks.count) tracks"
-        case .notes(let p): return "Pattern · \(len) · \(p.instrument.preset) · \(p.notes.count) notes"
+        case .notes(let p): return "Pattern · \(len) · \(p.instrument.isSampler ? "Sampler · " : "")\(p.instrument.displayName) · \(p.notes.count) notes"
         case .drums(let d): return "Beat · \(DrumKits.kitName(d.kit)) · \(d.steps) steps"
         case .audio(let f): return String(format: "Audio · %.2f s · %.0f Hz · %d ch", f.duration, f.sampleRate, f.channels)
         }

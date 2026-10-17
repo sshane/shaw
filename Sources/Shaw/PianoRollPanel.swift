@@ -32,10 +32,13 @@ struct PianoRollPanel: View {
     @State private var monitor = ScrollZoomMonitor()
     @State private var gridSize: CGSize = .zero
     @State private var keyHeight: CGFloat = 13
+    /// The drum sound a file is being dragged over (it gets an outline).
+    @State private var dropPitch: Int?
 
     static let keyboardWidth: CGFloat = 76
     static let rulerHeight: CGFloat = 18
     static let velocityHeight: CGFloat = 56
+    static let toolbarHeight: CGFloat = 28
 
     var body: some View {
         if let id = store.pianoRollAsset, let a = store.project.asset(id), case .notes(let p) = a.content {
@@ -46,7 +49,8 @@ struct PianoRollPanel: View {
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
                         Theme.panelHeader.frame(height: Self.rulerHeight)
-                        Keyboard(assetID: id, instrument: p.instrument, scrollY: scrollY, keyHeight: rowH, layout: layout)
+                        Keyboard(assetID: id, instrument: p.instrument, scrollY: scrollY, keyHeight: rowH, layout: layout,
+                                 dropPitch: dropPitch)
                         Text("Velocity").font(.system(size: 9)).foregroundStyle(Theme.textFaint)
                             .frame(maxWidth: .infinity).frame(height: Self.velocityHeight).background(Theme.panelHeader)
                     }
@@ -76,11 +80,30 @@ struct PianoRollPanel: View {
             }
             .onAppear { install(id) }
             .onDisappear { monitor.remove() }
-            .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(onPayload: { payload, _ in
-                // Drag an instrument onto the piano roll to swap the sound and keep the notes.
-                guard case .preset(let name) = payload else { NSSound.beep(); return false }
-                return store.replaceInstrument(ofAsset: id, with: .synth(name))
-            }))
+            .onDrop(of: [.utf8PlainText, .fileURL], delegate: ShawDropDelegate(
+                onPayload: { payload, loc in
+                    switch payload {
+                    // Drag an instrument onto the piano roll to swap the sound and keep the notes.
+                    case .preset(let name): return store.replaceInstrument(ofAsset: id, with: .synth(name))
+                    case .kit(let k): return store.replaceInstrument(ofAsset: id, with: .kit(k))
+                    // An audio file from the Project panel works like one from Finder.
+                    case .asset(let a):
+                        guard let path = store.audioPath(of: a) else { NSSound.beep(); return false }
+                        dropSamples([path], at: loc, id: id, pattern: p, layout: layout, rowH: rowH)
+                        return true
+                    default:
+                        NSSound.beep()
+                        return false
+                    }
+                },
+                onFiles: { urls, loc in
+                    let audio = urls.filter { SampleLibrary.isAudioFile($0) }
+                    guard !audio.isEmpty else { NSSound.beep(); return }
+                    dropSamples(audio.map(\.path), at: loc, id: id, pattern: p, layout: layout, rowH: rowH)
+                },
+                onHoverFile: { loc in
+                    dropPitch = p.instrument.isDrumKit ? loc.flatMap { drumPitch(at: $0, layout: layout, rowH: rowH) } : nil
+                }))
             .onChange(of: store.playingPitches) { _, pitches in reveal(pitches, layout: layout, rowH: rowH) }
             .onChange(of: store.keyboardOctave) { _, _ in
                 if layout == .piano { reveal([store.keyboardBasePitch, store.keyboardBasePitch + 17], layout: layout, rowH: rowH) }
@@ -100,6 +123,30 @@ struct PianoRollPanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// Audio files dropped on the piano roll: a drum pattern takes them on the sound under the cursor
+    /// (and the ones below it, for several files); any other pattern starts playing the first one with the sampler.
+    private func dropSamples(_ paths: [String], at loc: CGPoint, id: AssetID, pattern p: NotePattern, layout: RowLayout, rowH: CGFloat) {
+        store.focus = .pianoRoll
+        if p.instrument.isDrumKit {
+            guard let pitch = drumPitch(at: loc, layout: layout, rowH: rowH), let v = DrumKits.voice(atPitch: pitch) else {
+                NSSound.beep()
+                return
+            }
+            store.setKitSamples(paths, startingAt: v.id, pattern: id)
+        } else if let first = paths.first {
+            store.useSample(first, forPattern: id)
+        }
+    }
+
+    /// The drum sound at a point in the panel (its name or its row in the grid).
+    private func drumPitch(at loc: CGPoint, layout: RowLayout, rowH: CGFloat) -> Int? {
+        let y = loc.y - Self.toolbarHeight - Self.rulerHeight
+        guard y >= 0, gridSize.height <= 0 || y < gridSize.height else { return nil }
+        let row = Int((y + max(0, scrollY)) / rowH)
+        guard row >= 0, row < layout.count else { return nil }
+        return layout.pitch(atRow: row)
     }
 
     /// Scroll so the given pitches are on screen (used while playing the computer keyboard).
@@ -138,7 +185,16 @@ struct PianoRollPanel: View {
                 }
             }
             .menuStyle(.borderlessButton).fixedSize()
-            Menu(p.instrument.kit.map(DrumKits.kitName) ?? SynthPresets.baseName(p.instrument.preset)) {
+            // Kits with your own sounds say "(custom)" in Effect Controls; here the rows below already show it.
+            Menu(p.instrument.kit.map(DrumKits.kitName) ?? p.instrument.displayName) {
+                if !p.instrument.isDrumKit {
+                    Section("Sampler") {
+                        Button(p.instrument.isSampler ? "Choose Another Sample…" : "Play a Sample File…") { store.chooseSampleFile(for: a.id) }
+                        if let file = p.instrument.sample, p.instrument.isSampler {
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)]) }
+                        }
+                    }
+                }
                 if !store.customInstruments.isEmpty {
                     Section("My Instruments") {
                         ForEach(store.customInstruments) { c in
@@ -165,8 +221,10 @@ struct PianoRollPanel: View {
                 }
             }
             .menuStyle(.borderlessButton).fixedSize()
-            .help("Change the sound and keep the notes. You can also drag an instrument from the Browser onto the piano roll.")
-            if !p.instrument.isDrumKit {
+            .help(p.instrument.isDrumKit
+                  ? "Change the kit and keep the notes. Drag an audio file onto a sound's name to use your own sample."
+                  : "Change the sound and keep the notes. You can also drag an instrument or an audio file onto the piano roll.")
+            if p.instrument.isSynth {
                 Button { store.openInstrumentEditor(a.id) } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "slider.horizontal.3").font(.system(size: 10))
@@ -189,7 +247,7 @@ struct PianoRollPanel: View {
             Button { store.inspector = .asset(a.id); store.workspace.reveal(.inspector) } label: {
                 Image(systemName: "slider.horizontal.3")
             }
-            .buttonStyle(.borderless).help("Edit synth")
+            .buttonStyle(.borderless).help(p.instrument.isSampler ? "Sampler settings" : (p.instrument.isDrumKit ? "Kit settings" : "Edit synth"))
             Divider().frame(height: 16)
             Text("Length").font(Theme.tiny).foregroundStyle(Theme.textFaint)
             DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.03,
@@ -205,7 +263,7 @@ struct PianoRollPanel: View {
             EditorControls()
         }
         .padding(.horizontal, 8)
-        .frame(height: 28)
+        .frame(height: Self.toolbarHeight)
         .background(Theme.panelHeader.opacity(0.6))
     }
 
@@ -337,17 +395,22 @@ struct Keyboard: View {
     let scrollY: CGFloat
     let keyHeight: CGFloat
     var layout: RowLayout = .piano
+    /// A drum sound a file is being dragged over.
+    var dropPitch: Int? = nil
     @State private var held: Int?
     @State private var hoverPitch: Int?
 
     var body: some View {
+        let files = instrument.isDrumKit ? (instrument.kitSamples ?? [:]) : [:]
+        // The sampler's root note: where the sample plays at its own pitch.
+        let root = instrument.isSampler ? Int((instrument.params["root"] ?? 60).rounded()) : nil
         Canvas { ctx, size in
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.85)))
             let first = max(0, Int(scrollY / keyHeight) - 1)
             let last = min(layout.count - 1, Int((scrollY + size.height) / keyHeight) + 1)
             guard first <= last else { return }
             if instrument.isDrumKit {
-                // Drum kits: one labelled pad per sound.
+                // Drum kits: one labelled pad per sound. Sounds playing your own file show its name.
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.16)))
                 for row in first...last {
                     let pitch = layout.pitch(atRow: row)
@@ -355,9 +418,21 @@ struct Keyboard: View {
                     let r = CGRect(x: 2, y: y + 1, width: size.width - 4, height: keyHeight - 2)
                     let lit = pitch == held || store.playingPitches.contains(pitch)
                     ctx.fill(Path(roundedRect: r, cornerRadius: 3), with: .color(lit ? Theme.accent : Color(white: 0.26)))
-                    let name = DrumKits.voice(atPitch: pitch)?.name ?? ""
-                    ctx.draw(Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.text),
-                             at: CGPoint(x: 8, y: y + keyHeight / 2), anchor: .leading)
+                    if pitch == dropPitch {
+                        ctx.stroke(Path(roundedRect: r, cornerRadius: 3), with: .color(Theme.accent), lineWidth: 2)
+                    }
+                    let voice = DrumKits.voice(atPitch: pitch)
+                    var label = Text(voice?.name ?? "").foregroundStyle(Theme.text)
+                    if let id = voice?.id, let file = files[id] {
+                        let there = FileManager.default.fileExists(atPath: file)
+                        label = Text(Instrument.sampleName(file))
+                            .foregroundStyle(lit ? Theme.text : (there ? Theme.accent : Theme.textFaint))
+                            .strikethrough(!there)
+                    }
+                    var clipped = ctx
+                    clipped.clip(to: Path(r.insetBy(dx: 4, dy: 0)))
+                    clipped.draw(label.font(.system(size: 10, weight: .medium)),
+                                 at: CGPoint(x: 8, y: y + keyHeight / 2), anchor: .leading)
                 }
                 return
             }
@@ -374,10 +449,10 @@ struct Keyboard: View {
                     ctx.fill(Path(CGRect(x: size.width - 4, y: y, width: 4, height: keyHeight)), with: .color(Theme.accent.opacity(0.75)))
                 }
                 ctx.fill(Path(CGRect(x: 0, y: y + keyHeight - 0.5, width: size.width, height: 0.5)), with: .color(.black.opacity(0.25)))
-                // C is always labelled; any other key shows its name while hovered or played.
-                let showName = pitch % 12 == 0 || lit || pitch == hoverPitch
+                // C is always labelled (and a sampler's root note); any other key shows its name while hovered or played.
+                let showName = pitch % 12 == 0 || lit || pitch == hoverPitch || pitch == root
                 if showName && keyHeight >= 7 {
-                    let ink: Color = lit ? .white : (black ? .white.opacity(0.85) : .black.opacity(0.6))
+                    let ink: Color = lit ? .white : (pitch == root ? Theme.accent : (black ? .white.opacity(0.85) : .black.opacity(0.6)))
                     let x = black ? size.width * 0.62 - 3 : size.width - 6
                     ctx.draw(Text(RollGrid.name(pitch)).font(.system(size: 9, weight: .semibold)).foregroundStyle(ink),
                              at: CGPoint(x: x, y: y + keyHeight / 2), anchor: .trailing)
@@ -388,6 +463,19 @@ struct Keyboard: View {
         .onContinuousHover { phase in
             if case .active(let p) = phase { hoverPitch = layout.pitch(atRow: Int((p.y + scrollY) / keyHeight)) } else { hoverPitch = nil }
         }
+        .contextMenu {
+            if instrument.isDrumKit, let pitch = hoverPitch, let v = DrumKits.voice(atPitch: pitch) {
+                Button("Use a Sample File for \(v.name)…") { store.chooseSampleFile(for: assetID, voice: v.id) }
+                if let file = files[v.id] {
+                    Button("Show \(Instrument.sampleName(file)) in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)])
+                    }
+                    Divider()
+                    Button("Use the Built-in \(v.name)") { store.setKitSample(nil, voice: v.id, pattern: assetID) }
+                }
+            }
+        }
+        .help(instrument.isDrumKit ? "Click a sound to hear it. Drag an audio file onto it to use your own sample, or right-click for more." : "")
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
                 store.focus = .pianoRoll
