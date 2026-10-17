@@ -22,7 +22,9 @@ enum InstrumentChoice: Equatable, Identifiable {
 
     var category: String {
         switch self {
-        case .synth(let p): return SynthPresets.categories[p] ?? "Synth"
+        case .synth(let p):
+            if !SynthPresets.isBuiltIn(p), UserInstruments.named(p) != nil { return "My Instruments" }
+            return SynthPresets.categories[p] ?? "Synth"
         case .kit: return "Drums"
         }
     }
@@ -44,11 +46,11 @@ enum InstrumentChoice: Equatable, Identifiable {
     }
 
     static var all: [InstrumentChoice] {
-        DrumKits.kits.map { .kit($0.id) } + SynthPresets.names.map { .synth($0) }
+        UserInstruments.items.map { .synth($0.name) } + DrumKits.kits.map { .kit($0.id) } + SynthPresets.names.map { .synth($0) }
     }
 
     /// Display order of categories in the Instruments tab.
-    static let categoryOrder = ["Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Future Bass", "Dubstep & Bass House", "Hyperpop", "Chiptune", "FX", "Synth"]
+    static let categoryOrder = ["My Instruments", "Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Future Bass", "Dubstep & Bass House", "Hyperpop", "Chiptune", "FX", "Synth"]
 }
 
 extension Store {
@@ -122,9 +124,15 @@ extension Store {
 
     /// A short musical phrase suited to the preset: riffs for basses, chords for pads,
     /// arpeggios for plucks, melodies for leads. Mostly in A minor, beats are quarter notes.
-    static func phrase(forPreset name: String) -> ([PhraseNote], Double) {
+    static func phrase(forPreset preset: String) -> ([PhraseNote], Double) {
+        let p = SynthPresets.params(for: preset)
+        // Your instruments play the phrase of the preset they came from. Built from scratch,
+        // the sound itself decides: slow attack plays chords, mono plays a melody.
+        var name = preset
+        if !SynthPresets.isBuiltIn(preset), let mine = UserInstruments.named(preset) {
+            if let base = mine.basedOn { name = base } else if (p["a"] ?? 0) > 0.25 { name = "Pad" } else if (p["mode"] ?? 0) > 0 { name = "Lead" } else { name = "Init" }
+        }
         let cat = SynthPresets.categories[name] ?? "Synth"
-        let p = SynthPresets.params(for: name)
         func chord(_ at: Double, _ len: Double, _ pitches: [Int], _ vel: Double = 0.8) -> [PhraseNote] {
             pitches.map { PhraseNote(at, len, $0, vel) }
         }
@@ -317,6 +325,8 @@ extension Store {
 
     /// The pattern or beat the keyboard plays.
     var keyboardTarget: AssetID? {
+        // Typing in the Instrument Editor plays the sound you're editing.
+        if !headless, NSApp?.keyWindow?.title == InstrumentEditorView.windowTitle, let a = instrumentEditorAsset, project.asset(a) != nil { return a }
         switch focus {
         case .pianoRoll: if let a = pianoRollAsset { return a }
         default: break

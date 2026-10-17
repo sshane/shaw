@@ -31,7 +31,7 @@ public enum SynthParams {
         ParamDef("glide", "Glide", 0, 1, 0, .seconds),
         ParamDef("drive", "Drive", 0, 1, 0, .percent),
         ParamDef("volume", "Volume", -36, 6, -8, .db),
-        ParamDef("osclevel", "Osc Level", 0, 1, 1, .percent),
+        ParamDef("osclevel", "Osc Level", 0, 2, 1, .percent),
         // LFO: wobble the filter, add vibrato, or tremolo. Synced to the tempo unless set to Free.
         ParamDef("lforate", "LFO Rate", 0.05, 20, 5, .hz, .log),
         .choice("lfosync", "LFO Sync", ["Free", "1/16", "1/8", "1/8T", "1/4", "1/2", "1 bar"], 0),
@@ -44,6 +44,22 @@ public enum SynthParams {
         .choice("lfoshape", "LFO Shape", ["Sine", "Triangle", "Saw Down", "Saw Up", "Square", "Random"], 0),
         ParamDef("lfofm", "LFO → FM", 0, 1, 0, .percent),
         ParamDef("drift", "Drift", 0, 1, 0.25, .percent),
+        // Oscillator levels and two extra oscillators, for building sounds from scratch.
+        // Osc 1 and 2 still crossfade with Osc Mix, so older presets sound the same.
+        ParamDef("semi1", "Osc 1 Pitch", -24, 24, 0, .semitones),
+        ParamDef("lvl1", "Osc 1 Level", 0, 1, 1, .percent),
+        ParamDef("lvl2", "Osc 2 Level", 0, 1, 1, .percent),
+        .choice("on2", "Osc 2", ["Off", "On"], 1),
+        .choice("osc3", "Osc 3", waves, 0),
+        ParamDef("semi3", "Osc 3 Pitch", -24, 24, 12, .semitones),
+        ParamDef("fine3", "Osc 3 Fine", -50, 50, 0, .cents),
+        ParamDef("lvl3", "Osc 3 Level", 0, 1, 0.5, .percent),
+        .choice("on3", "Osc 3", ["Off", "On"], 0),
+        .choice("osc4", "Osc 4", waves, 0),
+        ParamDef("semi4", "Osc 4 Pitch", -24, 24, 19, .semitones),
+        ParamDef("fine4", "Osc 4 Fine", -50, 50, 0, .cents),
+        ParamDef("lvl4", "Osc 4 Level", 0, 1, 0.5, .percent),
+        .choice("on4", "Osc 4", ["Off", "On"], 0),
     ]
 
     /// Beats per LFO cycle for each `lfosync` choice (0 = free running in Hz).
@@ -60,6 +76,9 @@ public enum SynthParams {
     static let fa = 17, fd = 18, fs = 19, fr = 20, penv = 21, pdecay = 22, mode = 23, glide = 24, drive = 25, volume = 26, oscLevel = 27
     static let lfoRate = 28, lfoSync = 29, lfoCut = 30, lfoPitch = 31, lfoAmp = 32
     static let ftype = 33, fm = 34, lfoShape = 35, lfoFM = 36, drift = 37
+    static let semi1 = 38, lvl1 = 39, lvl2 = 40, on2 = 41
+    static let osc3 = 42, semi3 = 43, fine3 = 44, lvl3 = 45, on3 = 46
+    static let osc4 = 47, semi4 = 48, fine4 = 49, lvl4 = 50, on4 = 51
 }
 
 public enum SynthPresets {
@@ -99,7 +118,7 @@ public enum SynthPresets {
     // LFO sync: 0 free, 1 = 1/16, 2 = 1/8, 3 = 1/8T, 4 = 1/4, 5 = 1/2, 6 = 1 bar.
     // LFO shape: 0 sine, 1 triangle, 2 saw down, 3 saw up, 4 square, 5 random.
     // Filter type: 0 low-pass, 1 low-pass 24, 2 band-pass, 3 high-pass.
-    static let overrides: [String: [String: Double]] = [
+    public static let overrides: [String: [String: Double]] = [
         "Init": [:],
         // Bass
         "Reese Bass": ["osc1": 2, "osc2": 2, "fine2": 25, "unison": 1, "spread": 0.2, "cutoff": 700, "resonance": 0.2, "fenv": 0.1, "mode": 1, "glide": 0.04, "sub": 0.4, "drive": 0.3, "s": 1, "r": 0.15, "volume": -8],
@@ -196,7 +215,10 @@ public enum SynthPresets {
     /// Effects a preset puts on its layer when you add it, so it sounds finished out of the box
     /// (Ableton's presets do the same with audio effect racks). They're ordinary layer effects you can tweak or delete.
     public static func effects(for name: String) -> [Effect] {
-        presetEffects(name).map { e in
+        if !isBuiltIn(name), let mine = UserInstruments.named(baseName(name)) {
+            return mine.effects.map { var e = $0; e.id = UUID(); return e }
+        }
+        return presetEffects(name).map { e in
             // Fill in every parameter, like an effect dragged in from the browser.
             var full = EffectRegistry.descriptor(e.kind)?.makeEffect() ?? e
             for (k, v) in e.params { full.params[k] = v }
@@ -244,6 +266,10 @@ public enum SynthPresets {
 
     public static func params(for name: String) -> [String: Double] {
         var p = SynthParams.defs.defaults()
+        if overrides[name] == nil, let mine = UserInstruments.named(baseName(name)) {
+            for (k, v) in mine.params { p[k] = v }
+            return p
+        }
         for (k, v) in overrides[name] ?? [:] { p[k] = v }
         return p
     }
@@ -348,6 +374,8 @@ public final class Synth {
     /// Oscillator phases live outside the voice structs so copying a voice never allocates.
     let ph1: UnsafeMutablePointer<Double>
     let ph2: UnsafeMutablePointer<Double>
+    let ph3: UnsafeMutablePointer<Double>
+    let ph4: UnsafeMutablePointer<Double>
     static let maxUnison = 7
     static let unisonCounts = [1, 3, 5, 7]
 
@@ -357,6 +385,8 @@ public final class Synth {
         let n = voices.count * Synth.maxUnison
         ph1 = .allocate(capacity: n)
         ph2 = .allocate(capacity: n)
+        ph3 = .allocate(capacity: n)
+        ph4 = .allocate(capacity: n)
         // Spread start phases so unison voices don't start in sync, but seeded, so every bounce
         // of a song sounds identical.
         var seed: UInt32 = 0x5EED
@@ -364,12 +394,16 @@ public final class Synth {
         for i in 0..<n {
             ph1[i] = rnd()
             ph2[i] = rnd()
+            ph3[i] = rnd()
+            ph4[i] = rnd()
         }
     }
 
     deinit {
         ph1.deallocate()
         ph2.deallocate()
+        ph3.deallocate()
+        ph4.deallocate()
     }
 
     static func freq(_ note: Int) -> Double { 440 * pow(2, Double(note - 69) / 12) }
@@ -503,8 +537,18 @@ public final class Synth {
             return
         }
         let w1 = Int(p[SynthParams.osc1]), w2 = Int(p[SynthParams.osc2])
-        let ratio2 = pow(2, (p[SynthParams.semi2] + p[SynthParams.fine2] / 100) / 12)
-        let mix = p[SynthParams.mix], sub = p[SynthParams.sub], nz = p[SynthParams.noise]
+        let w3 = Int(p[SynthParams.osc3]), w4 = Int(p[SynthParams.osc4])
+        let ratio1 = pow(2, p[SynthParams.semi1] / 12)
+        let ratio2 = pow(2, (p[SynthParams.semi1] + p[SynthParams.semi2] + p[SynthParams.fine2] / 100) / 12)
+        let ratio3 = pow(2, (p[SynthParams.semi1] + p[SynthParams.semi3] + p[SynthParams.fine3] / 100) / 12)
+        let ratio4 = pow(2, (p[SynthParams.semi1] + p[SynthParams.semi4] + p[SynthParams.fine4] / 100) / 12)
+        // Osc 1 and 2 crossfade with Osc Mix (0.5 each at the middle); osc 3 and 4 add 0.5 at full level.
+        let mix0 = p[SynthParams.mix]
+        let g1 = p[SynthParams.lvl1] * (1 - mix0)
+        let g2 = p[SynthParams.on2] > 0.5 ? p[SynthParams.lvl2] * mix0 : 0
+        let g3 = p[SynthParams.on3] > 0.5 ? p[SynthParams.lvl3] * 0.5 : 0
+        let g4 = p[SynthParams.on4] > 0.5 ? p[SynthParams.lvl4] * 0.5 : 0
+        let sub = p[SynthParams.sub], nz = p[SynthParams.noise]
         let uniCount = Synth.unisonCounts[min(3, max(0, Int(p[SynthParams.unison])))]
         let spread = p[SynthParams.spread]
         let cutoff = p[SynthParams.cutoff], res = Float(p[SynthParams.res])
@@ -591,7 +635,7 @@ public final class Synth {
                 for u in 0..<uniCount {
                     let det = detunes[u]
                     let fu = f0 * detuneRatios[u]
-                    let dt1 = fu / sr, dt2 = fu * ratio2 / sr
+                    let dt1 = fu * ratio1 / sr, dt2 = fu * ratio2 / sr
                     let k = base + u
                     let o2 = oscillator(w2, ph2[k], dt2)
                     let o1: Double
@@ -602,10 +646,20 @@ public final class Synth {
                     } else {
                         o1 = oscillator(w1, ph1[k], dt1)
                     }
-                    // With FM on, osc 2 is the modulator; the mix still lets you hear it.
-                    let o = o1 * (1 - mix) + o2 * mix
-                    ph1[k] += dt1; if ph1[k] >= 1 { ph1[k] -= 1 }
-                    ph2[k] += dt2; if ph2[k] >= 1 { ph2[k] -= 1 }
+                    // With FM on, osc 2 is the modulator; its level still lets you hear it.
+                    var o = o1 * g1 + o2 * g2
+                    ph1[k] += dt1; if ph1[k] >= 1 { ph1[k] -= ph1[k].rounded(.down) }
+                    ph2[k] += dt2; if ph2[k] >= 1 { ph2[k] -= ph2[k].rounded(.down) }
+                    if g3 > 0 {
+                        let dt3 = fu * ratio3 / sr
+                        o += oscillator(w3, ph3[k], dt3) * g3
+                        ph3[k] += dt3; if ph3[k] >= 1 { ph3[k] -= ph3[k].rounded(.down) }
+                    }
+                    if g4 > 0 {
+                        let dt4 = fu * ratio4 / sr
+                        o += oscillator(w4, ph4[k], dt4) * g4
+                        ph4[k] += dt4; if ph4[k] >= 1 { ph4[k] -= ph4[k].rounded(.down) }
+                    }
                     let pan = uniCount == 1 ? 0.5 : 0.5 + det * 0.45
                     sl += o * (1 - pan) * 2
                     sr2 += o * pan * 2

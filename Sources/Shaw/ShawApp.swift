@@ -35,6 +35,14 @@ struct ShawApp: App {
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands { ShawCommands(store: store) }
+
+        Window(InstrumentEditorView.windowTitle, id: "instrument-editor") {
+            InstrumentEditorView()
+                .environment(store)
+                .frame(minWidth: 640, minHeight: 520)
+        }
+        .defaultSize(width: 860, height: 720)
+        .windowStyle(.titleBar)
     }
 }
 
@@ -290,6 +298,22 @@ enum DebugSnapshot {
            let c = comp.tracks.flatMap(\.clips).first(where: { store.project.usageCount(of: $0.assetID) > 2 }) {
             store.selectedClips = [c.id]
         }
+        // SHAW_EDITOR=scratch builds a new instrument; SHAW_EDITOR=1 edits the newest synth pattern.
+        if let mode = env["SHAW_EDITOR"] {
+            if mode == "scratch" {
+                store.newInstrumentFromScratch()
+                if let id = store.instrumentEditorAsset {
+                    store.edit { $0.updateNotes(id) { p in
+                        p.instrument.params["on2"] = 1; p.instrument.params["osc2"] = 2; p.instrument.params["semi2"] = 12
+                        p.instrument.params["lvl2"] = 0.4; p.instrument.params["sub"] = 0.4
+                    } }
+                }
+            } else if let a = store.project.assets.last(where: {
+                if case .notes(let p) = $0.content { return !p.instrument.isDrumKit } else { return false }
+            }) {
+                store.openInstrumentEditor(a.id)
+            }
+        }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         if env["SHAW_INSPECT_SLOT"] != nil, let comp = store.activeComp,
            let t = comp.tracks.first(where: { !$0.slots.isEmpty }), let scene = t.slots.keys.min() {
@@ -302,7 +326,8 @@ enum DebugSnapshot {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + (Double(env["SHAW_DELAY"] ?? "") ?? 2.5)) {
-            let sheet = env["SHAW_WELCOME"] != nil ? NSApp.windows.first(where: { $0.isSheet && $0.isVisible }) : nil
+            let sheet = env["SHAW_WELCOME"] != nil ? NSApp.windows.first(where: { $0.isSheet && $0.isVisible })
+                : env["SHAW_EDITOR"] != nil ? NSApp.windows.first(where: { $0.title == InstrumentEditorView.windowTitle && $0.isVisible }) : nil
             guard let w = sheet ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }), let v = w.contentView,
                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { exit(1) }
             v.cacheDisplay(in: v.bounds, to: rep)

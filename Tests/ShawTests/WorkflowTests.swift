@@ -336,3 +336,81 @@ final class BrowserPreviewTests: XCTestCase {
         XCTAssertGreaterThan(out2.map { abs($0) }.max() ?? 0, 0.02)
     }
 }
+
+final class CustomInstrumentTests: XCTestCase {
+    func store() -> Store { Store(project: DemoProject.empty(), headless: true) }
+
+    func pattern(_ s: Store) -> AssetID { s.project.assets.last { $0.kind == .notes }!.id }
+
+    func testEditingAPresetShowsEditedAndRevertBringsItBack() {
+        let s = store()
+        s.addInstrument(.synth("Strings"))
+        let id = pattern(s)
+        XCTAssertEqual(s.instrumentStatus(id), .builtIn)
+        s.edit { $0.updateNotes(id) { $0.instrument.params["a"] = 0.01 } }
+        XCTAssertEqual(s.instrumentStatus(id), .edited)
+        XCTAssertEqual(s.instrumentName(id), "Strings", "no more * in the name")
+        s.revertInstrument(id)
+        XCTAssertEqual(s.instrumentStatus(id), .builtIn)
+    }
+
+    func testSaveAsNewKeepsTheBuiltInAndAddsYourOwn() {
+        let s = store()
+        s.addInstrument(.synth("Strings"))
+        let id = pattern(s)
+        s.edit { $0.updateNotes(id) { $0.instrument.params["a"] = 0.01 } }
+        let saved = s.saveInstrumentAsNew(from: id)
+        XCTAssertEqual(saved?.name, "Strings copy")
+        XCTAssertEqual(saved?.basedOn, "Strings")
+        XCTAssertEqual(saved?.effects.map(\.kind), ["chorus", "reverb"], "layer effects come along")
+        XCTAssertEqual(s.instrumentStatus(id), .custom)
+        XCTAssertEqual(s.project.asset(id)?.name, "Strings copy", "the pattern follows the new name")
+        XCTAssertNotEqual(SynthPresets.params(for: "Strings")["a"], 0.01, "the built-in is unchanged")
+        // Adding it again gives the saved sound and effects.
+        s.addInstrument(.synth("Strings copy"))
+        let second = pattern(s)
+        XCTAssertEqual(s.instrument(of: second)?.params["a"], 0.01)
+        XCTAssertEqual(s.activeComp!.tracks.last!.effects.map(\.kind), ["chorus", "reverb"])
+        XCTAssertTrue(InstrumentChoice.all.contains { $0.name == "Strings copy" && $0.category == "My Instruments" })
+    }
+
+    func testSavingUpdatesYourInstrumentAndRenameFollows() {
+        let s = store()
+        s.addInstrument(.synth("Pluck"))
+        let id = pattern(s)
+        s.saveInstrumentAsNew(from: id, name: "Mine")
+        s.edit { $0.updateNotes(id) { $0.instrument.params["cutoff"] = 1234 } }
+        XCTAssertEqual(s.instrumentStatus(id), .edited)
+        s.saveInstrument(from: id)
+        XCTAssertEqual(s.instrumentStatus(id), .custom)
+        XCTAssertEqual(SynthPresets.params(for: "Mine")["cutoff"], 1234)
+        XCTAssertEqual(s.uniqueInstrumentName("Mine"), "Mine 2")
+        XCTAssertEqual(s.uniqueInstrumentName("Pluck"), "Pluck 2", "built-in names are taken too")
+        s.duplicateCustomInstrument(s.customInstruments[0].id)
+        XCTAssertEqual(s.customInstruments.map(\.name), ["Mine", "Mine copy"])
+        s.deleteCustomInstrument(s.customInstruments[1].id)
+        XCTAssertEqual(s.customInstruments.count, 1)
+    }
+
+    func testScratchInstrumentIsASineReadyToSave() {
+        let s = store()
+        s.newInstrumentFromScratch()
+        let id = s.instrumentEditorAsset!
+        XCTAssertEqual(s.instrumentStatus(id), .unsaved)
+        XCTAssertEqual(s.instrument(of: id)?.params["osc1"], 0)
+        XCTAssertEqual(OscillatorLevels.levels(s.instrument(of: id)!.params), [1, 0, 0, 0])
+        let saved = s.saveInstrumentAsNew(from: id)
+        XCTAssertEqual(saved?.name, "New Instrument")
+        XCTAssertNil(saved?.basedOn)
+        XCTAssertEqual(s.instrumentStatus(id), .custom)
+    }
+
+    func testOldStarredNamesStillWork() {
+        let s = store()
+        s.addInstrument(.synth("Pad"))
+        let id = pattern(s)
+        s.edit { $0.updateNotes(id) { $0.instrument.preset = "Pad*"; $0.instrument.params["r"] = 1 } }
+        XCTAssertEqual(s.instrumentName(id), "Pad")
+        XCTAssertEqual(s.instrumentStatus(id), .edited)
+    }
+}

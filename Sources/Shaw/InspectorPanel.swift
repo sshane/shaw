@@ -450,12 +450,14 @@ struct InstrumentInspector: View {
     @State private var showAll = false
 
     static let groups: [(String, [String])] = [
-        ("Oscillators", ["osc1", "osc2", "semi2", "fine2", "mix", "osclevel", "sub", "noise", "unison", "spread"]),
-        ("Filter", ["cutoff", "resonance", "fenv", "keytrack"]),
+        ("Oscillators", ["osc1", "semi1", "lvl1", "on2", "osc2", "semi2", "fine2", "lvl2", "mix", "fm",
+                         "on3", "osc3", "semi3", "fine3", "lvl3", "on4", "osc4", "semi4", "fine4", "lvl4",
+                         "osclevel", "sub", "noise", "unison", "spread", "drift"]),
+        ("Filter", ["ftype", "cutoff", "resonance", "fenv", "keytrack"]),
         ("Amp Envelope", ["a", "d", "s", "r"]),
         ("Filter Envelope", ["fa", "fd", "fs", "fr"]),
         ("Pitch & Voice", ["penv", "pdecay", "mode", "glide"]),
-        ("LFO", ["lfosync", "lforate", "lfocut", "lfopitch", "lfoamp"]),
+        ("LFO", ["lfosync", "lforate", "lfoshape", "lfocut", "lfopitch", "lfoamp", "lfofm"]),
         ("Output", ["drive", "volume"]),
     ]
 
@@ -482,20 +484,11 @@ struct InstrumentInspector: View {
             } else {
                 InspectorTitle(icon: "pianokeys", kind: "Pattern · Shaw Synth", name: a.name, color: Theme.label(a.colorIndex))
             }
-            PropertyRow(label: "Preset") {
-                Menu(p.instrument.preset) {
-                    ForEach(SynthPresets.names, id: \.self) { n in
-                        Button(n) {
-                            store.edit { $0.updateNotes(assetID) { $0.instrument = .preset(n) } }
-                            if !store.transport.playing {
-                                store.previewNoteOn(60, instrument: .preset(n), asset: assetID)
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { store.engine.previewNoteOff(60) }
-                            }
-                        }
-                    }
-                }
-                .menuStyle(.borderlessButton).fixedSize()
+            PropertyRow(label: "Instrument") {
+                InstrumentMenu(assetID: assetID)
             }
+            InstrumentActions(assetID: assetID)
+                .padding(.horizontal, 10).padding(.bottom, 4)
             if !compact {
                 PropertyRow(label: "Length") {
                     DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
@@ -525,13 +518,85 @@ struct InstrumentInspector: View {
         if let def = SynthParams.defs.first(where: { $0.id == pid }) {
             ParamRow(def: def, value: def.clamp(p.instrument.params[pid] ?? def.defaultValue),
                      onChange: { v in
-                         store.live { $0.updateNotes(assetID) { pat in
-                             pat.instrument.params[pid] = v
-                             if !pat.instrument.preset.hasSuffix("*") { pat.instrument.preset += "*" }
-                         } }
+                         store.live { $0.updateNotes(assetID) { $0.instrument.params[pid] = v } }
                      },
                      onEnd: { store.endGesture() })
             .padding(.horizontal, 10)
+        }
+    }
+}
+
+/// Pick a sound for a pattern: your instruments first, then the built-in presets by category.
+struct InstrumentMenu: View {
+    @Environment(Store.self) private var store
+    let assetID: AssetID
+
+    var body: some View {
+        Menu(store.instrumentName(assetID)) {
+            if !store.customInstruments.isEmpty {
+                Section("My Instruments") {
+                    ForEach(store.customInstruments) { c in Button(c.name) { pick(c.name) } }
+                }
+            }
+            ForEach(InstrumentChoice.categoryOrder.filter { $0 != "My Instruments" && $0 != "Drums" }, id: \.self) { cat in
+                let names = SynthPresets.names.filter { (SynthPresets.categories[$0] ?? "Synth") == cat }
+                if !names.isEmpty {
+                    Menu(cat) { ForEach(names, id: \.self) { n in Button(n) { pick(n) } } }
+                }
+            }
+        }
+        .menuStyle(.borderlessButton).fixedSize()
+    }
+
+    private func pick(_ name: String) {
+        store.replaceInstrument(ofAsset: assetID, with: .synth(name))
+        if !store.transport.playing { store.previewInstrument(.synth(name)) }
+    }
+}
+
+/// Where the sound stands (edited or saved) and what you can do about it.
+struct InstrumentActions: View {
+    @Environment(Store.self) private var store
+    let assetID: AssetID
+    /// The editor window already is the editor, so it hides that button.
+    var showEdit = true
+
+    var body: some View {
+        let status = store.instrumentStatus(assetID)
+        let name = store.instrumentName(assetID)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(statusText(status, name))
+                .font(Theme.tiny).foregroundStyle(status == .edited || status == .unsaved ? Theme.accent : Theme.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                if showEdit {
+                    Button("Edit Instrument…") { store.openInstrumentEditor(assetID) }
+                        .help("Open the Instrument Editor: oscillators, filter, envelope, and LFO, with pictures")
+                }
+                if status == .edited, SynthPresets.isBuiltIn(name) == false {
+                    Button("Save") { store.saveInstrument(from: assetID) }
+                        .help("Update \(name) in My Instruments. Layers already using it keep their own copy.")
+                }
+                Button(status == .unsaved ? "Save to My Instruments…" : "Save as New…") { store.saveInstrumentAsNew(from: assetID) }
+                    .help("Save this sound as a new instrument you can add from the Browser in any project")
+                if status == .edited {
+                    Button("Revert") { store.revertInstrument(assetID) }
+                        .help("Go back to the saved \(name) sound")
+                }
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private func statusText(_ status: InstrumentStatus?, _ name: String) -> String {
+        switch status {
+        case .builtIn?: return "Built-in preset. Change anything, then save it as your own."
+        case .custom?: return "One of your instruments."
+        case .edited?: return SynthPresets.isBuiltIn(name)
+            ? "Edited. Only this pattern changed. The built-in \(name) stays the same."
+            : "Edited. Save updates \(name) for new layers; layers already using it keep their own copy."
+        case .unsaved?: return "Not saved yet. Save it to use it in other projects."
+        case nil: return ""
         }
     }
 }

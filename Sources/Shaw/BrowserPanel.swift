@@ -84,18 +84,52 @@ struct BrowserPanel: View {
             .padding(10)
         }
         let all = InstrumentChoice.all.filter { matches($0.name) || matches($0.category) }
+        // Re-read when the library changes (InstrumentChoice.all reads the engine's copy).
+        let _ = store.customInstruments
         ForEach(InstrumentChoice.categoryOrder, id: \.self) { cat in
             let items = all.filter { $0.category == cat }
-            if !items.isEmpty {
+            if cat == "My Instruments" {
+                if search.isEmpty || !items.isEmpty { myInstruments(items) }
+            } else if !items.isEmpty {
                 SectionHeader(title: cat)
-                ForEach(items) { item in
-                    BrowserRow(icon: item.icon, title: item.name, subtitle: subtitle(item), payload: item.payload,
-                               selected: selected == item.id, actionLabel: "Add",
-                               onSelect: {
-                                   selected = item.id
-                                   store.previewInstrument(item)
-                               },
-                               onActivate: { store.addInstrument(item) })
+                ForEach(items) { item in row(item) }
+            }
+        }
+    }
+
+    private func row(_ item: InstrumentChoice) -> some View {
+        BrowserRow(icon: item.icon, title: item.name, subtitle: subtitle(item), payload: item.payload,
+                   selected: selected == item.id, actionLabel: "Add",
+                   onSelect: {
+                       selected = item.id
+                       store.previewInstrument(item)
+                   },
+                   onActivate: { store.addInstrument(item) })
+    }
+
+    /// Your saved instruments, with a + to build one from scratch.
+    @ViewBuilder private func myInstruments(_ items: [InstrumentChoice]) -> some View {
+        HStack(spacing: 4) {
+            SectionHeader(title: "My Instruments")
+            Button { store.newInstrumentFromScratch() } label: {
+                Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .padding(.top, 6).padding(.trailing, 8)
+            .help("Build a new instrument from scratch")
+        }
+        if items.isEmpty {
+            Text("Change a sound and click Save as New Instrument, or click + to build one from scratch.")
+                .font(Theme.tiny).foregroundStyle(Theme.textFaint)
+                .padding(.horizontal, 8).padding(.bottom, 4)
+        }
+        ForEach(items) { item in
+            row(item).contextMenu {
+                if let c = store.customInstruments.first(where: { $0.name == item.name }) {
+                    Button("Rename…") { store.renameCustomInstrument(c.id) }
+                    Button("Duplicate") { store.duplicateCustomInstrument(c.id) }
+                    Divider()
+                    Button("Delete") { store.deleteCustomInstrument(c.id) }
                 }
             }
         }
@@ -104,7 +138,12 @@ struct BrowserPanel: View {
     private func subtitle(_ item: InstrumentChoice) -> String {
         switch item {
         case .kit(let k): return DrumKits.kits.first { $0.id == k }?.summary ?? "Drum kit"
-        case .synth: return "Shaw Synth · \(item.category)"
+        case .synth(let p):
+            if item.category == "My Instruments" {
+                let base = UserInstruments.named(p)?.basedOn
+                return base.map { "Your instrument · from \($0)" } ?? "Your instrument · built from scratch"
+            }
+            return "Shaw Synth · \(item.category)"
         }
     }
 

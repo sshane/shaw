@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(Store.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +34,7 @@ struct MainView: View {
         .sheet(isPresented: Binding(get: { store.showWelcome }, set: { if !$0 { store.dismissWelcome() } })) {
             WelcomeView().environment(store)
         }
+        .onChange(of: store.openEditorRequest) { _, _ in openWindow(id: "instrument-editor") }
         .navigationTitle(store.displayName + (store.dirty && store.fileURL != nil ? " (Edited)" : ""))
     }
 }

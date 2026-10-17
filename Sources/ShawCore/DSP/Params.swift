@@ -38,6 +38,11 @@ public struct ParamDef: Identifiable, Equatable {
 
     public func clamp(_ v: Double) -> Double { Swift.min(max, Swift.max(min, v)) }
 
+    /// The same parameter with a different label (editors that already say which section it's in).
+    public func renamed(_ newName: String) -> ParamDef {
+        ParamDef(id, newName, min, max, defaultValue, unit, scale)
+    }
+
     /// Map value to 0...1 for slider display.
     public func normalized(_ v: Double) -> Double {
         let v = clamp(v)

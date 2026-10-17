@@ -138,10 +138,24 @@ struct PianoRollPanel: View {
                 }
             }
             .menuStyle(.borderlessButton).fixedSize()
-            Menu(p.instrument.preset) {
+            Menu(p.instrument.kit.map(DrumKits.kitName) ?? SynthPresets.baseName(p.instrument.preset)) {
+                if !store.customInstruments.isEmpty {
+                    Section("My Instruments") {
+                        ForEach(store.customInstruments) { c in
+                            Button(c.name) { store.replaceInstrument(ofAsset: a.id, with: .synth(c.name)) }
+                        }
+                    }
+                }
                 Section("Synths") {
-                    ForEach(SynthPresets.names, id: \.self) { n in
-                        Button(n) { store.replaceInstrument(ofAsset: a.id, with: .synth(n)) }
+                    ForEach(InstrumentChoice.categoryOrder.filter { $0 != "My Instruments" && $0 != "Drums" }, id: \.self) { cat in
+                        let names = SynthPresets.names.filter { (SynthPresets.categories[$0] ?? "Synth") == cat }
+                        if !names.isEmpty {
+                            Menu(cat) {
+                                ForEach(names, id: \.self) { n in
+                                    Button(n) { store.replaceInstrument(ofAsset: a.id, with: .synth(n)) }
+                                }
+                            }
+                        }
                     }
                 }
                 Section("Drum Kits") {
@@ -152,6 +166,17 @@ struct PianoRollPanel: View {
             }
             .menuStyle(.borderlessButton).fixedSize()
             .help("Change the sound and keep the notes. You can also drag an instrument from the Browser onto the piano roll.")
+            if !p.instrument.isDrumKit {
+                Button { store.openInstrumentEditor(a.id) } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "slider.horizontal.3").font(.system(size: 10))
+                        Text("Edit").font(Theme.small)
+                        if store.instrumentStatus(a.id) == .edited { Text("(edited)").font(Theme.tiny).foregroundStyle(Theme.accent) }
+                    }
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.textDim)
+                .help("Open the Instrument Editor to shape this sound, then save it to My Instruments")
+            }
             if p.instrument.isDrumKit {
                 @Bindable var store = store
                 Picker("", selection: $store.drumStepView) {

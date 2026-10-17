@@ -123,6 +123,17 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     @ObservationIgnored var rollInsertBeat: Double?
     /// Pitches currently held on the computer keyboard (lit up in the piano roll).
     var playingPitches: Set<Int> = []
+    /// My Instruments: sounds you saved, shared by every project. Kept in sync with the engine's lookup.
+    var customInstruments: [CustomInstrument] = [] {
+        didSet {
+            UserInstruments.items = customInstruments
+            if !isolated { Store.saveLibrary(customInstruments) }
+        }
+    }
+    /// The pattern the Instrument Editor window is editing.
+    var instrumentEditorAsset: AssetID?
+    /// Bumped to ask the main view to open the Instrument Editor window.
+    var openEditorRequest = 0
     @ObservationIgnored var heldKeys: [String: (pitch: Int, isDrum: Bool)] = [:]
     var rollSnap: Double = 0.25
     var rollZoom: Double = 60 // pixels per beat in the piano roll
@@ -183,6 +194,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
             saved?.migrateDrumPatterns()
             dirty = saved != p
         }
+        let library = self.isolated ? [] : Store.loadLibrary()
+        UserInstruments.items = library
+        customInstruments = library
         if !headless { engine.start() }
         SampleLibrary.shared.onLoad = { [weak self] _ in self?.refreshEngine() }
         refreshEngine()
