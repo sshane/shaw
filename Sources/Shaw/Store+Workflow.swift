@@ -338,8 +338,9 @@ extension Store {
 
     /// Returns true if the key was handled (played, octave, velocity).
     func keyboardKey(_ chars: String, down: Bool, isRepeat: Bool) -> Bool {
-        guard keyboardEnabled else { return false }
         let k = chars.lowercased()
+        if !down { rollKeys.held.remove(k) }
+        guard keyboardEnabled else { return false }
         if down {
             switch k {
             case "z": releaseKeyboard(); keyboardOctave = max(-1, keyboardOctave - 1); return true
@@ -367,6 +368,7 @@ extension Store {
             heldKeys[k] = (DrumKits.basePitch + i, true)
             playingPitches.insert(DrumKits.basePitch + i)
             previewNoteOn(DrumKits.basePitch + i, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
+            if stepTyping && asset.id == pianoRollAsset { typeNote(DrumKits.basePitch + i, key: k) }
             return true
         case .notes(let p):
             guard let off = Store.pianoKeys[k] else { return false }
@@ -375,6 +377,7 @@ extension Store {
             heldKeys[k] = (pitch, false)
             playingPitches.insert(pitch)
             previewNoteOn(pitch, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
+            if stepTyping && asset.id == pianoRollAsset { typeNote(pitch, key: k) }
             return true
         default:
             return false

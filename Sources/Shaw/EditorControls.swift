@@ -20,13 +20,13 @@ struct EditorControls: View {
             Button {
                 if let id = store.editingClip { store.loop(aroundClip: id) }
             } label: {
-                Label("Loop This", systemImage: "repeat").font(Theme.tiny)
+                Label("Loop This", systemImage: "repeat").font(Theme.tiny).lineLimit(1).fixedSize()
             }
             .buttonStyle(.borderless)
             .disabled(store.editingClip == nil)
             .help("Loop just this clip while you edit it")
             Button { store.loopVariationRun() } label: {
-                Label("Loop All", systemImage: "repeat.circle").font(Theme.tiny)
+                Label("Loop All", systemImage: "repeat.circle").font(Theme.tiny).lineLimit(1).fixedSize()
             }
             .buttonStyle(.borderless)
             .disabled(store.editingClip == nil)

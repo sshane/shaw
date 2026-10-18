@@ -85,8 +85,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var selectedClips: Set<UUID> = []
     var inspector: InspectorTarget?
     var selectedAssets: Set<AssetID> = []
-    var pianoRollAsset: AssetID?
-    var focus: FocusArea = .timeline
+    var pianoRollAsset: AssetID? {
+        didSet { if pianoRollAsset != oldValue { stepTyping = false; rollCursor = nil } }
+    }
+    var focus: FocusArea = .timeline {
+        didSet { if focus != .pianoRoll && stepTyping { stepTyping = false } }
+    }
     var workspace = Workspace.load() { didSet { if workspace != oldValue && !isolated { workspace.save() } } }
     var renamingAsset: AssetID?
     var selectedNotes: Set<UUID> = []
@@ -130,9 +134,17 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var auditionNotes = (UserDefaults.standard.object(forKey: "ShawAuditionNotes.v2") as? Bool) ?? true {
         didSet { if !isolated { UserDefaults.standard.set(auditionNotes, forKey: "ShawAuditionNotes.v2") } }
     }
-    /// Copied piano-roll notes (⌘C / ⌘X) and where ⌘V pastes them (last click in the grid).
+    /// Copied piano-roll notes (⌘C / ⌘X).
     @ObservationIgnored var noteClipboard: [Note] = []
-    @ObservationIgnored var rollInsertBeat: Double?
+    /// The piano roll cursor: where typed notes, Tab, and ⌘V start (nil until you click or use the keys).
+    var rollCursor: Double?
+    /// Typing notes with the computer keyboard (Return in the piano roll). See Store+StepEntry.swift.
+    var stepTyping = false
+    /// The cheat sheet of piano roll keys (?).
+    var showRollKeys = false
+    /// Bumped when the keys move the cursor or selection, so the piano roll scrolls to follow.
+    var rollRevealRequest = 0
+    @ObservationIgnored var rollKeys = RollKeyState()
     /// Pitches currently held on the computer keyboard (lit up in the piano roll).
     var playingPitches: Set<Int> = []
     /// My Instruments: sounds you saved, shared by every project. Kept in sync with the engine's lookup.

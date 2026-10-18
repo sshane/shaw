@@ -340,17 +340,35 @@ enum DebugSnapshot {
             }
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
-        // SHAW_KEYS=down,down,up,return presses keys in the Browser, through the normal key handling.
-        if let keys = env["SHAW_KEYS"] {
-            store.focus = .browser
+        // SHAW_KEYS=down,down,return presses keys in the Browser, through the normal key handling.
+        // SHAW_KEYS=roll:return,2,d,f,right,shift-tab,? presses them in the piano roll instead.
+        if var keys = env["SHAW_KEYS"] {
+            let roll = keys.hasPrefix("roll:")
+            if roll { keys.removeFirst(5) }
+            store.focus = roll ? .pianoRoll : .browser
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                for k in keys.split(separator: ",") {
-                    let (code, ch): (UInt16, Int) = k == "up" ? (126, 0xF700) : k == "down" ? (125, 0xF701) : (36, 13)
-                    let s = String(UnicodeScalar(ch).map(Character.init) ?? " ")
-                    if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                                                windowNumber: NSApp.windows.first { $0.isVisible }?.windowNumber ?? 0, context: nil,
-                                                characters: s, charactersIgnoringModifiers: s, isARepeat: false, keyCode: code) {
-                        NSApp.postEvent(e, atStart: false)
+                let named: [String: (UInt16, UInt32)] = [
+                    "up": (126, 0xF700), "down": (125, 0xF701), "left": (123, 0xF702), "right": (124, 0xF703),
+                    "return": (36, 13), "esc": (53, 27), "tab": (48, 9), "delete": (51, 127), "?": (44, 63),
+                ]
+                let letters: [String: UInt16] = [
+                    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "w": 13, "e": 14, "t": 17, "y": 16, "u": 32, "j": 38,
+                    "k": 40, "o": 31, "l": 37, "p": 35, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23,
+                ]
+                let window = NSApp.windows.first { $0.isVisible }?.windowNumber ?? 0
+                for raw in keys.split(separator: ",") {
+                    let shift = raw.hasPrefix("shift-")
+                    let k = shift ? String(raw.dropFirst(6)) : String(raw)
+                    let code: UInt16, ch: String
+                    if let n = named[k], let u = UnicodeScalar(n.1) { code = n.0; ch = String(Character(u)) }
+                    else if let c = letters[k] { code = c; ch = k }
+                    else { continue }
+                    for type in [NSEvent.EventType.keyDown, .keyUp] {
+                        if let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: shift || k == "?" ? .shift : [],
+                                                    timestamp: 0, windowNumber: window, context: nil, characters: ch,
+                                                    charactersIgnoringModifiers: ch, isARepeat: false, keyCode: code) {
+                            NSApp.postEvent(e, atStart: false)
+                        }
                     }
                 }
             }

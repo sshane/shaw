@@ -19,6 +19,7 @@ Shaw is a music app for the Mac that works like After Effects. I came from After
 - **Keyframes.** Click a setting's stopwatch and change it over time. Diamonds show up under the layer, and you drag them around like in After Effects.
 - **Variations without recording.** Tweak a loop while it plays, then Save Variation keeps that version and gives you a fresh copy right after it. Play them back to back when you're done.
 - **Your keyboard is a piano.** The home row plays notes and Z / X change the octave. On drums, A is the kick and S is the snare.
+- **Type melodies.** Press Return in the piano roll and type notes like text: each key places a note and moves on, → adds a rest, and Delete erases. Tab steps through notes, and the arrow keys move them.
 
 ## Install
 
@@ -70,6 +71,8 @@ The first time you open Shaw, a short three-page guide walks through what's diff
 - ⌥← and ⌥→ change note length. ↑ and ↓ transpose.
 - Press B to switch to draw mode, where a single click adds a note.
 - Drum patterns can switch to a step grid with the **Steps** button.
+- Press Return (or click **Type Notes**) to type notes with your keyboard. Each key places a note at the cursor and moves past it, keys pressed together make a chord, and 1 to 5 set the length. Esc stops.
+- Tab and ⇧Tab select the next and previous note, ⇧→ and ⇧← select more or fewer, and ⌘← and ⌘→ move notes a whole bar. Press ? in the piano roll to see every key.
 
 **Effects and keyframes**
 - Search the Browser's Effects tab and drag an effect onto a clip, a layer header, or a composition tab.
