@@ -44,12 +44,13 @@ struct PianoRollPanel: View {
         if let id = store.pianoRollAsset, let a = store.project.asset(id), case .notes(let p) = a.content {
             let layout = RowLayout.of(p.instrument)
             let rowH = p.instrument.isDrumKit ? max(keyHeight, 22) : keyHeight
+            let shownY = shownY(layout, rowH)
             VStack(spacing: 0) {
                 toolbar(a, p)
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
                         Theme.panelHeader.frame(height: Self.rulerHeight)
-                        Keyboard(assetID: id, instrument: p.instrument, scrollY: scrollY, keyHeight: rowH, layout: layout,
+                        Keyboard(assetID: id, instrument: p.instrument, scrollY: shownY, keyHeight: rowH, layout: layout,
                                  dropPitch: dropPitch)
                         Text("Velocity").font(.system(size: 9)).foregroundStyle(Theme.textFaint)
                             .frame(maxWidth: .infinity).frame(height: Self.velocityHeight).background(Theme.panelHeader)
@@ -63,7 +64,7 @@ struct PianoRollPanel: View {
                             if p.instrument.isDrumKit && store.drumStepView {
                                 DrumStepView(assetID: id, pattern: p, scrollX: scrollX, rowHeight: rowH, size: geo.size)
                             } else {
-                            NoteGrid(assetID: id, pattern: p, scrollX: scrollX, scrollY: scrollY, keyHeight: rowH, layout: layout, size: geo.size)
+                            NoteGrid(assetID: id, pattern: p, scrollX: scrollX, scrollY: shownY, keyHeight: rowH, layout: layout, size: geo.size)
                                 .onAppear { gridSize = geo.size; centerIfNeeded(p, geo.size) }
                                 .onChange(of: geo.size) { _, s in gridSize = s }
                             }
@@ -106,10 +107,15 @@ struct PianoRollPanel: View {
                 onHoverFile: { loc in
                     dropPitch = p.instrument.isDrumKit ? loc.flatMap { drumPitch(at: $0, layout: layout, rowH: rowH) } : nil
                 }))
-            .onChange(of: store.playingPitches) { _, pitches in reveal(pitches, layout: layout, rowH: rowH) }
-            .onChange(of: store.rollRevealRequest) { _, _ in follow(layout: layout, rowH: rowH) }
+            .onChange(of: store.playingPitches) { _, pitches in reveal(pitches) }
+            .onChange(of: store.rollRevealRequest) { _, _ in follow() }
             .onChange(of: store.keyboardOctave) { _, _ in
-                if layout == .piano { reveal([store.keyboardBasePitch, store.keyboardBasePitch + 17], layout: layout, rowH: rowH) }
+                if layout == .piano { reveal([store.keyboardBasePitch, store.keyboardBasePitch + 17]) }
+            }
+            // Switching the sound between a synth and a drum kit changes the rows, so start over at the top or the middle.
+            .onChange(of: layout) { _, _ in
+                scrollY = -1
+                centerIfNeeded(p, gridSize)
             }
             .onChange(of: store.pianoRollAsset) { _, new in
                 scrollY = -1
@@ -147,16 +153,31 @@ struct PianoRollPanel: View {
     private func drumPitch(at loc: CGPoint, layout: RowLayout, rowH: CGFloat) -> Int? {
         let y = loc.y - Self.toolbarHeight - Self.rulerHeight
         guard y >= 0, gridSize.height <= 0 || y < gridSize.height else { return nil }
-        let row = Int((y + max(0, scrollY)) / rowH)
+        let row = Int((y + shownY(layout, rowH)) / rowH)
         guard row >= 0, row < layout.count else { return nil }
         return layout.pitch(atRow: row)
     }
 
+    /// The scroll position, kept inside the rows this pattern has. A piano has 128 rows and a kit
+    /// about a dozen, so a position left over from one can be far past the end of the other.
+    private func shownY(_ layout: RowLayout, _ rowH: CGFloat) -> CGFloat {
+        min(max(0, scrollY), max(0, CGFloat(layout.count) * rowH - gridSize.height))
+    }
+
+    /// The open pattern's rows and row height, looked up when needed rather than captured, so a
+    /// change of pattern or sound in the same moment can't scroll with the old one's rows.
+    private var currentRows: (layout: RowLayout, rowH: CGFloat)? {
+        guard let (_, p) = store.openPattern else { return nil }
+        return (RowLayout.of(p.instrument), p.instrument.isDrumKit ? max(keyHeight, 22) : keyHeight)
+    }
+
     /// Scroll so the given pitches are on screen (used while playing the computer keyboard).
-    private func reveal(_ pitches: Set<Int>, layout: RowLayout, rowH: CGFloat) {
-        guard let lo = pitches.min(), let hi = pitches.max(), gridSize.height > 20 else { return }
+    private func reveal(_ pitches: Set<Int>) {
+        guard let (layout, rowH) = currentRows, let lo = pitches.filter(layout.contains).min(),
+              let hi = pitches.filter(layout.contains).max(), gridSize.height > 20 else { return }
         let top = CGFloat(layout.row(of: hi)) * rowH, bottom = CGFloat(layout.row(of: lo) + 1) * rowH
-        if top < scrollY || bottom > scrollY + gridSize.height {
+        let y = shownY(layout, rowH)
+        if top < y || bottom > y + gridSize.height {
             let mid = (top + bottom) / 2
             withAnimation(.easeOut(duration: 0.15)) {
                 scrollY = max(0, min(CGFloat(layout.count) * rowH - gridSize.height, mid - gridSize.height / 2))
@@ -415,7 +436,7 @@ struct PianoRollPanel: View {
     }
 
     /// Keep the cursor, the end of the box, or the selected notes in view.
-    private func follow(layout: RowLayout, rowH: CGFloat) {
+    private func follow() {
         guard let (_, p) = store.openPattern, gridSize.width > 40 else { return }
         let chosen = p.notes.filter { store.selectedNotes.contains($0.id) }
         let lo: Double, hi: Double, pitches: Set<Int>
@@ -434,7 +455,7 @@ struct PianoRollPanel: View {
         } else if b > scrollX + w - margin {
             scrollX = max(0, min(a - margin, b - w + margin))
         }
-        reveal(pitches, layout: layout, rowH: rowH)
+        reveal(pitches)
     }
 
 }
