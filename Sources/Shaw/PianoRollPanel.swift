@@ -75,23 +75,6 @@ struct PianoRollPanel: View {
                         RollCursor(scrollX: scrollX).allowsHitTesting(false)
                         RollPlayhead(assetID: id, scrollX: scrollX).allowsHitTesting(false)
                     }
-                    .overlay(alignment: .topTrailing) {
-                        if store.stepTyping {
-                            // What typing does right now: note length, and the octave the A key plays.
-                            HStack(spacing: 6) {
-                                Image(systemName: "keyboard").font(.system(size: 10))
-                                Text("Typing \(store.stepLengthName)\(p.instrument.isDrumKit ? "" : " · A is C\(store.keyboardOctave)")")
-                                    .font(Theme.small.weight(.semibold)).monospacedDigit()
-                                Text("Esc to stop · ? for keys").font(Theme.tiny).foregroundStyle(Theme.textDim)
-                            }
-                            .foregroundStyle(Theme.accent)
-                            .padding(.horizontal, 8).frame(height: 22)
-                            .background(Theme.panel.opacity(0.92), in: RoundedRectangle(cornerRadius: 5))
-                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.accent.opacity(0.5)))
-                            .padding(.top, Self.rulerHeight + 6).padding(.trailing, 8)
-                            .allowsHitTesting(false)
-                        }
-                    }
                     .clipped()
                 }
                 .background(FrameReporter { monitor.frame = $0 })
@@ -280,10 +263,9 @@ struct PianoRollPanel: View {
             }
             .labelsHidden().frame(width: 70).controlSize(.small)
             Spacer()
-            IconButton(systemName: "keyboard", active: store.stepTyping,
-                       help: store.stepTyping ? "Typing notes. Esc or Return stops, and ? shows every key."
-                           : "Type notes with your keyboard, like typing text (Return). Press ? to see every key.") {
-                store.stepTyping ? store.stopTyping() : store.startTyping()
+            IconButton(systemName: "keyboard", active: store.showRollKeys,
+                       help: "Edit notes with your keyboard: the arrow keys move the cursor, and Return adds a note. Press ? to see every key.") {
+                store.showRollKeys.toggle()
             }
             EditorControls()
         }
@@ -341,49 +323,55 @@ struct PianoRollPanel: View {
         let sel = store.selectedNotes
         let cmd = e.modifierFlags.contains(.command), shift = e.modifierFlags.contains(.shift), opt = e.modifierFlags.contains(.option)
         let grid = store.rollStep
+        let layout = RowLayout.of(p.instrument)
         func transform(_ f: @escaping (inout Note) -> Void) {
             store.edit { $0.updateNotes(id) { pat in for i in pat.notes.indices where sel.contains(pat.notes[i].id) { f(&pat.notes[i]) } } }
+        }
+        // How far an arrow goes: a grid step or a row, and with ⌘ a bar or an octave.
+        func arrow() -> (beats: Double, rows: Int) {
+            let sign = e.keyCode == 124 || e.keyCode == 126 ? 1 : -1
+            if e.keyCode == 123 || e.keyCode == 124 { return (Double(sign) * (cmd ? Double(store.project.beatsPerBar) : grid), 0) }
+            return (0, sign * (cmd ? (layout == .piano ? 12 : layout.count) : 1))
         }
         // ? shows every key the piano roll knows.
         if e.keyCode == 44 && shift && !cmd { store.showRollKeys.toggle(); return true }
         if e.keyCode == 53 && store.showRollKeys { store.showRollKeys = false; return true }
-        if store.stepTyping, !cmd, !opt, let handled = typingKey(e, shift: shift) { return handled }
+        // ⇧ and a note key adds that note at the cursor's beat. The keys on their own only play.
+        if shift && !cmd && !opt, let k = e.characters(byApplyingModifiers: [])?.lowercased(), Store.pianoKeys[k] != nil {
+            if !e.isARepeat { store.addKeyAtCursor(k) }
+            return true
+        }
         switch e.keyCode {
-        case 51, 117:
-            guard !sel.isEmpty else { return false }
+        case 51, 117: // Delete: the selected notes, or the note under the cursor
+            if sel.isEmpty { store.deleteNoteAtCursor(); return true }
             store.edit { $0.updateNotes(id) { $0.notes.removeAll { sel.contains($0.id) } } }
             store.selectedNotes = []
             return true
-        case 126, 125: // up / down
-            guard !sel.isEmpty else { return false }
-            let d = (e.keyCode == 126 ? 1 : -1) * (shift ? 12 : 1)
-            let layout = RowLayout.of(p.instrument)
-            transform { $0.pitch = layout.clamp($0.pitch + (layout == .piano ? d : (d > 0 ? 1 : -1))) }
-            if let n = p.notes.first(where: { sel.contains($0.id) }) { store.audition(n.pitch + d, instrument: p.instrument) }
-            return true
-        case 123 where opt, 124 where opt: // ⌥← / ⌥→ shorten / lengthen
-            guard !sel.isEmpty else { return false }
+        case 123 where opt, 124 where opt: // ⌥← / ⌥→: the selected notes, or the notes Return adds, get shorter or longer
             let d = (e.keyCode == 124 ? 1.0 : -1.0) * (shift ? 1 : grid)
+            if sel.isEmpty { store.lastNoteLength = max(grid, store.lastNoteLength + d); return true }
             transform { $0.length = max(grid, $0.length + d) }
             if let n = p.notes.first(where: { sel.contains($0.id) }) { store.lastNoteLength = max(grid, n.length + d) }
             return true
-        case 123 where shift && !cmd, 124 where shift && !cmd: // ⇧← / ⇧→ select fewer or more notes
-            store.extendSelection(next: e.keyCode == 124)
+        case 123...126 where shift: // ⇧ and the arrows draw a box that selects notes
+            let a = arrow()
+            store.extendBox(beats: a.beats, rows: a.rows)
             return true
-        case 123, 124: // left / right: the cursor, or the selected notes (⌘ for a whole bar)
-            let d = (e.keyCode == 124 ? 1.0 : -1.0) * (cmd ? Double(store.project.beatsPerBar) : grid)
-            if sel.isEmpty {
-                if cmd { store.cursorToEdge(end: e.keyCode == 124) } else { store.moveCursor(by: d) }
-                return true
-            }
-            transform { $0.start = max(0, $0.start + d) }
-            if let first = p.notes.filter({ sel.contains($0.id) }).map(\.start).min() { store.rollCursor = max(0, first + d) }
+        case 123...126: // the arrows move the cursor, or the selected notes
+            let a = arrow()
+            if !sel.isEmpty { store.moveSelectedNotes(beats: a.beats, semitones: a.rows) }
+            else if cmd && a.rows == 0 { store.cursorToEdge(end: e.keyCode == 124) }
+            else { store.moveCursor(beats: a.beats, rows: a.rows) }
             return true
         case 48 where !cmd && !opt: // Tab / ⇧Tab: next or previous note
             store.selectNeighbor(next: !shift)
             return true
-        case 36 where !cmd && !opt, 76 where !cmd && !opt: // Return: start typing notes
-            store.startTyping()
+        case 36 where !cmd && !opt, 76 where !cmd && !opt: // Return: add a note at the cursor
+            if sel.isEmpty { store.addNoteAtCursor() }
+            return true
+        case 18, 19, 20, 21, 23: // 1–5: how long the notes Return adds are
+            guard !cmd && !opt else { return false }
+            store.setStepLength([18, 19, 20, 21, 23].firstIndex(of: e.keyCode) ?? 0)
             return true
         case 8 where cmd, 7 where cmd: // ⌘C / ⌘X
             let chosen = p.notes.filter { sel.contains($0.id) }
@@ -418,38 +406,24 @@ struct PianoRollPanel: View {
             store.edit { $0.updateNotes(id) { $0.notes += copies } }
             store.selectedNotes = Set(copies.map(\.id))
             return true
-        case 53: // escape: deselect, and put the cursor where the selection started
-            if let first = p.notes.filter({ sel.contains($0.id) }).map(\.start).min() { store.rollCursor = first }
-            store.selectedNotes = []
+        case 53: // Esc: deselect, and put the cursor on the first selected note
+            store.deselectToCursor()
             return true
         default:
             return false
         }
     }
 
-    /// Keys while typing notes. nil passes the key on: note keys place notes (Store.keyboardKey), Space plays.
-    private func typingKey(_ e: NSEvent, shift: Bool) -> Bool? {
-        switch e.keyCode {
-        case 53, 36, 76: store.stopTyping(); return true // Esc or Return stops
-        case 124: store.stepForward(); return true
-        case 123: store.stepBack(); return true
-        case 51, 117: store.stepBackspace(); return true
-        case 126, 125: store.stepNudge((e.keyCode == 126 ? 1 : -1) * (shift ? 12 : 1)); return true
-        case 18, 19, 20, 21, 23: store.setStepLength([18, 19, 20, 21, 23].firstIndex(of: e.keyCode) ?? 0); return true
-        case 48: store.stopTyping(); return nil // Tab stops typing and selects the next note
-        default: return nil
-        }
-    }
-
-    /// Keep the cursor, or the notes the keys just selected, in view.
+    /// Keep the cursor, the end of the box, or the selected notes in view.
     private func follow(layout: RowLayout, rowH: CGFloat) {
         guard let (_, p) = store.openPattern, gridSize.width > 40 else { return }
         let chosen = p.notes.filter { store.selectedNotes.contains($0.id) }
-        let lo: Double, hi: Double
-        if let a = chosen.map(\.start).min(), let b = chosen.map(\.end).max() {
-            lo = a; hi = b
-        } else if let c = store.rollCursor {
-            lo = c; hi = c + (store.stepTyping ? store.lastNoteLength : 0)
+        let lo: Double, hi: Double, pitches: Set<Int>
+        if store.activeBox == nil, let a = chosen.map(\.start).min(), let b = chosen.map(\.end).max() {
+            lo = a; hi = b; pitches = Set(chosen.map(\.pitch))
+        } else if store.rollCursor != nil {
+            let c = store.cursorSpot(p)
+            lo = c.beat; hi = c.beat + (store.activeBox != nil ? store.rollStep : store.cursorNoteLength(p)); pitches = [c.pitch]
         } else {
             return
         }
@@ -460,12 +434,7 @@ struct PianoRollPanel: View {
         } else if b > scrollX + w - margin {
             scrollX = max(0, min(a - margin, b - w + margin))
         }
-        if !chosen.isEmpty {
-            reveal(Set(chosen.map(\.pitch)), layout: layout, rowH: rowH)
-        } else if store.stepTyping {
-            let typed = Set(store.rollKeys.notes)
-            reveal(Set(p.notes.filter { typed.contains($0.id) }.map(\.pitch)), layout: layout, rowH: rowH)
-        }
+        reveal(pitches, layout: layout, rowH: rowH)
     }
 
 }
@@ -488,6 +457,7 @@ struct Keyboard: View {
         let files = instrument.isDrumKit ? (instrument.kitSamples ?? [:]) : [:]
         // The sampler's root note: where the sample plays at its own pitch.
         let root = instrument.isSampler ? Int((instrument.params["root"] ?? 60).rounded()) : nil
+        let letters = store.keyboardEnabled && store.focus == .pianoRoll
         Canvas { ctx, size in
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.85)))
             let first = max(0, Int(scrollY / keyHeight) - 1)
@@ -515,12 +485,12 @@ struct Keyboard: View {
                     }
                     var clipped = ctx
                     var room = r.insetBy(dx: 4, dy: 0)
-                    if store.stepTyping { room.size.width -= 12 } // leave room for the key letter
+                    if letters { room.size.width -= 12 } // leave room for the key letter
                     clipped.clip(to: Path(room))
                     clipped.draw(label.font(.system(size: 10, weight: .medium)),
                                  at: CGPoint(x: 8, y: y + keyHeight / 2), anchor: .leading)
-                    // While typing notes, each sound shows the key that types it.
-                    if store.stepTyping, let i = DrumKits.voices.firstIndex(where: { $0.id == voice?.id }), i < Store.drumKeys.count {
+                    // While the piano roll has the keys, each sound shows the key that plays it.
+                    if letters, let i = DrumKits.voices.firstIndex(where: { $0.id == voice?.id }), i < Store.drumKeys.count {
                         ctx.draw(Text(Store.drumKeys[i].uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(lit ? Color.white : Theme.accent),
                                  at: CGPoint(x: size.width - 8, y: y + keyHeight / 2), anchor: .trailing)
                     }
@@ -540,8 +510,8 @@ struct Keyboard: View {
                     ctx.fill(Path(CGRect(x: size.width - 4, y: y, width: 4, height: keyHeight)), with: .color(Theme.accent.opacity(0.75)))
                 }
                 ctx.fill(Path(CGRect(x: 0, y: y + keyHeight - 0.5, width: size.width, height: 0.5)), with: .color(.black.opacity(0.25)))
-                // While typing notes, the keys show which letter types them.
-                if store.stepTyping, keyHeight >= 8, let letter = Store.pianoKeyLetters[pitch - base] {
+                // While the piano roll has the keys, each key shows the letter that plays it.
+                if letters, keyHeight >= 8, let letter = Store.pianoKeyLetters[pitch - base] {
                     ctx.draw(Text(letter).font(.system(size: 9, weight: .bold)).foregroundStyle(lit ? Color.white : Theme.accent),
                              at: CGPoint(x: 5, y: y + keyHeight / 2), anchor: .leading)
                 }
@@ -666,6 +636,10 @@ struct NoteGrid: View {
         let sel = store.selectedNotes
         let grid = store.rollSnap
         let bpb = Double(store.project.beatsPerBar)
+        // The keyboard cursor: the cell Return fills, or the box ⇧ and the arrow keys draw.
+        let box = store.focus == .pianoRoll ? store.activeBox.map(store.boxBounds) : nil
+        let cursor = store.focus == .pianoRoll && store.rollCursor != nil && (sel.isEmpty || box != nil)
+            ? (spot: store.cursorSpot(pattern), length: box != nil ? store.rollStep : store.cursorNoteLength(pattern)) : nil
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in
                 let first = max(0, Int(scrollY / keyHeight) - 1)
@@ -698,6 +672,10 @@ struct NoteGrid: View {
                 if endX < size.width {
                     ctx.fill(Path(CGRect(x: max(0, endX), y: 0, width: size.width, height: size.height)), with: .color(Color.black.opacity(0.4)))
                 }
+                if let c = cursor, box == nil {
+                    let y = CGFloat(layout.row(of: c.spot.pitch)) * keyHeight - scrollY
+                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: keyHeight)), with: .color(Theme.accent.opacity(0.07)))
+                }
                 let color = store.color(of: assetID)
                 for n in pattern.notes where layout.contains(n.pitch) {
                     let r = rect(of: n)
@@ -714,6 +692,25 @@ struct NoteGrid: View {
                                  at: CGPoint(x: r.minX + 3, y: r.midY), anchor: .leading)
                     }
                 }
+                if let b = box {
+                    let r = CGRect(x: CGFloat(b.start) * zoom - scrollX, y: CGFloat(layout.row(of: b.high)) * keyHeight - scrollY,
+                                   width: CGFloat(b.end - b.start) * zoom, height: CGFloat(b.high - b.low + 1) * keyHeight)
+                    ctx.fill(Path(r), with: .color(Theme.accent.opacity(0.08)))
+                    ctx.stroke(Path(r), with: .color(Theme.accent.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [3]))
+                }
+                if let c = cursor {
+                    let r = CGRect(x: CGFloat(c.spot.beat) * zoom - scrollX, y: CGFloat(layout.row(of: c.spot.pitch)) * keyHeight - scrollY,
+                                   width: max(3, CGFloat(c.length) * zoom), height: keyHeight)
+                    let path = Path(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 2)
+                    if box == nil { ctx.fill(path, with: .color(Theme.accent.opacity(0.22))) }
+                    ctx.stroke(path, with: .color(Theme.accent), lineWidth: 1.5)
+                    // Name the note Return would add, unless a note already sits there.
+                    let taken = pattern.notes.contains { $0.pitch == c.spot.pitch && $0.start < c.spot.beat + c.length && $0.end > c.spot.beat }
+                    if box == nil, !taken, layout == .piano, r.width > 22, keyHeight >= 10 {
+                        ctx.draw(Text(RollGrid.name(c.spot.pitch)).font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.accent),
+                                 at: CGPoint(x: r.minX + 3, y: r.midY), anchor: .leading)
+                    }
+                }
             }
             if let m = marquee {
                 Rectangle().fill(Color.white.opacity(0.06))
@@ -721,7 +718,7 @@ struct NoteGrid: View {
                     .frame(width: m.width, height: m.height).offset(x: m.minX, y: m.minY)
             }
             if pattern.notes.isEmpty {
-                Text(store.drawMode ? "Click to draw notes" : "Double-click to add a note · play the A–L keys to try ideas · press Return to type them in")
+                Text(store.drawMode ? "Click to draw notes" : "Double-click to add a note · play the A–L keys to try ideas · press Return to add one at the cursor")
                     .font(Theme.small).foregroundStyle(Theme.textFaint)
                     .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
@@ -908,6 +905,7 @@ struct NoteGrid: View {
             // A plain click on empty space clears the selection and puts the cursor there.
             store.selectedNotes = []
             store.rollCursor = snap(beat(atX: p.x), floorMode: true)
+            store.rollCursorPitch = pitch(atY: p.y)
         }
     }
 }
@@ -954,28 +952,18 @@ struct VelocityLane: View {
     }
 }
 
-/// The piano roll cursor: where typed notes go, and where Tab and ⌘V start. It hides while notes
-/// are selected, since the arrow keys then move the notes instead of the cursor.
+/// The piano roll cursor's beat: a line down the panel and a marker in the ruler. NoteGrid draws the
+/// cell it's on. It hides while notes are selected, since the arrow keys then move the notes instead.
 struct RollCursor: View {
     @Environment(Store.self) private var store
     let scrollX: CGFloat
 
     var body: some View {
-        let typing = store.stepTyping
         ZStack(alignment: .topLeading) {
             Color.clear
-            if let c = store.rollCursor, store.focus == .pianoRoll, typing || store.selectedNotes.isEmpty {
-                let zoom = CGFloat(store.rollZoom)
-                let x = CGFloat(c) * zoom - scrollX
-                if typing {
-                    // Where the next note goes.
-                    Rectangle().fill(Theme.accent.opacity(0.13))
-                        .frame(width: max(2, CGFloat(store.lastNoteLength) * zoom))
-                        .padding(.top, PianoRollPanel.rulerHeight).padding(.bottom, PianoRollPanel.velocityHeight)
-                        .offset(x: x)
-                }
-                Rectangle().fill(Theme.accent.opacity(typing ? 1 : 0.55)).frame(width: typing ? 2 : 1)
-                    .offset(x: x - (typing ? 1 : 0.5))
+            if let c = store.rollCursor, store.focus == .pianoRoll, store.selectedNotes.isEmpty || store.activeBox != nil {
+                let x = CGFloat(c) * CGFloat(store.rollZoom) - scrollX
+                Rectangle().fill(Theme.accent.opacity(0.4)).frame(width: 1).offset(x: x - 0.5)
                 Image(systemName: "arrowtriangle.down.fill").font(.system(size: 8)).foregroundStyle(Theme.accent)
                     .offset(x: x - 4, y: 5)
             }
@@ -987,36 +975,34 @@ struct RollCursor: View {
 struct RollKeysHelp: View {
     @Environment(Store.self) private var store
 
-    private static let typing: [(String, String)] = [
-        ("Return", "Start or stop typing"),
-        ("A W S E D F …", "Type a note and move on"),
-        ("Keys together", "A chord"),
-        ("Hold a key + →", "Make it longer"),
-        ("→  ←", "A rest / step back"),
-        ("Delete", "Erase the last note"),
-        ("↑  ↓", "Nudge it (⇧ an octave)"),
+    private static let adding: [(String, String)] = [
+        ("A W S E D F …", "Play notes to try ideas"),
+        ("←  →  ↑  ↓", "Move the cursor"),
+        ("Return", "Add a note at the cursor"),
+        ("⇧ + A W S …", "Add that note at the cursor"),
+        ("Delete", "Delete the note at the cursor"),
         ("1 2 3 4 5", "Length: 1/16, 1/8, 1/4, 1/2, 1 bar"),
+        ("⌥←  ⌥→", "Shorter / longer"),
+        ("⌘←  ⌘→", "Jump to the start / end"),
         ("Z X", "Octave down / up"),
         ("C V", "Softer / harder"),
         ("Space", "Play"),
     ]
     private static let editing: [(String, String)] = [
+        ("⇧ + arrows", "Draw a box to select notes"),
         ("Tab  ⇧Tab", "Select the next / previous note"),
-        ("⇧→  ⇧←", "Select more / fewer notes"),
-        ("↑  ↓", "Move up or down (⇧ an octave)"),
-        ("←  →", "Move earlier or later"),
-        ("⌘←  ⌘→", "Move a whole bar"),
+        ("←  →  ↑  ↓", "Move the selected notes"),
+        ("⌘ + arrows", "Move them a bar or an octave"),
         ("⌥←  ⌥→", "Shorter / longer"),
-        ("Delete", "Delete"),
+        ("Delete", "Delete them"),
         ("⌘C  ⌘V  ⌘D", "Copy, paste at the cursor, duplicate"),
-        ("Esc", "Deselect"),
-        ("←  → (nothing selected)", "Move the cursor"),
+        ("Esc", "Deselect and go back to the cursor"),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 28) {
-                column("Typing notes", Self.typing)
+                column("Adding notes", Self.adding)
                 column("Selecting and editing", Self.editing)
             }
             Text("Press ? or Esc to close").font(Theme.tiny).foregroundStyle(Theme.textFaint)

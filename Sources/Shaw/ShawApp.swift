@@ -175,7 +175,9 @@ final class KeyRouter {
             if NSApp.keyWindow?.firstResponder is NSText { return e }
             if e.type == .keyUp {
                 let plain = e.modifierFlags.intersection([.command, .option, .control]).isEmpty
-                return plain && store.keyboardKey(e.charactersIgnoringModifiers ?? "", down: false, isRepeat: false) ? nil : e
+                // Without ⇧ applied, so a note added with ⇧; stops when ; comes back up as ;, not :.
+                let key = e.characters(byApplyingModifiers: []) ?? e.charactersIgnoringModifiers ?? ""
+                return plain && store.keyboardKey(key, down: false, isRepeat: false) ? nil : e
             }
             return self.handle(e, store) ? nil : e
         }
@@ -341,7 +343,7 @@ enum DebugSnapshot {
         }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         // SHAW_KEYS=down,down,return presses keys in the Browser, through the normal key handling.
-        // SHAW_KEYS=roll:return,2,d,f,right,shift-tab,? presses them in the piano roll instead.
+        // SHAW_KEYS=roll:up,return,shift-d,right,shift-up,? presses them in the piano roll instead.
         if var keys = env["SHAW_KEYS"] {
             let roll = keys.hasPrefix("roll:")
             if roll { keys.removeFirst(5) }
