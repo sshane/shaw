@@ -135,9 +135,7 @@ struct CompTab: View {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.label(a?.colorIndex ?? 0)).frame(width: 7, height: 9)
             Text(a?.name ?? "?").font(.system(size: 11, weight: active ? .semibold : .regular))
             if isMain {
-                if (a?.name ?? "").lowercased() != "main" {
-                    Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(active ? Theme.textDim : Theme.textFaint)
-                }
+                Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(active ? Theme.textDim : Theme.textFaint)
             } else {
                 // Main always stays open, so you can always get back to the whole song.
                 Button { store.closeComposition(id) } label: {

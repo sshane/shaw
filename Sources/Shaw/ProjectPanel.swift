@@ -193,10 +193,7 @@ struct AssetRow: View {
             } else {
                 HStack(spacing: 4) {
                     Text(asset.name).font(Theme.small).foregroundStyle(Theme.text).lineLimit(1)
-                    // Tag the song's main composition, unless its name already says so.
-                    if isMain && asset.name.lowercased() != "main" {
-                        Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.textFaint)
-                    }
+                    if isMain { Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.textFaint) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
