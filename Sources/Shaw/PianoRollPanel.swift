@@ -214,7 +214,7 @@ struct PianoRollPanel: View {
                 if !p.instrument.isDrumKit {
                     Section("Sampler") {
                         Button(p.instrument.isSampler ? "Choose Another Sample…" : "Play a Sample File…") { store.chooseSampleFile(for: a.id) }
-                        if let file = p.instrument.sample, p.instrument.isSampler {
+                        if let file = p.instrument.sample, p.instrument.isSampler, !SampleLibrary.isBundled(file) {
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)]) }
                         }
                     }
@@ -228,7 +228,7 @@ struct PianoRollPanel: View {
                 }
                 Section("Synths") {
                     ForEach(InstrumentChoice.categoryOrder.filter { $0 != "My Instruments" && $0 != "Drums" }, id: \.self) { cat in
-                        let names = SynthPresets.names.filter { (SynthPresets.categories[$0] ?? "Synth") == cat }
+                        let names = InstrumentChoice.presetNames(in: cat)
                         if !names.isEmpty {
                             Menu(cat) {
                                 ForEach(names, id: \.self) { n in
@@ -499,7 +499,7 @@ struct Keyboard: View {
                     let voice = DrumKits.voice(atPitch: pitch)
                     var label = Text(voice?.name ?? "").foregroundStyle(Theme.text)
                     if let id = voice?.id, let file = files[id] {
-                        let there = FileManager.default.fileExists(atPath: file)
+                        let there = SampleLibrary.exists(file)
                         label = Text(Instrument.sampleName(file))
                             .foregroundStyle(lit ? Theme.text : (there ? Theme.accent : Theme.textFaint))
                             .strikethrough(!there)
@@ -555,7 +555,7 @@ struct Keyboard: View {
                 Button("Use a Sample File for \(v.name)…") { store.chooseSampleFile(for: assetID, voice: v.id) }
                 if let file = files[v.id] {
                     Button("Show \(Instrument.sampleName(file)) in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)])
+                        NSWorkspace.shared.activateFileViewerSelecting([SampleLibrary.fileURL(file)])
                     }
                     Divider()
                     Button("Use the Built-in \(v.name)") { store.setKitSample(nil, voice: v.id, pattern: assetID) }

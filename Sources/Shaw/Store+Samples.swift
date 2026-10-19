@@ -15,6 +15,16 @@ struct SampleFile: Identifiable, Equatable {
 extension Store {
     static let maxSamplesPerFolder = 20_000
 
+    /// Sample folders that come with Shaw (public domain recordings), listed above yours.
+    static let builtInSampleFolders = ["Percussion", "Acoustic Kit"].map { SampleLibrary.bundledPrefix + $0 }
+
+    var allSampleFolders: [String] { Store.builtInSampleFolders + sampleFolders }
+
+    /// A folder's name in the Browser.
+    static func sampleFolderName(_ folder: String) -> String {
+        SampleLibrary.isBundled(folder) ? String(folder.dropFirst(SampleLibrary.bundledPrefix.count)) : URL(fileURLWithPath: folder).lastPathComponent
+    }
+
     // MARK: Sample folders
 
     func addSampleFolderDialog() {
@@ -41,18 +51,22 @@ extension Store {
 
     /// Scan folders that haven't been scanned yet (the Samples tab calls this when it appears).
     func scanSampleFoldersIfNeeded() {
-        for f in sampleFolders where sampleIndex[f] == nil && !scanningFolders.contains(f) { rescanSamples(f) }
+        for f in allSampleFolders where sampleIndex[f] == nil && !scanningFolders.contains(f) { rescanSamples(f) }
     }
 
     /// Look for audio files again in one folder (or all of them), off the main thread.
     func rescanSamples(_ path: String? = nil) {
-        for folder in path.map({ [$0] }) ?? sampleFolders where !scanningFolders.contains(folder) {
+        for folder in path.map({ [$0] }) ?? allSampleFolders where !scanningFolders.contains(folder) {
             scanningFolders.insert(folder)
             DispatchQueue.global(qos: .userInitiated).async {
-                let files = Store.scanSampleFolder(URL(fileURLWithPath: folder))
+                var files = Store.scanSampleFolder(SampleLibrary.fileURL(folder))
+                // Shaw's own sounds are saved in projects the portable way, so they survive moving the app.
+                if SampleLibrary.isBundled(folder) {
+                    files = files.map { SampleFile(path: SampleLibrary.portablePath($0.path), name: $0.name, folder: $0.folder) }
+                }
                 DispatchQueue.main.async {
                     self.scanningFolders.remove(folder)
-                    guard self.sampleFolders.contains(folder) else { return }
+                    guard self.allSampleFolders.contains(folder) else { return }
                     self.sampleIndex[folder] = files
                 }
             }
@@ -105,7 +119,8 @@ extension Store {
 
     /// A sampler for `path`, or nil (with an alert) if it isn't readable audio.
     func samplerInstrument(_ path: String) -> Instrument? {
-        guard let ref = try? SampleLibrary.probe(URL(fileURLWithPath: path)) else {
+        let path = SampleLibrary.portablePath(path)
+        guard let ref = try? SampleLibrary.probe(SampleLibrary.fileURL(path)) else {
             showAlert("Couldn't use that file", "Shaw couldn't read \(URL(fileURLWithPath: path).lastPathComponent) as audio.")
             return nil
         }
@@ -166,8 +181,9 @@ extension Store {
     /// Play your own file for one sound of a drum kit (nil goes back to the built-in sound).
     func setKitSample(_ path: String?, voice: String, pattern id: AssetID) {
         guard case .notes(let pat)? = project.asset(id)?.content, pat.instrument.isDrumKit else { NSSound.beep(); return }
+        let path = path.map(SampleLibrary.portablePath)
         if let path {
-            guard (try? SampleLibrary.probe(URL(fileURLWithPath: path))) != nil else {
+            guard (try? SampleLibrary.probe(SampleLibrary.fileURL(path))) != nil else {
                 showAlert("Couldn't use that file", "Shaw couldn't read \(URL(fileURLWithPath: path).lastPathComponent) as audio.")
                 return
             }

@@ -23,33 +23,53 @@ struct SamplerInspector: View {
     var body: some View {
         let inst = pattern.instrument
         let file = inst.sample ?? ""
-        let missing = !FileManager.default.fileExists(atPath: file)
+        let missing = !SampleLibrary.exists(file)
+        // One of the real instruments that come with Shaw (a folder of recorded notes, not one file).
+        let recorded = RecordedInstruments.named(inst.preset)?.path == file
         let value: (String) -> Double = { id in
             let def = SamplerParams.defs.first { $0.id == id }
             return def.map { $0.clamp(inst.params[id] ?? $0.defaultValue) } ?? 0
         }
+        let kind = recorded ? "Real Instrument" : "Sampler"
         if compact {
-            SectionHeader(title: "Sound · Sampler")
+            SectionHeader(title: "Sound · \(kind)")
         } else {
-            InspectorTitle(icon: "waveform", kind: "Pattern · Sampler", name: asset.name, color: Theme.label(asset.colorIndex))
+            InspectorTitle(icon: recorded ? "music.note" : "waveform", kind: "Pattern · \(kind)", name: asset.name,
+                           color: Theme.label(asset.colorIndex))
         }
-        PropertyRow(label: "Sample") {
+        PropertyRow(label: recorded ? "Instrument" : "Sample") {
             Menu(inst.preset) {
-                Button("Choose Another File…") { store.chooseSampleFile(for: assetID) }
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)]) }
-                    .disabled(missing)
+                if recorded {
+                    ForEach(RecordedInstruments.names, id: \.self) { n in
+                        Button(n) {
+                            store.replaceInstrument(ofAsset: assetID, with: .synth(n))
+                            if !store.transport.playing { store.previewInstrument(.synth(n)) }
+                        }
+                    }
+                    Divider()
+                    Button("Play an Audio File Instead…") { store.chooseSampleFile(for: assetID) }
+                } else {
+                    Button("Choose Another File…") { store.chooseSampleFile(for: assetID) }
+                    if !SampleLibrary.isBundled(file) {
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file)]) }
+                            .disabled(missing)
+                    }
+                }
             }
             .menuStyle(.borderlessButton).fixedSize()
-            .help(file)
+            .help(recorded ? (RecordedInstruments.named(inst.preset)?.summary ?? "") : file)
         }
-        SampleWaveform(path: file, start: value("start"),
-                       loop: value("loop") > 0.5 && value("playmode") < 0.5 ? (value("loopstart"), value("loopend")) : nil,
-                       onStart: { v in store.live { $0.updateNotes(assetID) { $0.instrument.params["start"] = v } } },
-                       onEnd: { store.endGesture() })
-            .frame(height: 40)
-            .padding(.horizontal, 10).padding(.vertical, 4)
+        if !recorded {
+            SampleWaveform(path: file, start: value("start"),
+                           loop: value("loop") > 0.5 && value("playmode") < 0.5 ? (value("loopstart"), value("loopend")) : nil,
+                           onStart: { v in store.live { $0.updateNotes(assetID) { $0.instrument.params["start"] = v } } },
+                           onEnd: { store.endGesture() })
+                .frame(height: 40)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+        }
         if missing {
-            Text("Shaw can't find this file. Choose it again to hear this pattern.")
+            Text(recorded ? "Shaw can't find its recordings of this instrument. Reinstall Shaw to get them back."
+                          : "Shaw can't find this file. Choose it again to hear this pattern.")
                 .font(Theme.tiny).foregroundStyle(Theme.mute)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10).padding(.bottom, 4)
@@ -68,7 +88,8 @@ struct SamplerInspector: View {
                 ForEach(group.1, id: \.self) { pid in paramRow(pid, value(pid)) }
             }
         } else {
-            ForEach(SamplerParams.basic, id: \.self) { pid in paramRow(pid, value(pid)) }
+            // Where the file starts means nothing for a real instrument's many recordings.
+            ForEach(SamplerParams.basic.filter { !recorded || $0 != "start" }, id: \.self) { pid in paramRow(pid, value(pid)) }
         }
         Button(showAll ? "Show fewer sampler controls" : "Show all sampler controls (\(SamplerParams.defs.count - SamplerParams.basic.count) more)") {
             showAll.toggle()
@@ -157,7 +178,7 @@ struct KitSamplesSection: View {
         } else {
             ForEach(mine, id: \.id) { v in
                 let file = files[v.id] ?? ""
-                let there = FileManager.default.fileExists(atPath: file)
+                let there = SampleLibrary.exists(file)
                 PropertyRow(label: v.name) {
                     Text(Instrument.sampleName(file))
                         .font(Theme.small).foregroundStyle(there ? Theme.text : Theme.textFaint)

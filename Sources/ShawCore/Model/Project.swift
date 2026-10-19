@@ -447,8 +447,10 @@ public struct Instrument: Codable, Equatable {
         kitSamples = try c.decodeIfPresent([String: String].self, forKey: .kitSamples)
     }
 
+    /// A synth preset, or one of the real instruments that come with Shaw (they share one list of names).
     public static func preset(_ name: String) -> Instrument {
-        Instrument(preset: name, params: SynthPresets.params(for: name))
+        if let r = RecordedInstruments.named(name) { return RecordedInstruments.instrument(r) }
+        return Instrument(preset: name, params: SynthPresets.params(for: name))
     }
 
     public static func kit(_ id: String) -> Instrument {

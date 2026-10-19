@@ -162,8 +162,9 @@ public final class Sampler {
     public var isSilent: Bool { !voices.contains { $0.sample != nil } }
 
     /// Start a note. `offset` skips into the sample (seconds), for notes picked up mid-way after a seek.
-    /// Audio thread safe: no allocation.
-    public func noteOn(_ note: Int, velocity: Float, params p: [Double], sample: MipSample?, offset: Double = 0) {
+    /// `recordedAt` is the note a recorded instrument's recording was made at; then the Root Note
+    /// control transposes (C4 leaves it alone). Audio thread safe: no allocation.
+    public func noteOn(_ note: Int, velocity: Float, params p: [Double], sample: MipSample?, recordedAt: Int? = nil, offset: Double = 0) {
         guard let sample, sample.frames > 1 else { return }
         counter += 1
         let oneShot = p[SamplerParams.playmode] > 0.5
@@ -194,7 +195,8 @@ public final class Sampler {
         }
         if idx < 0 { idx = max(0, victim) }
 
-        let semis = Double(note) - p[SamplerParams.root].rounded() + p[SamplerParams.fine] / 100
+        let root = recordedAt.map { Double($0) + p[SamplerParams.root].rounded() - 60 } ?? p[SamplerParams.root].rounded()
+        let semis = Double(note) - root + p[SamplerParams.fine] / 100
         let rate = pow(2, semis / 12) * sample.sampleRate / sr
         // Read from a half-rate copy once the note is pitched up far enough to alias.
         var level = 0

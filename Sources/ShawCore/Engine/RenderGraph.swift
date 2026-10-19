@@ -523,8 +523,8 @@ final class SamplerNotePlayer: NotePlayer {
     let state: SamplerState
     let params: [Double]
     /// Nil while the file is still loading (or missing): notes are silent until it arrives.
-    let sample: MipSample?
-    init(state: SamplerState, params: [Double], sample: MipSample?) {
+    let sample: SamplerSource?
+    init(state: SamplerState, params: [Double], sample: SamplerSource?) {
         self.state = state
         self.params = params
         self.sample = sample
@@ -534,11 +534,14 @@ final class SamplerNotePlayer: NotePlayer {
         get { state.expected }
         set { state.expected = newValue }
     }
-    func noteOn(_ pitch: Int, velocity: Float) { state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: sample) }
+    func noteOn(_ pitch: Int, velocity: Float) {
+        guard let z = sample?.pick(pitch) else { return }
+        state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: z.0, recordedAt: z.1)
+    }
     func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double) {
         // One-Shots are hits: like drums, they don't restart halfway through after a jump.
-        guard params[SamplerParams.playmode] < 0.5 else { return }
-        state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: sample, offset: elapsedSeconds)
+        guard params[SamplerParams.playmode] < 0.5, let z = sample?.pick(pitch) else { return }
+        state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: z.0, recordedAt: z.1, offset: elapsedSeconds)
     }
     func noteOff(_ pitch: Int) { state.sampler.noteOff(pitch) }
     func allNotesOff() { state.sampler.allNotesOff() }

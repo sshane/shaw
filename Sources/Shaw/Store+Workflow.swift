@@ -23,6 +23,7 @@ enum InstrumentChoice: Equatable, Identifiable {
     var category: String {
         switch self {
         case .synth(let p):
+            if RecordedInstruments.named(p) != nil { return RecordedInstruments.category }
             if !SynthPresets.isBuiltIn(p), UserInstruments.named(p) != nil { return "My Instruments" }
             return SynthPresets.categories[p] ?? "Synth"
         case .kit: return "Drums"
@@ -31,7 +32,7 @@ enum InstrumentChoice: Equatable, Identifiable {
 
     var icon: String {
         switch self {
-        case .synth: return "pianokeys"
+        case .synth(let p): return RecordedInstruments.named(p) != nil ? "music.note" : "pianokeys"
         case .kit: return "circle.grid.3x3.fill"
         }
     }
@@ -46,11 +47,18 @@ enum InstrumentChoice: Equatable, Identifiable {
     }
 
     static var all: [InstrumentChoice] {
-        UserInstruments.items.map { .synth($0.name) } + DrumKits.kits.map { .kit($0.id) } + SynthPresets.names.map { .synth($0) }
+        UserInstruments.items.map { .synth($0.name) } + DrumKits.kits.map { .kit($0.id) }
+            + RecordedInstruments.names.map { .synth($0) } + SynthPresets.names.map { .synth($0) }
+    }
+
+    /// The synth presets in a category, or the real instruments (for sound menus).
+    static func presetNames(in category: String) -> [String] {
+        if category == RecordedInstruments.category { return RecordedInstruments.names }
+        return SynthPresets.names.filter { (SynthPresets.categories[$0] ?? "Synth") == category }
     }
 
     /// Display order of categories in the Instruments tab.
-    static let categoryOrder = ["My Instruments", "Drums", "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Future Bass", "Dubstep & Bass House", "Hyperpop", "Chiptune", "FX", "Synth"]
+    static let categoryOrder = ["My Instruments", "Drums", RecordedInstruments.category, "Bass", "Keys", "Pluck", "Lead", "Pad", "Strings & Brass", "Future Bass", "Dubstep & Bass House", "Hyperpop", "Chiptune", "FX", "Synth"]
 }
 
 extension Store {
@@ -69,7 +77,17 @@ extension Store {
     /// Short audition when you click an instrument in the browser: a little beat or phrase that
     /// shows off what the sound is for, through the preset's own effects.
     func previewInstrument(_ choice: InstrumentChoice) {
+        pendingPreview = nil
         switch choice {
+        case .synth(let p) where RecordedInstruments.named(p) != nil:
+            let inst = Instrument.preset(p)
+            // The first listen loads the recordings; it plays as soon as they arrive.
+            if let path = inst.sample, SampleLibrary.shared.samplerSource(for: path) == nil {
+                pendingPreview = (path, choice)
+                return
+            }
+            let (notes, bpm) = Store.phrase(forRecorded: p)
+            engine.playPhrase(notes, instrument: inst, bpm: bpm)
         case .synth(let p):
             let (notes, bpm) = Store.phrase(forPreset: p)
             engine.playPhrase(notes, instrument: .preset(p), effects: SynthPresets.effects(for: p), bpm: bpm)
@@ -87,6 +105,14 @@ extension Store {
             for s in sixteenths { n.append(PhraseNote(s / 4, 0.25, d(sound), vel)) }
         }
         switch kit {
+        case "acoustic":
+            // A pop-rock groove: kick on 1 and the "and" of 3, snare on 2 and 4, eighth hats, a crash to start.
+            hit("kick", [0, 8, 10], 0.9)
+            hit("snare", [4, 12], 0.9)
+            hit("chat", [0, 2, 4, 6, 8, 10, 12], 0.55)
+            hit("ohat", [14], 0.5)
+            hit("crash", [0], 0.7)
+            return (n, 104)
         case "house", "techno":
             // Four on the floor, clap on 2 and 4, open hats on the offbeats.
             hit("kick", [0, 4, 8, 12], 0.95)
@@ -119,6 +145,20 @@ extension Store {
             for i in 0..<6 { n.append(PhraseNote((12 + Double(i) * 0.667) / 4, 0.1, d("chat"), 0.35 + Double(i) * 0.06)) }
             hit("ohat", [drill ? 9 : 14], 0.5)
             return (n, drill ? 142 : 140)
+        }
+    }
+
+    /// A real instrument's phrase: chords for pianos and the organ, an arpeggio for mallets and plucks,
+    /// and a melody for the sax.
+    static func phrase(forRecorded name: String) -> ([PhraseNote], Double) {
+        switch RecordedInstruments.named(name)?.style ?? .chords {
+        case .chords: return phrase(forPreset: "Keys")
+        case .arpeggio: return phrase(forPreset: "Electric Piano")
+        case .melody:
+            // The lead hook, down an octave where a tenor sax sits.
+            let hook: [(Double, Double, Int)] = [(0, 0.5, 57), (0.5, 0.5, 60), (1, 0.75, 64), (1.75, 0.25, 62),
+                                                 (2, 0.5, 60), (2.5, 0.5, 59), (3, 1, 57)]
+            return (hook.map { PhraseNote($0.0, $0.1, $0.2, 0.85) }, 110)
         }
     }
 

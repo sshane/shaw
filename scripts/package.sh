@@ -9,13 +9,14 @@ fi
 swift build -c release --arch arm64 --arch x86_64
 BIN=.build/out/Products/Release/Shaw
 [ -f "$BIN" ] || BIN=.build/apple/Products/Release/Shaw
-STAGE=build/package
+STAGE=build/package.noindex
 APP="$STAGE/Shaw.app"
 rm -rf "$STAGE" build/Shaw.zip
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Shaw"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp -R Resources/Sounds "$APP/Contents/Resources/"
 codesign --force --deep --sign - "$APP"
 cat > "$STAGE/How to open Shaw.txt" <<'TXT'
 Shaw is a music app for Macs running macOS 14 (Sonoma) or newer. It works on Apple Silicon and Intel.

@@ -102,7 +102,8 @@ The first time you open Shaw, a short three-page guide walks through what's diff
 
 - **Shaw Synth**, a polyphonic synth with up to four oscillators, a sub, noise, supersaw-style unison, FM with its own envelope, analog drift, four filter types, envelopes, a tempo-synced LFO with six shapes, glide, and drive. It comes with 55 presets, including FM electric pianos and bells, plus Future Bass, Dubstep & Bass House, and Hyperpop sounds. Presets bring their own effects, like a sidechain pump and reverb on Future Chords.
 - **Instrument Editor and My Instruments.** Click Edit Instrument to see a sound as cards you can stack: sine, triangle, saw, and square waves, plus pictures of the filter and envelope. Change a preset and save it as your own, or click + under My Instruments to build one from scratch. Your instruments show up in the Browser in every project.
-- **Seven drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi, Techno, Electro, and Drill. Shaw generates every sound in code, so there are no samples to download or license.
+- **Eight drum kits**: Trap 808, House 909, Boom Bap, Lo-Fi, Techno, Electro, Drill, and a recorded Acoustic Kit. Shaw generates the electronic kits in code.
+- **Ten real instruments**, recorded a few notes apart so each note sounds natural: Grand Piano, Upright Piano, FM Piano, Vibraphone, Concert Marimba, Kenyan Kalimba, Glockenspiel, Harp, Tenor Sax, and Pipe Organ. The Samples tab also has 14 hand percussion hits, like congas, cajon, shaker, and tambourine. They come from the [Versilian Community Sample Library](https://github.com/sgossner/VCSL), which is public domain, so you can use them in anything. See `Resources/Sounds/CREDITS.txt`.
 - **14 effects**: Reverb, Delay, Chorus, Phaser, Auto Pan, Sidechain Pump, Compressor, Limiter, EQ Three, Auto Filter, Saturator, Bitcrusher, Volume, and Utility.
 - Audio import (drag files in from Finder), WAV export, autosave, and projects saved as `.shaw` files.
 

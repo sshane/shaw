@@ -421,7 +421,7 @@ extension View {
     /// Drag an audio file the way Finder does, so everything that takes files from Finder takes it too.
     func fileDraggable(_ path: String, preview: String) -> some View {
         onDrag {
-            NSItemProvider(object: URL(fileURLWithPath: path) as NSURL)
+            NSItemProvider(object: SampleLibrary.fileURL(path) as NSURL)
         } preview: {
             Text(preview)
                 .font(Theme.small)

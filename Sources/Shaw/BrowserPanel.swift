@@ -177,6 +177,7 @@ struct BrowserPanel: View {
                 let base = UserInstruments.named(p)?.basedOn
                 return base.map { "Your instrument · from \($0)" } ?? "Your instrument · built from scratch"
             }
+            if let r = RecordedInstruments.named(p) { return r.summary }
             return "Shaw Synth · \(item.category)"
         }
     }
@@ -184,6 +185,7 @@ struct BrowserPanel: View {
     // MARK: Samples
 
     @ViewBuilder private var samples: some View {
+        ForEach(Store.builtInSampleFolders, id: \.self) { folder in sampleFolder(folder) }
         if store.sampleFolders.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Use your own sounds").font(Theme.header).foregroundStyle(Theme.text)
@@ -210,12 +212,12 @@ struct BrowserPanel: View {
         HStack(spacing: 4) {
             Image(systemName: open ? "chevron.down" : "chevron.right")
                 .font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.textFaint).frame(width: 10)
-            Text(URL(fileURLWithPath: folder).lastPathComponent.uppercased())
+            Text(Store.sampleFolderName(folder).uppercased())
                 .font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.textFaint).lineLimit(1)
             Spacer()
             if store.scanningFolders.contains(folder) {
                 ProgressView().controlSize(.mini)
-            } else if !FileManager.default.fileExists(atPath: folder) {
+            } else if !SampleLibrary.exists(folder) {
                 Text("Missing").font(Theme.tiny).foregroundStyle(Theme.textFaint)
             }
         }
@@ -225,12 +227,14 @@ struct BrowserPanel: View {
             if collapsedFolders.contains(folder) { collapsedFolders.remove(folder) } else { collapsedFolders.insert(folder) }
         }
         .contextMenu {
-            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder)]) }
-            Button("Look for New Files") { store.rescanSamples(folder) }
-            Divider()
-            Button("Remove from Browser") { store.removeSampleFolder(folder) }
+            if !SampleLibrary.isBundled(folder) {
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder)]) }
+                Button("Look for New Files") { store.rescanSamples(folder) }
+                Divider()
+                Button("Remove from Browser") { store.removeSampleFolder(folder) }
+            }
         }
-        .help(folder)
+        .help(SampleLibrary.isBundled(folder) ? "Comes with Shaw. Public domain recordings, free to use in anything." : folder)
         if open {
             if files.isEmpty, store.sampleIndex[folder] != nil {
                 Text(search.isEmpty ? "No audio files in this folder." : "No matches.")
@@ -307,7 +311,7 @@ struct BrowserPanel: View {
                 Entry(id: d.id, select: {}, activate: { if let host { store.addEffect(d.id, to: host) } })
             }
         case .samples:
-            return store.sampleFolders.flatMap(visibleFiles).map { file in
+            return store.allSampleFolders.flatMap(visibleFiles).map { file in
                 Entry(id: file.id, select: { store.previewSampleFile(file.path) },
                       activate: { store.stopSamplePreview(); store.addSampler(file.path) })
             }

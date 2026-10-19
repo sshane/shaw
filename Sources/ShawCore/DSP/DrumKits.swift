@@ -43,7 +43,7 @@ public struct DrumKitInfo: Identifiable {
     public let summary: String
 }
 
-/// Synthesized drum kits. Nothing is downloaded, so there are no licensing questions.
+/// Drum kits: synthesized in code, except the Acoustic Kit, which plays public domain recordings.
 public enum DrumKits {
     public static let defaultKit = "trap"
 
@@ -68,6 +68,15 @@ public enum DrumKits {
         DrumKitInfo(id: "techno", name: "Techno", summary: "Hard, distorted industrial kit"),
         DrumKitInfo(id: "electro", name: "Electro", summary: "Dry, snappy drum machine with a tight kick"),
         DrumKitInfo(id: "drill", name: "Drill", summary: "Deep sliding 808 kick, sharp snare, and crisp hats"),
+        DrumKitInfo(id: "acoustic", name: "Acoustic Kit", summary: "A real drum kit, recorded: kick, snare, toms, hats, and a crash"),
+    ]
+
+    /// Kits played from recordings that come with Shaw instead of synthesized: each sound's file in
+    /// Resources/Sounds. The recordings are public domain (see Resources/Sounds/CREDITS.txt).
+    public static let recordedKits: [String: [String: String]] = [
+        "acoustic": ["kick": "Kick", "snare": "Snare", "clap": "Clap", "chat": "Closed Hat", "ohat": "Open Hat",
+                     "tomlo": "Low Tom", "tomhi": "High Tom", "rim": "Rim", "perc": "Cowbell", "crash": "Crash"]
+            .mapValues { SampleLibrary.bundledPrefix + "Acoustic Kit/\($0).caf" },
     ]
 
     /// Lowest pitch of a kit in the piano roll: C1 is the kick, then one sound per semitone.
@@ -167,6 +176,7 @@ public enum DrumKits {
     static let kickLoudness = -8.5
 
     static func generate(kit: String, sampleRate sr: Double) -> [String: SampleData] {
+        if let files = recordedKits[kit] { return loadRecorded(files, sampleRate: sr) }
         var kick: KickSpec, snare: SnareSpec, clap: ClapSpec, hat: HatSpec, tom: TomSpec
         var crashDecay = 0.42
         var mix: [String: Double] = [:]
@@ -259,6 +269,39 @@ public enum DrumKits {
         for (id, x, hp) in raw {
             let target = kickLoudness + (mix[id] ?? balance[id] ?? 0)
             out[id] = SampleData(left: finish(post(x), loudness: target, highpass: hp, sr), sampleRate: sr)
+        }
+        return out
+    }
+
+    /// A recorded kit, converted to the engine's sample rate and finished like the synthesized
+    /// kits: each sound at the loudness the kits use for it (so switching kits keeps the mix), and a
+    /// fade to exactly zero at the end. Peaks are limited by at most 4 dB, so a very peaky hit
+    /// (a real kick or clap) can end up a little quieter rather than squashed.
+    static func loadRecorded(_ files: [String: String], sampleRate sr: Double) -> [String: SampleData] {
+        var out: [String: SampleData] = [:]
+        for (id, path) in files {
+            guard let d = try? SampleLibrary.decode(SampleLibrary.fileURL(path), sampleRate: sr) else { continue }
+            var l = Array(UnsafeBufferPointer(start: d.l, count: d.frames))
+            var r = d.channels > 1 ? Array(UnsafeBufferPointer(start: d.r, count: d.frames)) : nil
+            let cap: Float = 0.944
+            // Each side measured on its own: a wide stereo hat partly cancels when the sides are summed.
+            let level = max(loudness(l, sr), r.map { loudness($0, sr) } ?? -.infinity)
+            var g = Float(pow(10, (kickLoudness + (balance[id] ?? 0) - level) / 20))
+            let pk = max(peak(l), r.map(peak) ?? 0)
+            g = min(g, cap * 1.585 / pk)
+            l = l.map { $0 * g }
+            r = r?.map { $0 * g }
+            if pk * g > cap {
+                l = limit(l, ceiling: cap, sr)
+                r = r.map { limit($0, ceiling: cap, sr) }
+            }
+            let fade = min(l.count, Int(0.004 * sr))
+            for k in 0..<fade {
+                let w = Float(0.5 + 0.5 * cos(Double.pi * Double(k + 1) / Double(fade)))
+                l[l.count - fade + k] *= w
+                r?[l.count - fade + k] *= w
+            }
+            out[id] = SampleData(left: l, right: r, sampleRate: sr)
         }
         return out
     }

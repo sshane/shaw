@@ -1,0 +1,240 @@
+Shaw bundled samples: credits and sources
+==========================================
+
+All recordings in this folder come from the Versilian Community Sample Library (VCSL)
+by Versilian Studios LLC and its contributors, released into the public domain under
+Creative Commons CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+No rights are reserved; attribution is not required but is given here with thanks.
+
+  VCSL:              https://github.com/sgossner/VCSL
+  Versilian Studios: https://versilian-studios.com/
+
+The Pipe Organ and the Knight upright piano were sampled by Simon Dalzell of Ivy Audio
+(organ: Winter 2015-16; upright: for the VSCO 2 Pro sample set).
+
+Processing for Shaw: leading silence trimmed, tails trimmed with a short fade, one gain
+per instrument (drums and percussion normalized per file), converted to 16-bit Apple
+Lossless CAF at the original sample rate. The Kalimba notes were retuned by resampling
+(by -36 to +36 cents) to equal temperament, because the source instrument uses its own
+traditional tuning. Instrument files are named by the MIDI note of the recorded pitch.
+
+Source paths are relative to the root of the VCSL repository (branch master).
+
+[Instruments/FM Piano]
+024.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C1_vl2.wav
+028.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E1_vl2.wav
+032.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#1_vl2.wav
+036.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C2_vl2.wav
+040.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E2_vl2.wav
+044.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#2_vl2.wav
+048.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C3_vl2.wav
+052.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E3_vl2.wav
+056.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#3_vl2.wav
+060.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C4_vl2.wav
+064.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E4_vl2.wav
+068.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#4_vl2.wav
+072.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C5_vl2.wav
+076.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E5_vl2.wav
+080.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#5_vl2.wav
+084.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C6_vl2.wav
+088.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_E6_vl2.wav
+092.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_G#6_vl2.wav
+096.caf            <- Electrophones/TX81Z/FM Piano/FMPiano_C7_vl2.wav
+
+[Instruments/Glockenspiel]
+079.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G4_01.wav
+084.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C5_01.wav
+091.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G5_01.wav
+096.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C6_01.wav
+103.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_G6_01.wav
+108.caf            <- Idiophones/Struck Idiophones/Glockenspiel/glock_medium_C7_01.wav
+
+[Instruments/Grand Piano]
+021.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A#-1_v3_rr1_Player.wav
+024.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C0_v3_rr1_Player.wav
+027.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_D#0_v3_rr1_Player.wav
+030.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#0_v3_rr1_Player.wav
+033.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A0_v3_rr1_Player.wav
+036.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C1_v3_rr1_Player.wav
+039.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_D#1_v3_rr1_Player.wav
+042.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#1_v3_rr1_Player.wav
+045.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A1_v3_rr1_Player.wav
+048.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C2_v3_rr1_Player.wav
+052.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_E2_v3_rr1_Player.wav
+054.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#2_v3_rr1_Player.wav
+058.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A#2_v3_rr1_Player.wav
+060.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C3_v3_rr1_Player.wav
+064.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_E3_v3_rr1_Player.wav
+066.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#3_v3_rr1_Player.wav
+070.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A#3_v3_rr1_Player.wav
+072.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C4_v3_rr1_Player.wav
+076.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_E4_v3_rr1_Player.wav
+078.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#4_v3_rr1_Player.wav
+082.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A#4_v3_rr1_Player.wav
+084.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C5_v3_rr1_Player.wav
+087.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_D#5_v3_rr1_Player.wav
+090.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#5_v3_rr1_Player.wav
+093.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A5_v3_rr1_Player.wav
+096.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C6_v3_rr1_Player.wav
+099.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_D#6_v3_rr1_Player.wav
+102.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#6_v3_rr1_Player.wav
+105.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_A6_v3_rr1_Player.wav
+108.caf            <- Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C7_v3_rr1_Player.wav
+
+[Instruments/Harp]
+028.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_E1_f1.wav
+031.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_G1_f1.wav
+035.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_B1_f1.wav
+038.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_D2_f1.wav
+041.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_F2_f1.wav
+045.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_A2_f1.wav
+048.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_C3_f2.wav
+052.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_E3_f1.wav
+055.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_G3_f1.wav
+059.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_B3_f1.wav
+062.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_D4_f1.wav
+065.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_F4_f1.wav
+069.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_A4_f1.wav
+072.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_C5_f1.wav
+076.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_E5_f1.wav
+079.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_G5_f1.wav
+083.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_B5_f1.wav
+086.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_D6_f1.wav
+089.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_F6_f1.wav
+093.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_A6_f1.wav
+095.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_B6_f1.wav
+098.caf            <- Chordophones/Composite Chordophones/Concert Harp/KSHarp_D7_f1.wav
+
+[Instruments/Kalimba]
+059.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_B2_k8_vl3_rr2.wav  (retuned)
+061.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_C#3_k7_vl3_rr2.wav  (retuned)
+063.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_D#3_k6_vl3_rr2.wav  (retuned)
+066.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_F#3_k10_vl3_rr2.wav  (retuned)
+068.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_G#3_k4_vl3_rr2.wav  (retuned)
+071.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_B3_k12_vl3_rr2.wav  (retuned)
+073.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_C#4_k2_vl3_rr2.wav  (retuned)
+075.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_D#4_k13_vl3_rr2.wav  (retuned)
+078.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_F#4_k14_vl3_rr2.wav  (retuned)
+081.caf            <- Idiophones/Plucked Idiophones/Kalimba, Kenya/Mbira6_Normal_MainSpirit_A4_k1_vl3_rr2.wav  (retuned)
+
+[Instruments/Marimba]
+041.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F1_med_01.wav
+048.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C2_med_01.wav
+055.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_G2_med_01.wav
+059.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_B2_med_01.wav
+065.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F3_med_01.wav
+072.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C4_med_01.wav
+079.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_G4_med_01.wav
+083.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_B4_med_01.wav
+089.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_F5_med_01.wav
+096.caf            <- Idiophones/Struck Idiophones/Marimba/Marimba_hit_Outrigger_C6_med_01.wav
+
+[Instruments/Pipe Organ]
+036.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C1.wav
+039.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_D#1.wav
+042.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#1.wav
+045.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_A1.wav
+048.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C2.wav
+051.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_D#2.wav
+054.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#2.wav
+057.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_A2.wav
+060.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C3.wav
+063.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_D#3.wav
+066.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#3.wav
+069.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_A3.wav
+072.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C4.wav
+075.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_D#4.wav
+078.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#4.wav
+081.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_A4.wav
+084.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C5.wav
+087.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_D#5.wav
+090.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_F#5.wav
+093.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_A5.wav
+096.caf            <- Aerophones/Edge-blown Aerophones/Pipe Organ/Loud/Rode_Man3Open_C6.wav
+
+[Instruments/Tenor Sax]
+044.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_G#1_vl2_rr1.wav
+048.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_C2_vl2_rr1.wav
+052.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_E2_vl2_rr1.wav
+056.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_G#2_vl2_rr1.wav
+058.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_A#2_vl2_rr1.wav
+062.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_D3_vl2_rr1.wav
+064.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_E3_vl2_rr1.wav
+068.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_G#3_vl2_rr1.wav
+072.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_C4_vl2_rr1.wav
+076.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_E4_vl2_rr1.wav
+080.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_G#4_vl2_rr1.wav
+084.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_C5_vl2_rr1.wav
+088.caf            <- Aerophones/Reed Aerophones/Tenor Saxophone/Non-Vibrato/BrettTenor_NV_Main_E5_vl2_rr1.wav
+
+[Instruments/Upright Piano]
+021.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A-1.wav
+025.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#0.wav
+027.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#0.wav
+031.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G0.wav
+033.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A0.wav
+037.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#1.wav
+039.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#1.wav
+043.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G1.wav
+045.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A1.wav
+049.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#2.wav
+051.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#2.wav
+055.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G2.wav
+057.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A2.wav
+061.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#3.wav
+063.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#3.wav
+067.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G3.wav
+069.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A3.wav
+073.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#4.wav
+075.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#4.wav
+079.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G4.wav
+081.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A4.wav
+085.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#5.wav
+087.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#5.wav
+091.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G5.wav
+093.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A5.wav
+097.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_C#6.wav
+099.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_D#6.wav
+103.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_G6.wav
+105.caf            <- Chordophones/Zithers/Upright Piano, Knight/Sustains/Player_vl2_rr1_A6.wav
+
+[Instruments/Vibraphone]
+053.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_F2_v2_rr1_Main.wav
+057.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_A2_v2_rr1_Main.wav
+060.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_C3_v2_rr1_Main.wav
+064.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_E3_v2_rr1_Main.wav
+067.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_G3_v2_rr1_Main.wav
+071.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_B3_v2_rr1_Main.wav
+074.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_D4_v2_rr1_Main.wav
+077.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_F4_v2_rr1_Main.wav
+081.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_A4_v2_rr1_Main.wav
+084.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_C5_v2_rr1_Main.wav
+088.caf            <- Idiophones/Struck Idiophones/Vibraphone/Hard Mallets/Vibes_hard_E5_v2_rr1_Main.wav
+
+[Acoustic Kit]
+Closed Hat.caf     <- Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitC_v3_rr1_Mid.wav
+Clap.caf           <- Idiophones/Struck Idiophones/Claps/Clap_rr1.wav
+Crash.caf          <- Idiophones/Struck Idiophones/Suspended Cymbal 1/susCymb1_hit_stick_f1.wav
+Kick.caf           <- Membranophones/Struck Membranophones/Bass Drum 1/BDrumNew_hit_v5_rr1_Sum.wav
+Open Hat.caf       <- Idiophones/Struck Idiophones/Hi-Hat Cymbal/HiHat_HitO_rr1_Mid.wav
+Cowbell.caf        <- Idiophones/Struck Idiophones/Cowbells/Cowbell1_Normal_v3_rr1_Mid.wav
+Rim.caf            <- Membranophones/Struck Membranophones/Snare Drum, Modern 2/Snare3M_Xstick_v2_rr1_Mid.wav
+Snare.caf          <- Membranophones/Struck Membranophones/Snare Drum, Modern 1/Snare2_HitSN_v7_rr1_Mid.wav
+High Tom.caf       <- Membranophones/Struck Membranophones/Tom 1/Stick/TomH_HitS_v3_rr1_Mid.wav
+Low Tom.caf        <- Membranophones/Struck Membranophones/Tom 2/Stick/TomL_HitS_v3_rr1_Mid.wav
+
+[Percussion]
+Agogo High.caf     <- Idiophones/Struck Idiophones/Agogo Bells/Agogo_High_v2_rr1_Mid.wav
+Agogo Low.caf      <- Idiophones/Struck Idiophones/Agogo Bells/Agogo_Low_v2_rr1_Mid.wav
+Bongo High.caf     <- Membranophones/Struck Membranophones/Bongos/BongoH_Hit1_v2_rr1_Mid.wav
+Bongo Low.caf      <- Membranophones/Struck Membranophones/Bongos/BongoL_Hit1_v2_rr1_Mid.wav
+Cajon Bass.caf     <- Idiophones/Struck Idiophones/Cajon/Cajon_hit2_f_rr1.wav
+Cajon Slap.caf     <- Idiophones/Struck Idiophones/Cajon/Cajon_hit1_f_rr1.wav
+Claves.caf         <- Idiophones/Struck Idiophones/Claves/Claves2_Hit_v2_rr1_Mid.wav
+Conga Muted.caf    <- Membranophones/Struck Membranophones/Conga/Conga_HitFM_v2_rr1_Sum.wav
+Conga Open.caf     <- Membranophones/Struck Membranophones/Conga/Conga_HitN_v3_rr1_Sum.wav
+Cowbell.caf        <- Idiophones/Struck Idiophones/Cowbells/Cowbell2_Normal_v3_rr1_Mid.wav
+Shaker.caf         <- Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDouble_Down_rr1.wav
+Tambourine.caf     <- Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v2_rr1_Mid.wav
+Triangle.caf       <- Idiophones/Struck Idiophones/Triangles/Triangle6_Hit_v2_rr1_Mid.wav
+Woodblock.caf      <- Idiophones/Struck Idiophones/Woodblock/wood_click_f_rr1.wav

@@ -116,6 +116,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var scanningFolders: Set<String> = []
     /// Bumped whenever an audio file finishes loading, so waveforms redraw.
     var samplesLoaded = 0
+    /// A real instrument clicked in the Browser before its recordings loaded: it plays when they arrive.
+    @ObservationIgnored var pendingPreview: (path: String, choice: InstrumentChoice)?
     /// The latest browser preview request; older ones that finish loading late stay quiet.
     @ObservationIgnored var samplePreviewToken = 0
     /// The timeline clip whose pattern is open in an editor (drives looping and variations).
@@ -223,9 +225,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         if !self.isolated { sampleFolders = UserDefaults.standard.stringArray(forKey: Store.sampleFoldersKey) ?? [] }
         // SHAW_SILENT keeps a snapshot run from making sound (it still renders previews, just to nowhere).
         if !headless && !(self.isolated && ProcessInfo.processInfo.environment["SHAW_SILENT"] != nil) { engine.start() }
-        SampleLibrary.shared.onLoad = { [weak self] _ in
-            self?.samplesLoaded += 1
-            self?.refreshEngine()
+        SampleLibrary.shared.onLoad = { [weak self] path in
+            guard let self else { return }
+            self.samplesLoaded += 1
+            self.refreshEngine()
+            if let p = self.pendingPreview, p.path == path { self.previewInstrument(p.choice) }
         }
         refreshEngine()
         syncLoop()

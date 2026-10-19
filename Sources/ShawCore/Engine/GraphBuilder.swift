@@ -127,7 +127,7 @@ struct GraphBuilder {
             } else if let file = inst.sample {
                 let player = SamplerNotePlayer(state: state("\(sp):sampler") { SamplerState(sampleRate: sr) },
                                                params: SamplerParams.defs.resolve(inst.params),
-                                               sample: samples.mipmapped(for: file))
+                                               sample: samples.samplerSource(for: file))
                 source = NoteSourceNode(pattern: p, player: player)
             } else {
                 let player = SynthNotePlayer(state: state("\(sp):notes") { NoteState(sampleRate: sr) },

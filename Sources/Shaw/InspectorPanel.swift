@@ -542,7 +542,7 @@ struct InstrumentMenu: View {
                 }
             }
             ForEach(InstrumentChoice.categoryOrder.filter { $0 != "My Instruments" && $0 != "Drums" }, id: \.self) { cat in
-                let names = SynthPresets.names.filter { (SynthPresets.categories[$0] ?? "Synth") == cat }
+                let names = InstrumentChoice.presetNames(in: cat)
                 if !names.isEmpty {
                     Menu(cat) { ForEach(names, id: \.self) { n in Button(n) { pick(n) } } }
                 }
