@@ -86,25 +86,27 @@ final class RollCursorTests: XCTestCase {
         // C4, E4, G4, and C5, one beat each.
         set(s, id, [Note(pitch: 60, start: 0, length: 1), Note(pitch: 64, start: 1, length: 1),
                     Note(pitch: 67, start: 2, length: 1), Note(pitch: 72, start: 3, length: 1)])
-        s.rollCursor = 2
-        s.rollCursorPitch = 60 // the bottom right of the G
+        s.rollCursor = 3
+        s.rollCursorPitch = 60 // the bottom right, on the line where the C5 starts
         s.extendBox(rows: 7)
-        XCTAssertEqual(picked(s, id), [67])
+        XCTAssertEqual(picked(s, id), [], "a box with no width takes the notes crossing the line: none below C5 here")
+        s.extendBox(beats: -1)
+        XCTAssertEqual(picked(s, id), [67], "back to beat 2: just the G, nothing past where it started")
         s.extendBox(beats: -1)
         XCTAssertEqual(picked(s, id), [64, 67])
         s.extendBox(rows: -7)
         XCTAssertEqual(picked(s, id), [], "back down to the row it started on")
         s.extendBox(rows: 12)
-        XCTAssertEqual(picked(s, id), [64, 67])
+        XCTAssertEqual(picked(s, id), [64, 67], "the C5 starts on the line where the box started, so it stays out")
         XCTAssertEqual(cursor(s), [1, 72], "the cursor is the corner that moves")
         XCTAssertNotNil(s.activeBox)
         // With notes selected, the arrows move them, and that ends the box.
         s.moveSelectedNotes(semitones: 1)
         XCTAssertEqual(notes(s, id).map(\.pitch), [60, 65, 68, 72])
         XCTAssertNil(s.activeBox)
-        s.extendBox(beats: 1)
-        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note")
         s.extendBox(rows: 3)
+        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note; with no width it takes what crosses its line")
+        s.extendBox(beats: 2)
         XCTAssertEqual(picked(s, id), [65, 68])
     }
 

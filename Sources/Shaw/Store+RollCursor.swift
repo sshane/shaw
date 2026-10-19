@@ -1,7 +1,8 @@
 import Foundation
 import ShawCore
 
-/// A box drawn with ⇧ and the arrow keys, from the grid cell where it started to the one the cursor is on.
+/// A box drawn with ⇧ and the arrow keys: across time, from the line where the cursor started to the
+/// line it's on now (like selecting text); up and down, every row from the one it started on to this one.
 struct RollBox: Equatable {
     var anchorBeat: Double
     var anchorPitch: Int
@@ -214,13 +215,14 @@ extension Store {
         return b
     }
 
-    /// The beats and rows a box covers. It covers whole grid cells, so it's never empty.
+    /// The beats and rows a box covers. With no width (only ↑ and ↓ so far), it's the cursor's line.
     func boxBounds(_ b: RollBox) -> (start: Double, end: Double, low: Int, high: Int) {
-        (min(b.anchorBeat, b.headBeat), max(b.anchorBeat, b.headBeat) + rollStep,
+        (min(b.anchorBeat, b.headBeat), max(b.anchorBeat, b.headBeat),
          min(b.anchorPitch, b.headPitch), max(b.anchorPitch, b.headPitch))
     }
 
-    /// ⇧ and the arrow keys: stretch a box from where the cursor was and select every note it touches.
+    /// ⇧ and the arrow keys: stretch a box from where the cursor was and select every note in it.
+    /// A box with no width selects the notes crossing the cursor's line (a chord, say).
     func extendBox(beats: Double = 0, rows: Int = 0) {
         guard let (_, p) = openPattern else { return }
         let c = cursorSpot(p)
@@ -228,8 +230,11 @@ extension Store {
         box.headBeat = min(max(0, box.headBeat + beats), max(p.length, box.headBeat))
         box.headPitch = RowLayout.of(p.instrument).clamp(box.headPitch + rows)
         let r = boxBounds(box)
-        box.picked = Set(p.notes.filter {
-            $0.pitch >= r.low && $0.pitch <= r.high && $0.start < r.end - Store.eps && $0.end > r.start + Store.eps
+        let line = r.end - r.start < Store.eps
+        box.picked = Set(p.notes.filter { n in
+            guard n.pitch >= r.low && n.pitch <= r.high else { return false }
+            return line ? n.start < r.start + Store.eps && n.end > r.start + Store.eps
+                        : n.start < r.end - Store.eps && n.end > r.start + Store.eps
         }.map(\.id))
         selectedNotes = box.picked
         rollBox = box

@@ -444,7 +444,7 @@ struct PianoRollPanel: View {
             lo = a; hi = b; pitches = Set(chosen.map(\.pitch))
         } else if store.rollCursor != nil {
             let c = store.cursorSpot(p)
-            lo = c.beat; hi = c.beat + (store.activeBox != nil ? store.rollStep : store.cursorNoteLength(p)); pitches = [c.pitch]
+            lo = c.beat; hi = c.beat + (store.activeBox != nil ? 0 : store.cursorNoteLength(p)); pitches = [c.pitch]
         } else {
             return
         }
@@ -657,10 +657,11 @@ struct NoteGrid: View {
         let sel = store.selectedNotes
         let grid = store.rollSnap
         let bpb = Double(store.project.beatsPerBar)
-        // The keyboard cursor: the cell Return fills, or the box ⇧ and the arrow keys draw.
+        // The keyboard cursor: the cell Return fills, or the box ⇧ and the arrow keys draw (the cursor's
+        // line, drawn over the whole panel, marks where the box ends).
         let box = store.focus == .pianoRoll ? store.activeBox.map(store.boxBounds) : nil
-        let cursor = store.focus == .pianoRoll && store.rollCursor != nil && (sel.isEmpty || box != nil)
-            ? (spot: store.cursorSpot(pattern), length: box != nil ? store.rollStep : store.cursorNoteLength(pattern)) : nil
+        let cursor = store.focus == .pianoRoll && store.rollCursor != nil && sel.isEmpty && box == nil
+            ? (spot: store.cursorSpot(pattern), length: store.cursorNoteLength(pattern)) : nil
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in
                 let first = max(0, Int(scrollY / keyHeight) - 1)
@@ -693,7 +694,7 @@ struct NoteGrid: View {
                 if endX < size.width {
                     ctx.fill(Path(CGRect(x: max(0, endX), y: 0, width: size.width, height: size.height)), with: .color(Color.black.opacity(0.4)))
                 }
-                if let c = cursor, box == nil {
+                if let c = cursor {
                     let y = CGFloat(layout.row(of: c.spot.pitch)) * keyHeight - scrollY
                     ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: keyHeight)), with: .color(Theme.accent.opacity(0.07)))
                 }
@@ -715,7 +716,7 @@ struct NoteGrid: View {
                 }
                 if let b = box {
                     let r = CGRect(x: CGFloat(b.start) * zoom - scrollX, y: CGFloat(layout.row(of: b.high)) * keyHeight - scrollY,
-                                   width: CGFloat(b.end - b.start) * zoom, height: CGFloat(b.high - b.low + 1) * keyHeight)
+                                   width: max(2, CGFloat(b.end - b.start) * zoom), height: CGFloat(b.high - b.low + 1) * keyHeight)
                     ctx.fill(Path(r), with: .color(Theme.accent.opacity(0.08)))
                     ctx.stroke(Path(r), with: .color(Theme.accent.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [3]))
                 }
@@ -723,11 +724,11 @@ struct NoteGrid: View {
                     let r = CGRect(x: CGFloat(c.spot.beat) * zoom - scrollX, y: CGFloat(layout.row(of: c.spot.pitch)) * keyHeight - scrollY,
                                    width: max(3, CGFloat(c.length) * zoom), height: keyHeight)
                     let path = Path(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 2)
-                    if box == nil { ctx.fill(path, with: .color(Theme.accent.opacity(0.22))) }
+                    ctx.fill(path, with: .color(Theme.accent.opacity(0.22)))
                     ctx.stroke(path, with: .color(Theme.accent), lineWidth: 1.5)
                     // Name the note Return would add, unless a note already sits there.
                     let taken = pattern.notes.contains { $0.pitch == c.spot.pitch && $0.start < c.spot.beat + c.length && $0.end > c.spot.beat }
-                    if box == nil, !taken, layout == .piano, r.width > 22, keyHeight >= 10 {
+                    if !taken, layout == .piano, r.width > 22, keyHeight >= 10 {
                         ctx.draw(Text(RollGrid.name(c.spot.pitch)).font(.system(size: 8, weight: .semibold)).foregroundStyle(Theme.accent),
                                  at: CGPoint(x: r.minX + 3, y: r.midY), anchor: .leading)
                     }
