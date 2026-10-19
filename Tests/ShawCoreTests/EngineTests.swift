@@ -221,3 +221,53 @@ final class KeyframeTests: XCTestCase {
         XCTAssertEqual(e.params["mix"], 0.3)
     }
 }
+
+/// Editing a pattern while it plays (the graph is rebuilt, but the voices carry over).
+final class LiveEditTests: XCTestCase {
+    let sr = 48000.0
+
+    func project(_ notes: [Note]) -> (Project, AssetID) {
+        var p = Project()
+        let pat = Asset(name: "Organ", colorIndex: 1, content: .notes(NotePattern(length: 4, notes: notes, instrument: .preset("Organ"))))
+        p.assets.append(pat)
+        p.updateComposition(p.mainCompositionID) { c in
+            var t = Track(name: "Organ", colorIndex: 1)
+            t.clips = [Clip(assetID: pat.id, start: 0, length: 4)]
+            c.tracks = [t]
+        }
+        return (p, pat.id)
+    }
+
+    /// Render `beats` from `from` with a graph built for `p`, carrying voices over from `previous`.
+    func render(_ p: Project, from: Double, beats: Double, previous: [String: AnyObject]) -> ([Float], [String: AnyObject]) {
+        var b = GraphBuilder(project: p, sampleRate: sr, previous: previous, samples: SampleLibrary.shared)
+        let g = b.build(root: p.mainCompositionID)
+        let ctx = RenderContext(sampleRate: sr, bpm: p.bpm)
+        let buf = StereoBuffer()
+        var out: [Float] = []
+        var beat = from
+        let total = Int(beats * ctx.samplesPerBeat)
+        var done = 0
+        while done < total {
+            let n = min(512, total - done)
+            buf.clear(n)
+            g.root?.render(beat: beat, frames: n, l: buf.l, r: buf.r, ctx: ctx, songBeat: beat)
+            out += Array(UnsafeBufferPointer(start: buf.l, count: n))
+            beat += Double(n) * ctx.beatsPerSample
+            done += n
+        }
+        return (out, g.states)
+    }
+
+    func testMovingASoundingNoteDoesNotLeaveItRinging() {
+        let (p, id) = project([Note(pitch: 60, start: 0, length: 1, velocity: 0.9)])
+        let (a, states) = render(p, from: 0, beats: 0.5, previous: [:])
+        XCTAssertGreaterThan(AudioAnalysis.rms(a), 0.01, "the note plays")
+        // ↑ while it plays: the note is now a C#, still ending on beat 1.
+        var moved = p
+        moved.updateNotes(id) { $0.notes[0].pitch = 61 }
+        let (b, _) = render(moved, from: 0.5, beats: 2.5, previous: states)
+        let spb = Int(60 / p.bpm * sr)
+        XCTAssertLessThan(AudioAnalysis.rms(b, Int(1.5 * Double(spb)), b.count), 0.001, "the old note stops instead of ringing to the end of the loop")
+    }
+}

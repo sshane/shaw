@@ -241,6 +241,11 @@ public final class Sampler {
         }
     }
 
+    /// Let go of held notes that `keep` says shouldn't be sounding anymore (see `Synth.releaseHeld`).
+    public func releaseHeld(keep: (Int) -> Bool) {
+        for i in voices.indices where voices[i].isActive && voices[i].held && !keep(voices[i].note) { noteOff(voices[i].note) }
+    }
+
     public func allNotesOff() {
         for i in voices.indices where voices[i].isActive && voices[i].held {
             voices[i].held = false

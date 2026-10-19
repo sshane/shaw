@@ -652,6 +652,17 @@ public final class Synth {
         }
     }
 
+    /// Let go of held notes that `keep` says shouldn't be sounding anymore (a pattern edited while it
+    /// plays: a note moved or deleted never sends its own note-off). Audio thread safe.
+    public func releaseHeld(params p: [Double], keep: (Int) -> Bool) {
+        var i = heldStack.count - 1
+        while i >= 0 {
+            if i < heldStack.count, !keep(heldStack[i]) { noteOff(heldStack[i], params: p) }
+            i -= 1
+        }
+        for v in voices.indices where voices[v].held && !keep(voices[v].note) { noteOff(voices[v].note, params: p) }
+    }
+
     public func allNotesOff() {
         heldStack.removeAll(keepingCapacity: true)
         for i in voices.indices where voices[i].isActive {

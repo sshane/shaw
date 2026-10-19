@@ -495,6 +495,8 @@ protocol NotePlayer: AnyObject {
     /// A note that started before a jump (seek or loop wrap) and is still held at the new position.
     func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double)
     func noteOff(_ pitch: Int)
+    /// Release held notes that `keep` rejects (no allocation: called on the audio thread).
+    func releaseHeld(keep: (Int) -> Bool)
     func allNotesOff()
     func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?)
     func reset()
@@ -512,6 +514,7 @@ final class SynthNotePlayer: NotePlayer {
     func noteOn(_ pitch: Int, velocity: Float) { state.synth.noteOn(pitch, velocity: velocity, params: params) }
     func resume(_ pitch: Int, velocity: Float, elapsedSeconds: Double) { noteOn(pitch, velocity: velocity) }
     func noteOff(_ pitch: Int) { state.synth.noteOff(pitch, params: params) }
+    func releaseHeld(keep: (Int) -> Bool) { state.synth.releaseHeld(params: params, keep: keep) }
     func allNotesOff() { state.synth.allNotesOff() }
     func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?) {
         state.synth.render(l, r, frames: frames, params: params, bpm: bpm, beat: beat)
@@ -544,6 +547,7 @@ final class SamplerNotePlayer: NotePlayer {
         state.sampler.noteOn(pitch, velocity: velocity, params: params, sample: z.0, recordedAt: z.1, offset: elapsedSeconds)
     }
     func noteOff(_ pitch: Int) { state.sampler.noteOff(pitch) }
+    func releaseHeld(keep: (Int) -> Bool) { state.sampler.releaseHeld(keep: keep) }
     func allNotesOff() { state.sampler.allNotesOff() }
     func render(_ l: UnsafeMutablePointer<Float>, _ r: UnsafeMutablePointer<Float>, frames: Int, bpm: Double, beat: Double?) {
         state.sampler.render(l, r, frames: frames, params: params)
@@ -556,6 +560,9 @@ final class NoteSourceNode: SourceNode {
     let notes: [Note]
     let length: Double
     let player: NotePlayer
+    /// Set after the first block. The voices outlive the graph, so a pattern rebuilt after an edit
+    /// may find notes still held that it no longer has.
+    private var started = false
 
     init(pattern: NotePattern, player: NotePlayer) {
         let len = pattern.length
@@ -597,7 +604,16 @@ final class NoteSourceNode: SourceNode {
             for n in notes where n.start < w0 && min(n.end, length) > beat + bps {
                 player.resume(n.pitch, velocity: Float(n.velocity), elapsedSeconds: (beat - n.start) * 60 / ctx.bpm)
             }
+        } else if !started {
+            // Rebuilt after an edit while playing: a note that was moved or deleted never sends its
+            // note-off, so let go of anything this pattern doesn't have sounding right now. Otherwise
+            // it rings until the loop comes around.
+            let len = length
+            player.releaseHeld { pitch in
+                notes.contains { $0.pitch == pitch && $0.start <= beat + bps && min($0.end, len) > beat }
+            }
         }
+        started = true
         player.expected = beat + Double(frames) * bps
         var idx = firstEvent(atOrAfter: w0)
         var f = 0
