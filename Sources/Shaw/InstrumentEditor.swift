@@ -234,7 +234,8 @@ struct InstrumentEditorView: View {
             .pickerStyle(.segmented).labelsHidden().controlSize(.small)
             FilterCurve(type: Int(p["ftype"] ?? 0), cutoff: p["cutoff"] ?? 6000, resonance: p["resonance"] ?? 0)
                 .frame(height: 70)
-            params(id, p, ["cutoff", "resonance", "fenv", "fa", "fd", "fs", "fr", "keytrack"], names: ["fa": "Env Attack", "fd": "Env Decay", "fs": "Env Sustain", "fr": "Env Release"])
+            params(id, p, ["cutoff", "resonance", "fenv", "fa", "fd", "fs", "fr", "keytrack", "velcut"],
+                   names: ["fa": "Env Attack", "fd": "Env Decay", "fs": "Env Sustain", "fr": "Env Release", "velcut": "Velocity"])
         }
         .padding(10).panelBox()
     }
@@ -278,9 +279,9 @@ struct InstrumentEditorView: View {
 
     private func character(_ id: AssetID, _ p: [String: Double]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionTitle("Character", "Thickness, grit, and how notes connect.")
-            params(id, p, ["unison", "spread", "drift", "drive", "mode", "glide", "volume"],
-                   names: ["unison": "Voices", "spread": "Detune", "mode": "Notes"])
+            sectionTitle("Character", "Thickness, width, grit, and how notes connect.")
+            params(id, p, ["unison", "spread", "width", "drift", "drive", "mode", "glide", "volume"],
+                   names: ["unison": "Voices", "spread": "Detune", "width": "Width", "mode": "Notes"])
         }
         .padding(10).panelBox()
     }

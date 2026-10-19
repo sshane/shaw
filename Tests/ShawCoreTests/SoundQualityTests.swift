@@ -126,8 +126,10 @@ final class SynthSoundTests: XCTestCase {
                    "keytrack", "a", "d", "s", "r", "fa", "fd", "fs", "fr", "penv", "pdecay", "mode", "glide", "drive", "volume",
                    "osclevel", "lforate", "lfosync", "lfocut", "lfopitch", "lfoamp", "ftype", "fm", "lfoshape", "lfofm", "drift",
                    "semi1", "lvl1", "lvl2", "on2", "osc3", "semi3", "fine3", "lvl3", "on3", "osc4", "semi4", "fine4", "lvl4", "on4",
-                   "fmenv", "fmdecay"]
+                   "fmenv", "fmdecay", "width", "velcut"]
         XCTAssertEqual(SynthParams.defs.map(\.id), ids)
+        XCTAssertEqual(SynthParams.index["width"], SynthParams.width)
+        XCTAssertEqual(SynthParams.index["velcut"], SynthParams.velCut)
         XCTAssertEqual(SynthParams.index["fmenv"], SynthParams.fmEnv)
         XCTAssertEqual(SynthParams.index["fmdecay"], SynthParams.fmDecay)
         XCTAssertEqual(SynthParams.defs[SynthParams.fmEnv].defaultValue, 0)
@@ -164,7 +166,8 @@ final class SynthSoundTests: XCTestCase {
 
     func clean(_ extra: [String: Double]) -> [String: Double] {
         var p = SynthPresets.scratch()
-        for (k, v) in ["drift": 0, "cutoff": 20000, "fenv": 0, "keytrack": 0, "a": 0.001, "s": 1] as [String: Double] { p[k] = v }
+        // No width either: its copy sits a few cents sharp on purpose, which would read as off-harmonic energy.
+        for (k, v) in ["drift": 0, "width": 0, "cutoff": 20000, "fenv": 0, "keytrack": 0, "a": 0.001, "s": 1] as [String: Double] { p[k] = v }
         for (k, v) in extra { p[k] = v }
         return p
     }
