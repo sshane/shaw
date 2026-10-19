@@ -90,6 +90,9 @@ struct ShawCommands: Commands {
             Button("Split at Playhead") { store.splitSelectedClips(at: store.transport.position) }.keyboardShortcut("e")
             Button("Save Variation") { store.saveVariation() }.keyboardShortcut("d", modifiers: [.command, .shift])
         }
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { store.checkForUpdates() }
+        }
         CommandGroup(replacing: .help) {
             Button("Welcome to Shaw") { store.showWelcome = true }
         }
