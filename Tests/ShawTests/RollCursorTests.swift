@@ -89,7 +89,7 @@ final class RollCursorTests: XCTestCase {
         s.rollCursor = 3
         s.rollCursorPitch = 60 // the bottom right, on the line where the C5 starts
         s.extendBox(rows: 7)
-        XCTAssertEqual(picked(s, id), [], "a box with no width takes the notes crossing the line: none below C5 here")
+        XCTAssertEqual(picked(s, id), [], "moved only up, the box covers the step after the line: the C5 there is above it")
         s.extendBox(beats: -1)
         XCTAssertEqual(picked(s, id), [67], "back to beat 2: just the G, nothing past where it started")
         s.extendBox(beats: -1)
@@ -105,7 +105,7 @@ final class RollCursorTests: XCTestCase {
         XCTAssertEqual(notes(s, id).map(\.pitch), [60, 65, 68, 72])
         XCTAssertNil(s.activeBox)
         s.extendBox(rows: 3)
-        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note; with no width it takes what crosses its line")
+        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note, one step wide")
         s.extendBox(beats: 2)
         XCTAssertEqual(picked(s, id), [65, 68])
     }

@@ -215,14 +215,15 @@ extension Store {
         return b
     }
 
-    /// The beats and rows a box covers. With no width (only ↑ and ↓ so far), it's the cursor's line.
+    /// The beats and rows a box covers. It's always at least one grid step wide: moved only up or
+    /// down so far, it covers the step after the cursor's line (a chord there, say).
     func boxBounds(_ b: RollBox) -> (start: Double, end: Double, low: Int, high: Int) {
-        (min(b.anchorBeat, b.headBeat), max(b.anchorBeat, b.headBeat),
-         min(b.anchorPitch, b.headPitch), max(b.anchorPitch, b.headPitch))
+        let start = min(b.anchorBeat, b.headBeat)
+        return (start, max(max(b.anchorBeat, b.headBeat), start + rollStep),
+                min(b.anchorPitch, b.headPitch), max(b.anchorPitch, b.headPitch))
     }
 
     /// ⇧ and the arrow keys: stretch a box from where the cursor was and select every note in it.
-    /// A box with no width selects the notes crossing the cursor's line (a chord, say).
     func extendBox(beats: Double = 0, rows: Int = 0) {
         guard let (_, p) = openPattern else { return }
         let c = cursorSpot(p)
@@ -230,11 +231,8 @@ extension Store {
         box.headBeat = min(max(0, box.headBeat + beats), max(p.length, box.headBeat))
         box.headPitch = RowLayout.of(p.instrument).clamp(box.headPitch + rows)
         let r = boxBounds(box)
-        let line = r.end - r.start < Store.eps
-        box.picked = Set(p.notes.filter { n in
-            guard n.pitch >= r.low && n.pitch <= r.high else { return false }
-            return line ? n.start < r.start + Store.eps && n.end > r.start + Store.eps
-                        : n.start < r.end - Store.eps && n.end > r.start + Store.eps
+        box.picked = Set(p.notes.filter {
+            $0.pitch >= r.low && $0.pitch <= r.high && $0.start < r.end - Store.eps && $0.end > r.start + Store.eps
         }.map(\.id))
         selectedNotes = box.picked
         rollBox = box

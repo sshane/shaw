@@ -717,7 +717,7 @@ struct NoteGrid: View {
                 }
                 if let b = box {
                     let r = CGRect(x: CGFloat(b.start) * zoom - scrollX, y: CGFloat(layout.row(of: b.high)) * keyHeight - scrollY,
-                                   width: max(2, CGFloat(b.end - b.start) * zoom), height: CGFloat(b.high - b.low + 1) * keyHeight)
+                                   width: CGFloat(b.end - b.start) * zoom, height: CGFloat(b.high - b.low + 1) * keyHeight)
                     ctx.fill(Path(r), with: .color(Theme.accent.opacity(0.08)))
                     ctx.stroke(Path(r), with: .color(Theme.accent.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [3]))
                 }
