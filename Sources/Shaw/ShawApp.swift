@@ -344,6 +344,9 @@ enum DebugSnapshot {
                 store.openInstrumentEditor(a.id)
             }
         }
+        // SHAW_COMP=Drop opens the composition with that name in its own tab.
+        if let name = env["SHAW_COMP"],
+           let comp = store.project.assets.first(where: { $0.kind == .composition && $0.name == name }) { store.openComposition(comp.id) }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         // SHAW_KEYS=down,down,return presses keys in the Browser, through the normal key handling.
         // SHAW_KEYS=roll:up,return,shift-d,right,shift-up,? presses them in the piano roll instead.

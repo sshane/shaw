@@ -116,7 +116,8 @@ struct CompTabs: View {
             Spacer()
         }
         .frame(height: 24)
-        .background(Theme.panelHeader.opacity(0.7))
+        .background(Theme.bg)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 }
 
@@ -124,14 +125,21 @@ struct CompTab: View {
     @Environment(Store.self) private var store
     let id: AssetID
     @State private var target = false
+    @State private var hover = false
 
     var body: some View {
         let active = store.activeCompID == id
+        let isMain = id == store.project.mainCompositionID
         let a = store.project.asset(id)
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.label(a?.colorIndex ?? 0)).frame(width: 7, height: 9)
             Text(a?.name ?? "?").font(.system(size: 11, weight: active ? .semibold : .regular))
-            if store.openComps.count > 1 {
+            if isMain {
+                if (a?.name ?? "").lowercased() != "main" {
+                    Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(active ? Theme.textDim : Theme.textFaint)
+                }
+            } else {
+                // Main always stays open, so you can always get back to the whole song.
                 Button { store.closeComposition(id) } label: {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
                 }
@@ -140,9 +148,11 @@ struct CompTab: View {
         }
         .padding(.horizontal, 10)
         .frame(height: 24)
-        .foregroundStyle(active ? Theme.text : Theme.textDim)
-        .background(target ? Theme.accent.opacity(0.3) : (active ? Theme.panel : Color.clear))
+        .foregroundStyle(active ? Color.white : Theme.textDim)
+        .background(target ? Theme.accent.opacity(0.3) : (active ? Color(white: 0.23) : (hover ? Color.white.opacity(0.05) : Color.clear)))
+        .overlay(alignment: .bottom) { if active { Rectangle().fill(Theme.accent).frame(height: 2) } }
         .contentShape(Rectangle())
+        .onHover { hover = $0 }
         .onTapGesture { store.openComposition(id) }
         .help("Composition. Drop an effect here to apply it to the whole composition.")
         .onDrop(of: [.utf8PlainText], delegate: ShawDropDelegate(

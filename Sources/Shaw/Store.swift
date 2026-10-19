@@ -358,6 +358,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     func openComposition(_ id: AssetID) {
         guard project.composition(id) != nil else { return }
+        // Main is always the first tab.
+        if !openComps.contains(project.mainCompositionID) { openComps.insert(project.mainCompositionID, at: 0) }
         if !openComps.contains(id) { openComps.append(id) }
         if activeCompID != id {
             engine.stop(returnToStart: false)
@@ -372,7 +374,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         loopWholeComposition()
     }
 
+    /// Main can't be closed: it's the whole song, and its tab is the way back.
     func closeComposition(_ id: AssetID) {
+        guard id != project.mainCompositionID else { return }
         openComps.removeAll { $0 == id }
         if openComps.isEmpty { openComps = [project.mainCompositionID] }
         if activeCompID == id { openComposition(openComps.last!) }
