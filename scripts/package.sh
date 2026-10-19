@@ -27,6 +27,6 @@ Shaw is a music app for Macs running macOS 14 (Sonoma) or newer. It works on App
 
 You only do this once. Everything Shaw needs is inside the app.
 TXT
-ditto -c -k --keepParent "$APP" build/Shaw.zip
+ditto -c -k --norsrc --noextattr --keepParent "$APP" build/Shaw.zip
 (cd "$STAGE" && zip -q ../Shaw.zip "How to open Shaw.txt")
 echo "Created build/Shaw.zip ($(du -h build/Shaw.zip | cut -f1))"
