@@ -157,10 +157,11 @@ extension Store {
     }
 
     /// A real instrument's phrase: chords for pianos and the organ, an arpeggio for mallets and plucks,
-    /// and a melody for the sax.
+    /// a melody for the sax, and a riff for the bass.
     static func phrase(forRecorded name: String) -> ([PhraseNote], Double) {
         switch RecordedInstruments.named(name)?.style ?? .chords {
         case .chords: return phrase(forPreset: "Keys")
+        case .bassline: return phrase(forPreset: "Pluck Bass")
         case .arpeggio: return phrase(forPreset: "Electric Piano")
         case .melody:
             // The lead hook, down an octave where a tenor sax sits.

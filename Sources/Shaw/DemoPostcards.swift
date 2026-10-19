@@ -5,7 +5,7 @@ extension DemoProject {
 
     /// "Postcards": D major indie pop, 120 BPM, 38 bars (about 76 seconds), played on the real
     /// instruments: an upright piano, the Acoustic Kit, vibraphone, kalimba, glockenspiel, harp,
-    /// pipe organ, and a tenor sax hook. The bass is the synth (there's no recorded bass guitar).
+    /// pipe organ, a tenor sax hook, and a bass guitar.
     /// Intro (4) · Verse (8) · Pre-Chorus (4) · Chorus (8) · Bridge (4) · Last Chorus (8) · Outro (2)
     static func postcards() -> Project {
         var p = Project(name: "Postcards", bpm: 120)
@@ -59,12 +59,12 @@ extension DemoProject {
         let pianoBridge = synthPattern("Piano Bridge", 6, "Upright Piano", chords(bridge, [(0, 3.9, 0.5)]))
         let pianoEnd = synthPattern("Last Chord", 6, "Upright Piano", length: 8, chords([D], [(0, 7.5, 0.7)]))
 
-        // Bass: the synth's plucked bass, holding back in the verse and driving eighths in the chorus.
-        let bassVerse = synthPattern("Bass Verse", 1, "Pluck Bass", gain: -2, bass(verse, [(0, 1.4, 0.8), (1.5, 0.45, 0.6), (2.5, 1.4, 0.7)]))
-        let bassPre = synthPattern("Bass Build", 1, "Pluck Bass", gain: -2, bass(pre, (0..<8).map { (Double($0) * 0.5, 0.42, 0.72) }))
-        let bassChorus = synthPattern("Bass Chorus", 1, "Pluck Bass", gain: -1,
+        // Bass guitar: holding back in the verse, driving eighths in the chorus.
+        let bassVerse = synthPattern("Bass Verse", 1, "Bass Guitar", gain: -1, bass(verse, [(0, 1.4, 0.8), (1.5, 0.45, 0.6), (2.5, 1.4, 0.7)]))
+        let bassPre = synthPattern("Bass Build", 1, "Bass Guitar", gain: -1, bass(pre, (0..<8).map { (Double($0) * 0.5, 0.42, 0.72) }))
+        let bassChorus = synthPattern("Bass Chorus", 1, "Bass Guitar", gain: 0,
                                       bass(chorus, (0..<8).map { (Double($0) * 0.5, 0.42, $0 % 2 == 0 ? 0.88 : 0.68) }))
-        let bassBridge = synthPattern("Bass Bridge", 1, "Pluck Bass", gain: -3, bass(bridge, [(0, 3.5, 0.75)]))
+        let bassBridge = synthPattern("Bass Bridge", 1, "Bass Guitar", gain: -2, bass(bridge, [(0, 3.5, 0.75)]))
 
         // Kalimba in the intro and bridge, vibraphone answering the piano in the verse.
         let kalimba = synthPattern("Kalimba", 4, "Kenyan Kalimba", arp(chorus, up: 12, step: 0.5, [2, 1, 0, 1, 2, 3, 2, 1], vel: 0.75))
@@ -152,8 +152,9 @@ extension DemoProject {
                             effect("eq", ["lowgain": -2, "lowfreq": 80, "highgain": 4]), room]),
             track("Crash", 9, volume: -3, [clip(crash, at: 0, length: 4), clip(crash, at: 16, length: 4)]),
             track("Tambourine", 3, volume: -2, [clip(tambourine, at: 0, length: 32)]),
-            track("Bass", 1, volume: 0, [clip(bassChorus, at: 0, length: 32)],
-                  effects: [effect("eq", ["lowgain": -3, "lowfreq": 70, "midgain": -4, "midfreq": 260, "midq": 1]),
+            // A bass recorded direct is light on the very bottom, so it gets a little lift there.
+            track("Bass", 1, volume: 3, [clip(bassChorus, at: 0, length: 32)],
+                  effects: [effect("eq", ["lowgain": 6, "lowfreq": 110, "midgain": -3, "midfreq": 260, "midq": 1]),
                             effect("saturator", ["drive": 4, "mix": 0.4])]),
             track("Piano", 6, volume: -1, [clip(pianoChorus, at: 0, length: 32)], effects: [lowCut, room]),
             // The organ's sub-octave pipes would thicken the low mids, so it sits on top.

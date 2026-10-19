@@ -11,13 +11,13 @@ public struct RecordedInstrument {
     /// Sampler settings that suit it (`SamplerParams`).
     let settings: [String: Double]
 
-    public enum Style { case chords, arpeggio, melody }
+    public enum Style { case chords, arpeggio, melody, bassline }
 
     public var path: String { SampleLibrary.bundledPrefix + "Instruments/" + folder }
 }
 
-/// Recordings from the Versilian Community Sample Library by Versilian Studios, which is public
-/// domain (CC0), so Shaw can ship them. See Resources/Sounds/CREDITS.txt.
+/// Public domain (CC0) recordings, so Shaw can ship them: the Versilian Community Sample Library by
+/// Versilian Studios, and Karoryfer's Growlybass for the bass guitar. See Resources/Sounds/CREDITS.txt.
 public enum RecordedInstruments {
     public static let category = "Real Instruments"
 
@@ -46,6 +46,8 @@ public enum RecordedInstruments {
                            style: .arpeggio, settings: rings),
         RecordedInstrument(name: "Tenor Sax", folder: "Tenor Sax", summary: "A breathy jazz tenor saxophone",
                            style: .melody, settings: held.merging(["r": 0.12]) { $1 }),
+        RecordedInstrument(name: "Bass Guitar", folder: "Bass Guitar", summary: "A Squier Jazz Bass, played with fingers",
+                           style: .bassline, settings: held.merging(["r": 0.12]) { $1 }),
         RecordedInstrument(name: "Pipe Organ", folder: "Pipe Organ", summary: "A church organ",
                            style: .chords, settings: held.merging(["r": 0.25]) { $1 }),
     ]
