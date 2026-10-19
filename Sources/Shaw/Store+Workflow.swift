@@ -39,6 +39,14 @@ enum InstrumentChoice: Equatable, Identifiable {
 
     var isKit: Bool { if case .kit = self { return true } else { return false } }
 
+    /// Plays recordings (a real instrument or the Acoustic Kit) rather than synthesizing its sound.
+    var isSampled: Bool {
+        switch self {
+        case .synth(let p): return RecordedInstruments.named(p) != nil
+        case .kit(let k): return DrumKits.recordedKits[k] != nil
+        }
+    }
+
     var payload: DragPayload {
         switch self {
         case .synth(let p): return .preset(p)

@@ -127,7 +127,7 @@ struct BrowserPanel: View {
 
     private func row(_ item: InstrumentChoice) -> some View {
         BrowserRow(icon: item.icon, title: item.name, subtitle: subtitle(item), payload: item.payload,
-                   selected: selected == item.id, actionLabel: "Add",
+                   selected: selected == item.id, actionLabel: "Add", sampled: item.isSampled,
                    onSelect: {
                        selected = item.id
                        store.focus = .browser
@@ -417,6 +417,8 @@ struct BrowserRow: View {
     let payload: DragPayload
     var selected = false
     var actionLabel = "Add"
+    /// Plays recordings of a real instrument instead of synthesizing its sound.
+    var sampled = false
     let onSelect: () -> Void
     let onActivate: () -> Void
     @State private var hover = false
@@ -425,7 +427,17 @@ struct BrowserRow: View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.accent).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(Theme.small).foregroundStyle(Theme.text)
+                HStack(spacing: 5) {
+                    Text(title).font(Theme.small).foregroundStyle(Theme.text)
+                    if sampled {
+                        Text("SAMPLE")
+                            .font(.system(size: 8, weight: .bold)).tracking(0.3)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 3))
+                            .help("Plays recordings of a real instrument instead of a synthesized sound")
+                    }
+                }
                 Text(subtitle).font(Theme.tiny).foregroundStyle(Theme.textFaint).lineLimit(1)
             }
             Spacer()
