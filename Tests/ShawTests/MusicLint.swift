@@ -26,7 +26,9 @@ enum MusicLint {
                             if !c.loops { break }
                             passStart += len
                         }
-                    case .notes(let pat) where !pat.instrument.isDrumKit:
+                    // Drum kits and Shaw's hand percussion hits aren't pitched.
+                    case .notes(let pat) where !pat.instrument.isDrumKit
+                        && !(pat.instrument.sample ?? "").hasPrefix(SampleLibrary.bundledPrefix + "Percussion/"):
                         if pat.instrument.preset.contains("Riser") || pat.instrument.preset.contains("lifter")
                             || pat.instrument.preset.contains("Impact") || pat.instrument.preset.contains("Zap") { continue }
                         let len = pat.length
@@ -91,7 +93,8 @@ final class MusicLintTests: XCTestCase {
         let major: (Int) -> Set<Int> = { root in Set([0, 2, 4, 5, 7, 9, 11].map { ($0 + root) % 12 }) }
         let minor: (Int) -> Set<Int> = { root in Set([0, 2, 3, 5, 7, 8, 10].map { ($0 + root) % 12 }) }
         // G7 in C minor uses B natural (harmonic minor), so allow it there.
-        for (p, key) in [(DemoProject.starlightFM(), minor(0).union([11])), (DemoProject.afterburn(), minor(6)), (DemoProject.lanterns(), major(4))] {
+        for (p, key) in [(DemoProject.starlightFM(), minor(0).union([11])), (DemoProject.afterburn(), minor(6)), (DemoProject.lanterns(), major(4)),
+                         (DemoProject.postcards(), major(2))] {
             let r = MusicLint.check(p, scale: key)
             XCTAssertTrue(r.clashes.isEmpty && r.outOfKey.isEmpty, "\(p.name): \(r.description)")
         }

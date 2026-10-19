@@ -42,11 +42,12 @@ swift test                # runs the tests
 
 New projects start empty with one button: **Add an instrument**. Pick drums or a synth in the Browser on the left. Click one to hear it, and double-click it to add it. Shaw makes a layer with a one-bar pattern, opens it in the piano roll, and loops it. Press Space and start adding notes.
 
-To hear what a full song looks like, open **File → Open Demo Song**. There are three short ones, each about a minute long:
+To hear what a full song looks like, open **File → Open Demo Song**. There are four short ones, each about a minute long:
 
 - **Starlight FM** is UK garage and future house in C minor at 134 BPM. It has a skippy 2-step beat, a bouncy bassline, pumping garage chords, and vocal chops with delay throws at the end of each phrase. Drop 2 puts the first drop inside it with a four-on-the-floor beat and a new topline.
 - **Afterburn** is bass house in F♯ minor at 128 BPM. A call-and-response bass riff, "hey" chops, and rave stabs lead into a trap half-time switch-up where a growl bass and a riddim bass trade bars.
 - **Lanterns** is melodic dubstep in E major at 140 BPM. Strings and a music box open into a half-time drop with huge pumping supersaws and a growl bass that switches wobble speed every two bars. Each speed is its own pattern with its own LFO setting. A glitchy, gated bridge leads into the last drop.
+- **Postcards** is indie pop in D major at 120 BPM, played on the real instruments. An upright piano, kalimba, and vibraphone open into a chorus with the acoustic kit, tambourine, pipe organ, and a tenor sax hook doubled by glockenspiel. A harp bridge leads into the last chorus, where a second sax joins in harmony.
 
 ![Starting a new project](docs/images/start.png)
 

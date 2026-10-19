@@ -56,6 +56,7 @@ struct ShawCommands: Commands {
                 Button("Starlight FM (UK garage)") { store.openDemo(DemoProject.starlightFM) }
                 Button("Afterburn (bass house)") { store.openDemo(DemoProject.afterburn) }
                 Button("Lanterns (melodic dubstep)") { store.openDemo(DemoProject.lanterns) }
+                Button("Postcards (indie pop, real instruments)") { store.openDemo(DemoProject.postcards) }
             }
             Button("Open…") { store.openDialog() }.keyboardShortcut("o")
             Menu("Open Recent") {
