@@ -39,6 +39,7 @@ struct TimelinePanel: View {
                     .clipped()
                 }
                 .background(FrameReporter { monitor.frame = $0 })
+                .background(WindowReader { monitor.window = $0 })
             }
         }
         .onAppear(perform: installScroll)

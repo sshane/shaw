@@ -7,6 +7,9 @@ import SwiftUI
 final class ScrollZoomMonitor {
     private var monitor: Any?
     var frame: CGRect = .zero // in SwiftUI global (window, top-left origin) coordinates
+    /// The window the region is in. Scrolling in another window (the Instrument Editor) is left alone,
+    /// even where it overlaps the region's spot on screen.
+    weak var window: NSWindow?
     var onScroll: ((CGFloat, CGFloat, CGPoint, NSEvent.ModifierFlags) -> Void)?
     var onMagnify: ((CGFloat, CGPoint) -> Void)?
     /// Right-click inside the region (consumed only if the handler returns true).
@@ -16,6 +19,7 @@ final class ScrollZoomMonitor {
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .magnify, .rightMouseDown]) { [weak self] e in
             guard let self, let window = e.window, let content = window.contentView else { return e }
+            if let mine = self.window, mine !== window { return e }
             let p = CGPoint(x: e.locationInWindow.x, y: content.bounds.height - e.locationInWindow.y)
             guard self.frame.contains(p) else { return e }
             let local = CGPoint(x: p.x - self.frame.minX, y: p.y - self.frame.minY)
@@ -39,6 +43,27 @@ final class ScrollZoomMonitor {
     }
 
     deinit { remove() }
+}
+
+/// Reports the window a view is in (for `ScrollZoomMonitor.window`).
+struct WindowReader: NSViewRepresentable {
+    let onChange: (NSWindow?) -> Void
+
+    final class Probe: NSView {
+        var onChange: ((NSWindow?) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onChange?(window)
+        }
+    }
+
+    func makeNSView(context: Context) -> Probe {
+        let v = Probe()
+        v.onChange = onChange
+        return v
+    }
+
+    func updateNSView(_ v: Probe, context: Context) { v.onChange = onChange }
 }
 
 struct FrameReporter: View {

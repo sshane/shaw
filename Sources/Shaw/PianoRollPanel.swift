@@ -79,6 +79,7 @@ struct PianoRollPanel: View {
                     .clipped()
                 }
                 .background(FrameReporter { monitor.frame = $0 })
+                .background(WindowReader { monitor.window = $0 })
                 .overlay { if store.showRollKeys { RollKeysHelp() } }
             }
             .onAppear { install(id) }
