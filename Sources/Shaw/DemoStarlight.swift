@@ -188,7 +188,7 @@ extension DemoProject {
                        effect("compressor", ["threshold": -14, "ratio": 3, "attack": 10, "release": 120])]
         let bassFX = [effect("filter", ["type": 1, "cutoff": 35, "resonance": 0]),
                       effect("eq", ["lowgain": 0, "lowfreq": 80, "midgain": -5, "midfreq": 250, "midq": 1.1]),
-                      effect("saturator", ["drive": 5, "mix": 0.35]), pump(0.5)]
+                      effect("saturator", ["drive": 3, "mix": 0.2]), pump(0.5)]
         let voxFX = [effect("eq", ["lowgain": -10, "lowfreq": 350, "highgain": 3, "highfreq": 6000]),
                      effect("delay", ["time": 6, "feedback": 0.3, "pingpong": 1, "mix": 0.2]),
                      effect("reverb", ["mix": 0.28, "size": 0.75]), pump(0.35)]

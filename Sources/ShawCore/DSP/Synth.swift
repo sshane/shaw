@@ -142,9 +142,11 @@ public enum SynthPresets {
         "Acid": ["osc1": 2, "mix": 0, "cutoff": 400, "resonance": 0.85, "fenv": 0.75, "fd": 0.22, "fs": 0.05, "mode": 2, "glide": 0.06, "s": 0.9, "r": 0.08, "drive": 0.4, "keytrack": 0.5, "volume": -10],
         "Wobble Bass": ["osc1": 2, "osc2": 3, "fine2": 0, "mix": 0.4, "sub": 0.5, "cutoff": 280, "resonance": 0.55, "fenv": 0, "keytrack": 0.2, "mode": 1, "glide": 0.02, "s": 1, "r": 0.1, "drive": 0.5, "lfosync": 2, "lfocut": 0.75, "volume": -7],
         // Punchy: saw and a square an octave down through a 24 dB filter that snaps shut, a tiny pitch drop for the hit.
-        "Pluck Bass": ["osc1": 2, "osc2": 3, "semi2": -12, "fine2": 0, "mix": 0.35, "sub": 0.3, "ftype": 1, "cutoff": 200, "resonance": 0.3,
-                       "fenv": 0.65, "fd": 0.18, "fs": 0.04, "keytrack": 0.5, "a": 0.001, "d": 0.4, "s": 0.3, "r": 0.08,
-                       "penv": 2, "pdecay": 0.02, "mode": 1, "drive": 0.35, "drift": 0.15, "volume": -2.5],
+        // A round pluck: the filter opens gently on each note, with no pitch blip, little drive, and
+        // no drift, so the attack doesn't crunch.
+        "Pluck Bass": ["osc1": 2, "osc2": 3, "semi2": -12, "fine2": 0, "mix": 0.35, "sub": 0.25, "ftype": 1, "cutoff": 200, "resonance": 0.3,
+                       "fenv": 0.45, "fd": 0.18, "fs": 0.04, "keytrack": 0.5, "a": 0.001, "d": 0.4, "s": 0.3, "r": 0.08,
+                       "penv": 0, "pdecay": 0.02, "mode": 1, "drive": 0.12, "drift": 0, "volume": -2.5],
         // Deep and round: triangle and a soft saw under a low 24 dB filter, with a sine sub and a little warmth.
         "Deep Bass": ["osc1": 1, "osc2": 2, "semi2": 0, "fine2": 4, "mix": 0.3, "sub": 0.5, "ftype": 1, "cutoff": 320, "resonance": 0.1,
                       "fenv": 0.3, "fd": 0.35, "fs": 0.3, "keytrack": 0.5, "a": 0.003, "d": 0.6, "s": 0.85, "r": 0.12,

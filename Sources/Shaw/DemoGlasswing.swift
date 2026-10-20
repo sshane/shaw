@@ -158,8 +158,10 @@ extension DemoProject {
             }
             return n
         }
-        let bass = synthPattern("Rolling Bass", 1, "Pluck Bass", length: 32, gain: 0, tweak: ["sub": 0], rolling(dark: false))
-        let bassDark = synthPattern("Rolling Bass (Dark)", 1, "Pluck Bass", length: 32, gain: 0, tweak: ["sub": 0], rolling(dark: true))
+        // The grittier Pluck Bass this song was mixed with: a harder pluck, a pitch blip, drive, and drift.
+        let grit: [String: Double] = ["sub": 0, "fenv": 0.65, "penv": 2, "drive": 0.35, "drift": 0.15]
+        let bass = synthPattern("Rolling Bass", 1, "Pluck Bass", length: 32, gain: 0, tweak: grit, rolling(dark: false))
+        let bassDark = synthPattern("Rolling Bass (Dark)", 1, "Pluck Bass", length: 32, gain: 0, tweak: grit, rolling(dark: true))
         func subNotes(dark: Bool, upTo end: Double = 32) -> [Note] {
             slots(dark: dark).filter { $0.start < end }.map {
                 Note(pitch: subPitch($0.root), start: $0.start, length: min($0.length, end - $0.start) - 0.05, velocity: 0.9)
