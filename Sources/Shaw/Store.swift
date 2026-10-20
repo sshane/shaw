@@ -189,6 +189,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     @ObservationIgnored private var lastAutosave = Date.distantPast
     var canUndo = false
     var canRedo = false
+    /// A time-lapse replay in progress (Store+Timelapse.swift), and how far along it is.
+    @ObservationIgnored var timelapse: TimelapseRun?
+    var timelapseProgress: Double?
 
     /// Set in tests: no alerts, no autosave.
     @ObservationIgnored var headless = false
@@ -269,6 +272,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     /// Apply a discrete edit (one undo step).
     func edit(_ body: (inout Project) -> Void) {
+        stopTimelapse() // any real edit applies to the real project
         gestureActive = false // a discrete edit always starts a fresh undo step
         let before = project
         // Edit a copy, then swap it in: closures may safely read `store.project` while editing
@@ -284,6 +288,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     /// Apply an edit during a continuous gesture. The first call snapshots for
     /// undo; call `endGesture()` when the drag finishes.
     func live(_ body: (inout Project) -> Void) {
+        stopTimelapse()
         let before = project
         var next = project // see edit(_:)
         body(&next)
@@ -313,6 +318,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     func undo() {
+        stopTimelapse()
         guard let p = undoStack.popLast() else { return }
         redoStack.append(project)
         project = p
@@ -323,6 +329,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     func redo() {
+        stopTimelapse()
         guard let p = redoStack.popLast() else { return }
         undoStack.append(project)
         project = p
@@ -909,6 +916,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     private func load(_ p: Project, url: URL?) {
+        stopTimelapse(restore: false)
         engine.stop()
         var p = p
         p.migrateDrumPatterns()
@@ -931,10 +939,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     func save() {
+        stopTimelapse()
         if let url = fileURL { write(to: url) } else { saveAs() }
     }
 
     func saveAs() {
+        stopTimelapse()
         let panel = NSSavePanel()
         panel.allowedContentTypes = [Store.shawType]
         panel.nameFieldStringValue = displayName + ".shaw"

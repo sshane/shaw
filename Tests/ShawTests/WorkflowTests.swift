@@ -428,3 +428,27 @@ final class CustomInstrumentTests: XCTestCase {
         XCTAssertEqual(s.instrumentStatus(id), .edited)
     }
 }
+
+final class TimelapseTests: XCTestCase {
+    /// The time-lapse builds the song up from an empty Main, ends on the real project, and when it
+    /// stops nothing about the real project has changed: no undo step, not edited.
+    func testTimelapseReplaysAndLeavesTheProjectAlone() {
+        let s = Store(project: DemoProject.glasswing(), headless: true)
+        let before = s.project
+        let frames = Store.timelapseFrames(of: before)
+        XCTAssertGreaterThan(frames.count, 50)
+        XCTAssertTrue(s.project.composition(before.mainCompositionID) != nil)
+        XCTAssertEqual(frames.first!.project.assets.count, 1, "starts from an empty Main")
+        XCTAssertEqual(frames.last!.project, before, "ends on the finished song")
+        XCTAssertTrue(frames.contains { $0.comp != before.mainCompositionID }, "it goes into the sections")
+        XCTAssertTrue(frames.contains { $0.roll != nil }, "it writes notes in the piano roll")
+
+        s.playTimelapse()
+        s.seekTimelapse(to: 0.5)
+        XCTAssertNotEqual(s.project, before)
+        s.stopTimelapse()
+        XCTAssertEqual(s.project, before)
+        XCTAssertFalse(s.canUndo)
+        XCTAssertFalse(s.dirty)
+    }
+}

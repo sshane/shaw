@@ -135,6 +135,11 @@ struct ShawCommands: Commands {
             Button("Zoom Out") { store.zoom = max(2, store.zoom / 1.25) }.keyboardShortcut("-")
             Button("Zoom to Fit") { store.fitRequest += 1 }.keyboardShortcut("0")
             Divider()
+            Button(store.timelapseProgress == nil ? "Play Time-lapse" : "Stop Time-lapse") {
+                if store.timelapseProgress == nil { store.playTimelapse() } else { store.stopTimelapse() }
+            }
+            .keyboardShortcut("t", modifiers: [.command, .option])
+            Divider()
             Button(store.workspace.showLeft ? "Hide Left Panels" : "Show Left Panels") { store.workspace.showLeft.toggle() }
             Button(store.workspace.showBottom ? "Hide Bottom Panel" : "Show Bottom Panel") { store.workspace.showBottom.toggle() }
             Button(store.workspace.showRight ? "Hide Right Panel" : "Show Right Panel") { store.workspace.showRight.toggle() }
@@ -346,6 +351,11 @@ enum DebugSnapshot {
             }) {
                 store.openInstrumentEditor(a.id)
             }
+        }
+        // SHAW_TIMELAPSE=0.4 shows the time-lapse paused 40% of the way through.
+        if let t = env["SHAW_TIMELAPSE"].flatMap(Double.init) {
+            store.playTimelapse()
+            store.seekTimelapse(to: t)
         }
         // SHAW_COMP=Drop opens the composition with that name in its own tab.
         if let name = env["SHAW_COMP"],
