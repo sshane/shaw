@@ -104,5 +104,8 @@ final class MusicLintTests: XCTestCase {
         // Glasswing borrows F# (the D7) and Ab (the Ab7), and is held to the strict octave-spread check.
         let r = MusicLint.check(DemoProject.glasswing(), scale: minor(7).union([6, 8]), strict: true)
         XCTAssertTrue(r.clashes.isEmpty && r.outOfKey.isEmpty, "Glasswing: \(r.description)")
+        // Sunroom borrows F, C, and G (its D minor 6 and F major 9).
+        let s = MusicLint.check(DemoProject.sunroom(), scale: major(9).union([5, 0, 7]), strict: true)
+        XCTAssertTrue(s.clashes.isEmpty && s.outOfKey.isEmpty, "Sunroom: \(s.description)")
     }
 }
