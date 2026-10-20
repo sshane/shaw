@@ -157,11 +157,26 @@ extension Store {
     }
 
     /// A real instrument's phrase: chords for pianos and the organ, an arpeggio for mallets and plucks,
-    /// a melody for the sax, and a riff for the bass.
+    /// a melody for the sax, a riff for the bass, and strummed chords for the guitars.
     static func phrase(forRecorded name: String) -> ([PhraseNote], Double) {
         switch RecordedInstruments.named(name)?.style ?? .chords {
         case .chords: return phrase(forPreset: "Keys")
         case .bassline: return phrase(forPreset: "Pluck Bass")
+        case .strum:
+            // Am, F, C, G, voiced like a guitar and strummed down, down-up, down: each strum's notes
+            // a few milliseconds apart, low to high going down and high to low coming back up.
+            let shapes: [[Int]] = [[45, 52, 57, 60, 64], [41, 48, 53, 57, 60, 65], [48, 52, 55, 60, 64], [43, 47, 50, 55, 59, 67]]
+            var n: [PhraseNote] = []
+            for (b, shape) in shapes.enumerated() {
+                for (t, down, vel) in [(0.0, true, 0.85), (1.5, true, 0.7), (2.0, false, 0.6), (3.0, true, 0.75)] {
+                    let strings = down ? shape : Array(shape.reversed().prefix(4))
+                    for (i, p) in strings.enumerated() {
+                        let at = Double(b) * 4 + t + Double(i) * 0.03
+                        n.append(PhraseNote(at, Double(b) * 4 + 4 - at - 0.05, p, vel - Double(i) * 0.03))
+                    }
+                }
+            }
+            return (n, 110)
         case .arpeggio: return phrase(forPreset: "Electric Piano")
         case .melody:
             // The lead hook, down an octave where a tenor sax sits.

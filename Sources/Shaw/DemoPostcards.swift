@@ -5,7 +5,7 @@ extension DemoProject {
 
     /// "Postcards": D major indie pop, 120 BPM, 38 bars (about 76 seconds), played on the real
     /// instruments: an upright piano, the Acoustic Kit, vibraphone, kalimba, glockenspiel, harp,
-    /// pipe organ, a tenor sax hook, and a bass guitar.
+    /// pipe organ, a jangly electric guitar, a tenor sax hook, and a bass guitar.
     /// Intro (4) · Verse (8) · Pre-Chorus (4) · Chorus (8) · Bridge (4) · Last Chorus (8) · Outro (2)
     static func postcards() -> Project {
         var p = Project(name: "Postcards", bpm: 120)
@@ -73,6 +73,41 @@ extension DemoProject {
         let harp = synthPattern("Harp", 10, "Harp", gain: 2, arp(bridge, up: 0, step: 0.25,
                                                                 [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5], vel: 0.7))
 
+        // Jangle guitar: picked chord tones in the verse, strummed eighths in the chorus. Same chords
+        // as the piano, voiced like a guitar; each strum's strings a few milliseconds apart.
+        let shapes: [[Int]: [Int]] = [D: [50, 57, 62, 66], A: [45, 52, 57, 61, 64], Bm: [47, 54, 59, 62, 66],
+                                      G: [43, 47, 50, 55, 59, 67], Em: [40, 47, 52, 55, 59, 64]]
+        func picked(_ prog: [[Int]]) -> [Note] {
+            var n: [Note] = []
+            for (b, chord) in prog.enumerated() {
+                let s = shapes[chord] ?? chord
+                for (i, k) in [0, 2, 1, 3, 2, 4, 3, 2].enumerated() {
+                    let at = Double(i) * 0.5
+                    n.append(Note(pitch: s[min(k, s.count - 1)], start: Double(b) * bar + at, length: min(0.9, bar - at),
+                                  velocity: i % 2 == 0 ? 0.7 : 0.55))
+                }
+            }
+            return n
+        }
+        func strummed(_ prog: [[Int]]) -> [Note] {
+            var n: [Note] = []
+            for (b, chord) in prog.enumerated() {
+                let s = shapes[chord] ?? chord
+                for e in 0..<8 {
+                    let down = e % 2 == 0
+                    let strings = down ? s : Array(s.reversed().prefix(4))
+                    for (i, pitch) in strings.enumerated() {
+                        let at = Double(e) * 0.5 + Double(i) * 0.02
+                        n.append(Note(pitch: pitch, start: Double(b) * bar + at, length: min(0.46, bar - at),
+                                      velocity: (down ? 0.75 : 0.55) - Double(i) * 0.02))
+                    }
+                }
+            }
+            return n
+        }
+        let guitarVerse = synthPattern("Guitar Verse", 7, "Jangle Guitar", picked(verse))
+        let guitarChorus = synthPattern("Guitar Chorus", 7, "Jangle Guitar", strummed(chorus))
+
         // Pipe organ over the build and the chorus: the top of each chord an octave up, held, above the piano.
         func organ(_ prog: [[Int]]) -> [Note] { chords(prog.map { $0.suffix(3).map { $0 + 12 } }, [(0, 3.95, 0.6)]) }
         let organPre = synthPattern("Organ Build", 8, "Pipe Organ", gain: -4, organ(pre))
@@ -122,6 +157,8 @@ extension DemoProject {
         let room = effect("reverb", ["mix": 0.18, "size": 0.45])
         // The upright is warm and dark: less low end under the driving parts, more sparkle on top.
         let lowCut = effect("eq", ["lowgain": -6, "lowfreq": 220, "midgain": -2, "midfreq": 400, "midq": 0.8, "highgain": 3])
+        // The guitar leaves the low end to the bass and adds sparkle on top.
+        let guitarEQ = effect("eq", ["lowgain": -8, "lowfreq": 250, "highgain": 3])
         let hall = effect("reverb", ["mix": 0.28, "size": 0.75])
 
         let intro = Asset(name: "Intro", colorIndex: 11, content: .composition(Composition(length: 16, tracks: [
@@ -136,6 +173,7 @@ extension DemoProject {
             track("Bass", 1, volume: -3, [clip(bassVerse, at: 0, length: 32)]),
             track("Piano", 6, volume: -3, [clip(pianoVerse, at: 0, length: 32)], effects: [room]),
             track("Vibes", 9, volume: -5, [clip(vibes, at: 0, length: 32)], effects: [hall]),
+            track("Guitar", 7, volume: -6, pan: -0.3, [clip(guitarVerse, at: 16, length: 16)], effects: [guitarEQ, room]),
         ])))
 
         let preComp = Asset(name: "Pre-Chorus", colorIndex: 5, content: .composition(Composition(length: 16, tracks: [
@@ -158,6 +196,7 @@ extension DemoProject {
                             effect("saturator", ["drive": 4, "mix": 0.4])]),
             track("Piano", 6, volume: -1, [clip(pianoChorus, at: 0, length: 32)], effects: [lowCut, room]),
             // The organ's sub-octave pipes would thicken the low mids, so it sits on top.
+            track("Guitar", 7, volume: -5, pan: -0.25, [clip(guitarChorus, at: 0, length: 32)], effects: [guitarEQ, room]),
             track("Organ", 8, volume: -9, [clip(organChorus, at: 0, length: 32)],
                   effects: [effect("eq", ["lowgain": -10, "lowfreq": 450]), hall]),
             track("Sax", 5, volume: 0, [clip(sax, at: 0, length: 32)],
@@ -200,6 +239,7 @@ extension DemoProject {
         p.updateComposition(p.mainCompositionID) { $0 = main }
         filed(&p, sections: [intro, verseComp, preComp, chorusComp, bridgeComp, lastChorus, outro],
               patterns: [pianoIntro, pianoVerse, pianoPre, pianoChorus, pianoBridge, pianoEnd, bassVerse, bassPre, bassChorus, bassBridge,
+                         guitarVerse, guitarChorus,
                          kalimba, kalimbaBridge, vibes, harp, organPre, organChorus, sax, saxHarmony, glock, shaker, tambourine],
               beats: [verseBeat, chorusBeat, buildBeat, fill, halfTime, crash], fx: [])
         return p

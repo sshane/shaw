@@ -11,13 +11,13 @@ public struct RecordedInstrument {
     /// Sampler settings that suit it (`SamplerParams`).
     let settings: [String: Double]
 
-    public enum Style { case chords, arpeggio, melody, bassline }
+    public enum Style { case chords, arpeggio, melody, bassline, strum }
 
     public var path: String { SampleLibrary.bundledPrefix + "Instruments/" + folder }
 }
 
 /// Public domain (CC0) recordings, so Shaw can ship them: the Versilian Community Sample Library by
-/// Versilian Studios, and Karoryfer's Growlybass for the bass guitar. See Resources/Sounds/CREDITS.txt.
+/// Versilian Studios, and Karoryfer Samples for the bass and the guitars. See Resources/Sounds/CREDITS.txt.
 public enum RecordedInstruments {
     public static let category = "Real Instruments"
 
@@ -48,6 +48,17 @@ public enum RecordedInstruments {
                            style: .melody, settings: held.merging(["r": 0.12]) { $1 }),
         RecordedInstrument(name: "Bass Guitar", folder: "Bass Guitar", summary: "A Squier Jazz Bass, played with fingers",
                            style: .bassline, settings: held.merging(["r": 0.12]) { $1 }),
+        // Guitars stop when the note ends, like a hand muting the strings.
+        RecordedInstrument(name: "Jangle Guitar", folder: "Jangle Guitar", summary: "A Gretsch hollow-body electric, bright and jangly",
+                           style: .strum, settings: held.merging(["r": 0.25]) { $1 }),
+        RecordedInstrument(name: "Hollow-Body Guitar", folder: "Hollow-Body Guitar", summary: "A Höfner Club hollow-body, warm and round",
+                           style: .strum, settings: held.merging(["r": 0.25]) { $1 }),
+        RecordedInstrument(name: "Clean Electric Guitar", folder: "Clean Electric Guitar", summary: "An Epiphone solid-body, recorded clean with no amp",
+                           style: .strum, settings: held.merging(["r": 0.25]) { $1 }),
+        RecordedInstrument(name: "Acoustic Archtop", folder: "Acoustic Archtop", summary: "An archtop guitar through a microphone, close to an acoustic",
+                           style: .strum, settings: held.merging(["r": 0.3]) { $1 }),
+        RecordedInstrument(name: "Jazz Guitar", folder: "Jazz Guitar", summary: "The same archtop through its pickup, warm and round",
+                           style: .strum, settings: held.merging(["r": 0.3]) { $1 }),
         RecordedInstrument(name: "Pipe Organ", folder: "Pipe Organ", summary: "A church organ",
                            style: .chords, settings: held.merging(["r": 0.25]) { $1 }),
     ]
