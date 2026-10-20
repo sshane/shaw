@@ -335,6 +335,20 @@ final class BrowserPreviewTests: XCTestCase {
         let out2 = e.renderForTesting(frames: 24000)
         XCTAssertGreaterThan(out2.map { abs($0) }.max() ?? 0, 0.02)
     }
+
+    /// Playing a note while a preview phrase is still going cuts the phrase, but the note it was
+    /// holding must still end (a held organ used to ring forever).
+    func testPlayingDuringAPreviewReleasesItsHeldNote() {
+        let e = AudioEngine()
+        let pad = Instrument.preset("Supersaw")
+        e.playPhrase([PhraseNote(0, 4, 60, 0.8)], instrument: pad, bpm: 120)
+        _ = e.renderForTesting(frames: 9600) // the phrase's note is sounding
+        e.previewNoteOn(64, instrument: pad)
+        _ = e.renderForTesting(frames: 4800)
+        e.previewNoteOff(64)
+        let out = e.renderForTesting(frames: 48000 * 3)
+        XCTAssertLessThan(out.suffix(24000).map { abs($0) }.max() ?? 0, 0.001, "the preview's note kept ringing")
+    }
 }
 
 final class CustomInstrumentTests: XCTestCase {

@@ -321,8 +321,8 @@ public final class AudioEngine {
             let (sample, root) = source.pick(pitch)
             let p = SamplerParams.defs.resolve(instrument.params)
             locked {
+                cutPhrase()
                 previewSamplerParams = p
-                phrase = []
                 phraseBPM = bpm
                 previewSampler.noteOn(pitch, velocity: Float(velocity), params: p, sample: sample, recordedAt: root)
                 idleFrames = 0
@@ -331,13 +331,25 @@ public final class AudioEngine {
         }
         let p = SynthParams.defs.resolve(instrument.params)
         locked {
+            cutPhrase()
             previewParams = p
             // Notes played by hand follow the song's tempo (a phrase uses its own).
-            phrase = []
             phraseBPM = bpm
             previewSynth.noteOn(pitch, velocity: Float(velocity), params: p)
             idleFrames = 0
         }
+    }
+
+    /// Stops the browser phrase so notes played by hand take over. Its notes that already started
+    /// still get their note-offs, or a held sound (an organ, a pad) would ring on forever. Call locked.
+    private func cutPhrase() {
+        if phraseKit == nil, phraseIndex < phrase.count {
+            for e in phrase[phraseIndex...] where !e.on {
+                if phraseSampler != nil { previewSampler.noteOff(e.pitch) } else { previewSynth.noteOff(e.pitch, params: previewParams) }
+            }
+        }
+        phrase = []
+        phraseIndex = 0
     }
 
     /// Play a short phrase on `instrument` (main thread). Replaces any phrase still playing.
