@@ -70,12 +70,13 @@ public enum RecordedInstruments {
                            style: .strum, settings: held.merging(["r": 0.3]) { $1 }),
         RecordedInstrument(name: "Pipe Organ", folder: "Pipe Organ", summary: "A church organ",
                            style: .chords, settings: held.merging(["r": 0.25]) { $1 }),
-        // A singer's "ah", "oh", and "eh", cut short for chopped vocal hooks.
+        // A singer's "ah", "oh", and "eh", cut short for chopped vocal hooks. Her takes are loud, so
+        // the voices start 8 dB down, where chords of them don't clip.
         RecordedInstrument(name: "Vocal Chops", folder: "Vocal Chops", summary: "A woman singing \"ah\", \"oh\", and \"eh\", for chopped vocal hooks",
-                           style: .melody, settings: held.merging(["r": 0.06]) { $1 }),
+                           style: .melody, settings: held.merging(["r": 0.06, "volume": -8]) { $1 }),
         // One long "ooh", played as chords: it fades in and lingers like a choir.
         RecordedInstrument(name: "Ooh Pad", folder: "Ooh Pad", summary: "A woman singing \"ooh\", for soft vocal chords",
-                           style: .chords, settings: held.merging(["a": 0.25, "r": 1.2]) { $1 }),
+                           style: .chords, settings: held.merging(["a": 0.25, "r": 1.2, "volume": -8]) { $1 }),
     ]
 
     public static let names = all.map(\.name)

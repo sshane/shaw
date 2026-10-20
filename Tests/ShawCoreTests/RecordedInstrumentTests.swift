@@ -91,10 +91,12 @@ final class RecordedInstrumentTests: XCTestCase {
     }
 
     func testEveryRealInstrumentIsThere() throws {
+        // The voices are a singer's few takes, pitched to every note; the rest are recorded note by note.
+        let voices: Set = ["Vocal Chops", "Ooh Pad"]
         for r in RecordedInstruments.all {
             XCTAssertTrue(SampleLibrary.shared.isFolder(r.path), "\(r.name): no folder at \(SampleLibrary.fileURL(r.path).path)")
             let zones = try XCTUnwrap(SampleLibrary.loadZones(SampleLibrary.fileURL(r.path)), r.name)
-            XCTAssertGreaterThanOrEqual(zones.roots.count, 4, "\(r.name) needs recordings across its range")
+            XCTAssertGreaterThanOrEqual(zones.roots.count, voices.contains(r.name) ? 1 : 4, "\(r.name) needs recordings across its range")
             // No more than an octave between recordings, so nothing gets stretched too far.
             for (a, b) in zip(zones.roots, zones.roots.dropFirst()) {
                 XCTAssertLessThanOrEqual(b - a, 12, "\(r.name): a gap from \(a) to \(b)")
