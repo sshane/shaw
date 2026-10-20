@@ -428,13 +428,14 @@ struct BrowserRow: View {
             Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.accent).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
-                    Text(title).font(Theme.small).foregroundStyle(Theme.text)
+                    Text(title).font(Theme.small).foregroundStyle(Theme.text).lineLimit(1)
                     if sampled {
                         Text("SAMPLE")
                             .font(.system(size: 8, weight: .bold)).tracking(0.3)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(Theme.accent, in: RoundedRectangle(cornerRadius: 3))
+                            .fixedSize()
                             .help("Plays recordings of a real instrument instead of a synthesized sound")
                     }
                 }
