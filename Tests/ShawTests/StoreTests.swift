@@ -216,10 +216,15 @@ final class DemoSongTests: XCTestCase {
               louder: [("Chorus", "Verse"), ("Last Chorus", "Bridge")])
     }
 
+    func testGlasswing() {
+        check(DemoProject.glasswing(), [("Intro", 0, 32), ("Build", 32, 64), ("Drop", 64, 96), ("Drop B", 96, 128), ("Outro", 128, 160)],
+              louder: [("Drop", "Intro")])
+    }
+
     /// Set SHAW_EXPORT_DIR to write every demo to a WAV you can listen to.
     func testExportDemos() throws {
         guard let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] else { return }
-        for p in [DemoProject.starlightFM(), DemoProject.afterburn(), DemoProject.lanterns(), DemoProject.postcards()] {
+        for p in [DemoProject.glasswing(), DemoProject.starlightFM(), DemoProject.afterburn(), DemoProject.lanterns(), DemoProject.postcards()] {
             try OfflineRenderer.export(project: p, composition: p.mainCompositionID,
                                        to: URL(fileURLWithPath: dir).appendingPathComponent("\(p.name).wav"))
         }

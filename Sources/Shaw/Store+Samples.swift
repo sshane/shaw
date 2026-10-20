@@ -16,7 +16,7 @@ extension Store {
     static let maxSamplesPerFolder = 20_000
 
     /// Sample folders that come with Shaw (public domain recordings), listed above yours.
-    static let builtInSampleFolders = ["Percussion", "Acoustic Kit"].map { SampleLibrary.bundledPrefix + $0 }
+    static let builtInSampleFolders = ["Percussion", "Acoustic Kit", "Vocals"].map { SampleLibrary.bundledPrefix + $0 }
 
     var allSampleFolders: [String] { Store.builtInSampleFolders + sampleFolders }
 

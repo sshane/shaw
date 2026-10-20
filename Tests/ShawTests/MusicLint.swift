@@ -26,9 +26,10 @@ enum MusicLint {
                             if !c.loops { break }
                             passStart += len
                         }
-                    // Drum kits and Shaw's hand percussion hits aren't pitched.
+                    // Drum kits, Shaw's hand percussion, and its shouts aren't pitched.
                     case .notes(let pat) where !pat.instrument.isDrumKit
-                        && !(pat.instrument.sample ?? "").hasPrefix(SampleLibrary.bundledPrefix + "Percussion/"):
+                        && !(pat.instrument.sample ?? "").hasPrefix(SampleLibrary.bundledPrefix + "Percussion/")
+                        && !(pat.instrument.sample ?? "").hasPrefix(SampleLibrary.bundledPrefix + "Vocals/"):
                         if pat.instrument.preset.contains("Riser") || pat.instrument.preset.contains("lifter")
                             || pat.instrument.preset.contains("Impact") || pat.instrument.preset.contains("Zap") { continue }
                         let len = pat.length
@@ -66,7 +67,8 @@ enum MusicLint {
 
     /// `scale`: pitch classes in key. Clashes: two different parts a minor 2nd or minor 9th apart,
     /// overlapping for more than a sixteenth note.
-    static func check(_ p: Project, scale: Set<Int>) -> Report {
+    /// `strict`: also flag a half step between parts spread across octaves (like A5 over an A♭ bass).
+    static func check(_ p: Project, scale: Set<Int>, strict: Bool = false) -> Report {
         let ev = flatten(p).sorted { $0.start < $1.start }
         var r = Report()
         for (i, a) in ev.enumerated() {
@@ -78,7 +80,8 @@ enum MusicLint {
                 // (A major 7th, like A under G#, is the lush maj7 sound and is fine.)
                 let interval = abs(a.pitch - b.pitch)
                 // Within one part only adjacent half steps count (a deliberate 9th spread across octaves is fine).
-                if overlap > 0.25, a.part == b.part ? interval == 1 : (interval == 1 || interval == 13) {
+                let crossClash = strict ? (interval % 12 == 1) : (interval == 1 || interval == 13)
+                if overlap > 0.25, a.part == b.part ? interval == 1 : crossClash {
                     r.clashes.append((max(a.start, b.start), "\(a.part) \(name(a.pitch)) vs \(b.part) \(name(b.pitch))"))
                 }
             }
@@ -98,5 +101,8 @@ final class MusicLintTests: XCTestCase {
             let r = MusicLint.check(p, scale: key)
             XCTAssertTrue(r.clashes.isEmpty && r.outOfKey.isEmpty, "\(p.name): \(r.description)")
         }
+        // Glasswing borrows F# (the D7) and Ab (the Ab7), and is held to the strict octave-spread check.
+        let r = MusicLint.check(DemoProject.glasswing(), scale: minor(7).union([6, 8]), strict: true)
+        XCTAssertTrue(r.clashes.isEmpty && r.outOfKey.isEmpty, "Glasswing: \(r.description)")
     }
 }

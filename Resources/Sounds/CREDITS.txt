@@ -4,8 +4,9 @@ Shaw bundled samples: credits and sources
 Every recording in this folder is in the public domain under Creative Commons CC0 1.0
 Universal (https://creativecommons.org/publicdomain/zero/1.0/). The Bass Guitar and the five
 guitars come from Karoryfer Samples (Growlybass, Black And Green Guitars, Emilyguitar, and
-Shinyguitar; see the end of this file). Everything else comes from the Versilian Community
-Sample Library (VCSL) by Versilian Studios LLC and its contributors.
+Shinyguitar; see the end of this file). The vocals come from Freesound (see [Vocals] below).
+Everything else comes from the Versilian Community Sample Library (VCSL) by Versilian Studios
+LLC and its contributors.
 No rights are reserved; attribution is not required but is given here with thanks.
 
   VCSL:              https://github.com/sgossner/VCSL
@@ -19,6 +20,22 @@ per instrument (drums and percussion normalized per file), converted to 16-bit A
 Lossless CAF at the original sample rate. The Kalimba notes were retuned by resampling
 (by -36 to +36 cents) to equal temperament, because the source instrument uses its own
 traditional tuning. Instrument files are named by the MIDI note of the recorded pitch.
+
+[Vocals]
+Recordings shared on Freesound (https://freesound.org) under CC0 1.0, each license checked on the
+sound's own page on 2026-10-19. Cut into notes, high-passed, retuned by resampling to equal
+temperament (by the cents shown), faded, normalized, and converted to 16-bit Apple Lossless CAF.
+
+Instruments/Vocal Chops/082.caf  <- "Ahohe" by maurolupo, 2.40-4.95 s (B-flat 5, -9 cents)
+                                    https://freesound.org/people/maurolupo/sounds/211961/
+Instruments/Vocal Chops/070.caf  <- the same recording, 5.05-6.40 s (B-flat 4, -5 cents)
+Instruments/Vocal Chops/063.caf  <- the same recording, 1.12-2.15 s (E-flat 4, -17 cents)
+Instruments/Ooh Pad/066.caf      <- "Uuuhh" by maurolupo, 0.08-9.08 s (F-sharp 4, +19 cents)
+                                    https://freesound.org/people/maurolupo/sounds/211629/
+Vocals/Yeah.caf                  <- "Shouting Yeah.wav" by tonsil5
+                                    https://freesound.org/people/tonsil5/sounds/416843/
+Vocals/Hey.caf                   <- "HEY VERY LOW 4.WAV" by metrostock99
+                                    https://freesound.org/people/metrostock99/sounds/345083/
 
 Source paths are relative to the root of the VCSL repository (branch master).
 

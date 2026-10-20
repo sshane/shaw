@@ -17,7 +17,8 @@ public struct RecordedInstrument {
 }
 
 /// Public domain (CC0) recordings, so Shaw can ship them: the Versilian Community Sample Library by
-/// Versilian Studios, and Karoryfer Samples for the bass and the guitars. See Resources/Sounds/CREDITS.txt.
+/// Versilian Studios, Karoryfer Samples for the bass and the guitars, and singers on Freesound for the
+/// vocals. See Resources/Sounds/CREDITS.txt.
 public enum RecordedInstruments {
     public static let category = "Real Instruments"
 
@@ -61,6 +62,12 @@ public enum RecordedInstruments {
                            style: .strum, settings: held.merging(["r": 0.3]) { $1 }),
         RecordedInstrument(name: "Pipe Organ", folder: "Pipe Organ", summary: "A church organ",
                            style: .chords, settings: held.merging(["r": 0.25]) { $1 }),
+        // A singer's "ah", "oh", and "eh", cut short for chopped vocal hooks.
+        RecordedInstrument(name: "Vocal Chops", folder: "Vocal Chops", summary: "A woman singing \"ah\", \"oh\", and \"eh\", for chopped vocal hooks",
+                           style: .melody, settings: held.merging(["r": 0.06]) { $1 }),
+        // One long "ooh", played as chords: it fades in and lingers like a choir.
+        RecordedInstrument(name: "Ooh Pad", folder: "Ooh Pad", summary: "A woman singing \"ooh\", for soft vocal chords",
+                           style: .chords, settings: held.merging(["a": 0.25, "r": 1.2]) { $1 }),
     ]
 
     public static let names = all.map(\.name)
