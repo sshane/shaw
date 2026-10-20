@@ -101,10 +101,40 @@ extension Store {
 
     /// Delete with nothing selected: delete the note under the cursor.
     func deleteNoteAtCursor() {
-        guard let (id, p) = openPattern else { return }
-        let c = cursorSpot(p)
-        guard let n = p.notes.last(where: { $0.pitch == c.pitch && c.beat > $0.start - Store.eps && c.beat < $0.end - Store.eps }) else { return }
+        guard let (id, p) = openPattern, let n = noteUnderCursor(p) else { return }
         edit { $0.updateNotes(id) { $0.notes.removeAll { $0.id == n.id } } }
+    }
+
+    /// The note on the cursor's row that's sounding at the cursor's beat: what Return selects and Delete removes.
+    func noteUnderCursor(_ p: NotePattern) -> Note? {
+        let c = cursorSpot(p)
+        return p.notes.last { $0.pitch == c.pitch && c.beat > $0.start - Store.eps && c.beat < $0.end - Store.eps }
+    }
+
+    /// Return: select the note under the cursor, or add one if there isn't one. The cursor stays put.
+    func returnAtCursor() {
+        guard let (_, p) = openPattern else { return }
+        guard let n = noteUnderCursor(p) else { return addNoteAtCursor() }
+        select([n], in: p)
+    }
+
+    /// ⇧Return: select every note sounding at the cursor's beat, on every row (a chord, say).
+    func selectChordAtCursor() {
+        guard let (_, p) = openPattern else { return }
+        let beat = cursorSpot(p).beat
+        let here = p.notes.filter { beat > $0.start - Store.eps && beat < $0.end - Store.eps }
+        guard !here.isEmpty else { return }
+        select(here, in: p)
+    }
+
+    private func select(_ notes: [Note], in p: NotePattern) {
+        let c = cursorSpot(p)
+        rollCursor = c.beat
+        rollCursorPitch = c.pitch
+        selectedNotes = Set(notes.map(\.id))
+        rollBox = nil
+        for n in notes { audition(n.pitch, instrument: p.instrument) }
+        rollRevealRequest += 1
     }
 
     /// 1–5: the length of the notes Return adds.

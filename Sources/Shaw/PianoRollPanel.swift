@@ -400,8 +400,9 @@ struct PianoRollPanel: View {
         case 48 where !cmd && !opt: // Tab / ⇧Tab: next or previous note
             store.selectNeighbor(next: !shift)
             return true
-        case 36 where !cmd && !opt, 76 where !cmd && !opt: // Return: add a note at the cursor
-            if sel.isEmpty { store.addNoteAtCursor() }
+        case 36 where !cmd && !opt, 76 where !cmd && !opt:
+            // ⇧Return selects the chord at the cursor; Return selects the note under it, or adds one.
+            if shift { store.selectChordAtCursor() } else if sel.isEmpty { store.returnAtCursor() }
             return true
         case 18, 19, 20, 21, 23: // 1–5: how long the notes Return adds are
             guard !cmd && !opt else { return false }
@@ -1016,7 +1017,8 @@ struct RollKeysHelp: View {
     private static let adding: [(String, String)] = [
         ("A W S E D F …", "Play notes to try ideas"),
         ("←  →  ↑  ↓", "Move the cursor"),
-        ("Return", "Add a note at the cursor"),
+        ("Return", "Add a note, or select the one under the cursor"),
+        ("⇧Return", "Select every note at the cursor (a chord)"),
         ("⇧ + A W S …", "Add that note at the cursor"),
         ("Delete", "Delete the note at the cursor"),
         ("1 2 3 4 5", "Length: 1/16, 1/8, 1/4, 1/2, 1 bar"),

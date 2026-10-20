@@ -205,3 +205,34 @@ final class RollCursorTests: XCTestCase {
         XCTAssertNil(s.rollCursorPitch)
     }
 }
+
+final class ReturnSelectsTests: XCTestCase {
+    /// Return on a note selects it instead of stacking a copy; on empty space it still adds one.
+    /// ⇧Return selects the whole chord at the cursor.
+    func testReturnSelectsTheNoteUnderTheCursor() {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.addInstrument(.synth("Pluck"))
+        let id = s.project.assets.last { $0.kind == .notes }!.id
+        let chord = [Note(pitch: 60, start: 0, length: 2), Note(pitch: 64, start: 0, length: 2), Note(pitch: 67, start: 0, length: 2)]
+        s.edit { $0.updateNotes(id) { $0.notes = chord } }
+        s.pianoRollAsset = id
+        s.rollCursor = 1 // inside the notes, not at their start
+        s.rollCursorPitch = 64
+        s.returnAtCursor()
+        guard case .notes(let p)? = s.project.asset(id)?.content else { return XCTFail("no pattern") }
+        XCTAssertEqual(p.notes.count, 3, "nothing added")
+        XCTAssertEqual(s.selectedNotes, [p.notes.first { $0.pitch == 64 }!.id])
+        XCTAssertEqual(s.rollCursor, 1, "the cursor stays put")
+
+        s.selectedNotes = []
+        s.selectChordAtCursor()
+        XCTAssertEqual(s.selectedNotes.count, 3, "⇧Return takes the whole chord")
+
+        s.selectedNotes = []
+        s.rollCursor = 2 // past the chord
+        s.returnAtCursor()
+        guard case .notes(let q)? = s.project.asset(id)?.content else { return XCTFail("no pattern") }
+        XCTAssertEqual(q.notes.count, 4, "on empty space Return adds a note")
+        XCTAssertTrue(s.selectedNotes.isEmpty)
+    }
+}
