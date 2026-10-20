@@ -27,10 +27,16 @@ struct DragNumber: View {
             if editing {
                 // A real NSTextField that takes focus and selects its text itself. SwiftUI focus
                 // sometimes failed here, and the select-all then hit another field (Project search).
-                SelectAllField(text: text, fontSize: editSize,
-                               onCommit: { t in text = t; commit() },
-                               onCancel: { editing = false })
-                    .frame(minWidth: 40)
+                // An NSTextField takes all the width it's offered, so size it to the value
+                // (plus room for one more digit) instead of letting it push the toolbar over.
+                Text(String(repeating: "0", count: max(4, text.count + 1)))
+                    .font(.system(size: editSize, design: .monospaced))
+                    .hidden()
+                    .overlay {
+                        SelectAllField(text: text, fontSize: editSize,
+                                       onCommit: { t in text = t; commit() },
+                                       onCancel: { editing = false })
+                    }
             } else {
                 Text(format(value))
                     .font(font)
