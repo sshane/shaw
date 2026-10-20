@@ -241,8 +241,10 @@ extension DemoProject {
             track("Oohs", 3, volume: -10, [clip(oohs, at: 0, length: 32)],
                   effects: [effect("eq", ["lowgain": -10, "lowfreq": 300]), effect("reverb", ["mix": 0.45, "size": 0.9])]),
             track("Vocal", 3, volume: -4, [clip(breakLine, at: 0, length: 8), clip(breakLine, at: 16, length: 8)], effects: voxFX),
+            // Her line echoes back smeared and half-reversed, blooming into the break.
             track("Take Me Away", 3, volume: -2, [clip(takeMeAway, at: 0, length: 32)],
-                  effects: lineFX + [effect("reverb", ["mix": 0.35, "size": 0.9])]),
+                  effects: lineFX + [effect("blurdelay", ["time": 6, "feedback": 0.78, "reverse": 0.85, "blur": 1, "decay": 0.95,
+                                                          "tone": 5500, "mix": 0.6])]),
             track("Bass", 1, volume: -6, [clip(bassBreak, at: 16, length: 15)], effects: bassFX),
             track("Kick", 2, volume: -7, [clip(kickOnly, at: 16, length: 15)],
                   effects: drumsFX + [keyframed("filter", ["resonance": 0.1], "cutoff", [(16, 300), (31, 4000)])]),
