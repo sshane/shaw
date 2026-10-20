@@ -422,6 +422,69 @@ final class SpaceEffectsTests: XCTestCase {
         XCTAssertLessThan(worst, 0.03, "largest step \(worst)")
     }
 
+    // MARK: Blur Delay
+
+    func blurRun(_ settings: [String: Double], _ l: [Float], _ r: [Float]) -> ([Float], [Float]) {
+        run(BlurDelayFX(sampleRate: sr), BlurDelayFX.params.resolve(settings), l, r)
+    }
+
+    /// Where the energy of `x` sits between two samples, as a fraction of the way through.
+    func centroid(_ x: [Float], from a: Int, to b: Int) -> Double {
+        var m = 0.0, e = 0.0
+        for i in a..<b { let v = Double(x[i] * x[i]); m += v * Double(i - a); e += v }
+        return e > 0 ? m / e / Double(b - a) : 0
+    }
+
+    func testBlurDelayEchoLandsOnTheBeat() {
+        // With no blur and no reverse it's a plain delay: 1/8 dotted at 120 bpm is 18000 samples.
+        let x = impulse(1.2)
+        let (l, _) = blurRun(["time": 6, "feedback": 0, "reverse": 0, "blur": 0, "pingpong": 0, "mix": 1, "tone": 16000], x, x)
+        var peak = 0, best: Float = 0
+        for i in 100..<Int(0.6 * sr) where abs(l[i]) > best { best = abs(l[i]); peak = i }
+        XCTAssertEqual(peak, 18000, accuracy: 3)
+    }
+
+    func testBlurSmearsTheRepeats() {
+        // A click comes back spread out in time: lower and longer the more blur there is.
+        let x = impulse(2.5)
+        let settings: [String: Double] = ["time": 5, "feedback": 0.7, "reverse": 0, "pingpong": 0, "mix": 1, "tone": 16000]
+        var sharp = settings, blurred = settings
+        sharp["blur"] = 0; blurred["blur"] = 1
+        let (a, _) = blurRun(sharp, x, x), (b, _) = blurRun(blurred, x, x)
+        // The third repeat (after two trips through the diffuser), from 0.75 s.
+        let s = Int(0.74 * sr), e = Int(0.99 * sr)
+        let peakA = a[s..<e].map(abs).max()!, peakB = b[s..<e].map(abs).max()!
+        XCTAssertLessThan(peakB, peakA * 0.5, "blurred repeats lose their sharp peak")
+        // Spread: how many samples hold a meaningful share of the energy.
+        func spread(_ x: ArraySlice<Float>) -> Int { let m = x.map(abs).max()!; return x.filter { abs($0) > m * 0.1 }.count }
+        XCTAssertGreaterThan(spread(b[s..<e]), spread(a[s..<e]) * 4)
+    }
+
+    func testReverseTurnsTheEchoAround() {
+        // A burst that fades out comes back fading in.
+        var x = [Float](repeating: 0, count: Int(2 * sr))
+        for i in 0..<Int(0.2 * sr) { x[i] = sinf(Float(i) * 0.05) * expf(-Float(i) / Float(0.04 * sr)) }
+        let base: [String: Double] = ["time": 8, "feedback": 0, "blur": 0, "pingpong": 0, "mix": 1, "tone": 16000]
+        var fwd = base, back = base
+        fwd["reverse"] = 0; back["reverse"] = 1
+        let (a, _) = blurRun(fwd, x, x), (b, _) = blurRun(back, x, x)
+        // The forward echo's energy sits at the start of its window; the reversed one's later.
+        let s = Int(0.5 * sr), e = Int(1.6 * sr)
+        XCTAssertLessThan(centroid(a, from: s, to: e), 0.15)
+        XCTAssertGreaterThan(centroid(b, from: s, to: e), centroid(a, from: s, to: e) + 0.15)
+    }
+
+    func testBlurDelayFeedbackNeverRunsAway() {
+        let period = Int(0.25 * sr) / 120
+        let n = Int(8 * sr)
+        let x = (0..<n).map { i in Float(sin(2 * Double.pi * Double(i) / Double(period))) * 0.5 }
+        for ping in [0.0, 1.0] {
+            let (l, r) = blurRun(["time": 5, "feedback": 0.95, "reverse": 0.5, "blur": 1, "pingpong": ping, "mix": 1, "tone": 16000], x, x)
+            XCTAssert(l.allSatisfy(\.isFinite) && r.allSatisfy(\.isFinite))
+            XCTAssertLessThan(max(l.map(abs).max()!, r.map(abs).max()!), 3.0)
+        }
+    }
+
     // MARK: Chorus
 
     func chorusRun(_ settings: [String: Double], _ l: [Float], _ r: [Float]) -> ([Float], [Float]) {

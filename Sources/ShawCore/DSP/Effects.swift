@@ -41,6 +41,10 @@ public enum EffectRegistry {
                          summary: "Tempo-synced echo with ping-pong",
                          keywords: ["echo", "ping pong", "tape"],
                          params: DelayFX.params, make: { DelayFX(sampleRate: $0) }),
+        EffectDescriptor(id: "blurdelay", name: "Blur Delay", category: "Space",
+                         summary: "Echoes that smear, reverse, and bloom into reverb",
+                         keywords: ["blur", "reverse", "ambient", "wash", "shimmer", "echo", "dreamy"],
+                         params: BlurDelayFX.params, make: { BlurDelayFX(sampleRate: $0) }),
         EffectDescriptor(id: "chorus", name: "Chorus", category: "Modulation",
                          summary: "Widening, flanging, and doubling",
                          keywords: ["flanger", "ensemble", "width", "double"],
@@ -94,6 +98,7 @@ public enum EffectRegistry {
     static let basic: [String: [String]] = [
         "reverb": ["mix", "size"],
         "delay": ["time", "feedback", "mix"],
+        "blurdelay": ["time", "reverse", "blur", "mix"],
         "chorus": ["depth", "mix"],
         "phaser": ["rate", "mix"],
         "autopan": ["rate", "amount"],
