@@ -46,7 +46,7 @@ To hear what a full song looks like, open **File → Open Demo Song**. There are
 
 - **Sunroom** is psychedelic indie rock in A major at 113 BPM, played on the real instruments. It opens like a sample on an old record, muffled and pumping, until the filter opens on a band with double-tracked hollow-body guitars, a fingered bass, the acoustic kit, and a singer's "ooh" and "ah". A breakdown of congas and phased keys leads into the last chorus, and the song ends back inside the record.
 - **Glasswing** is melodic electro in G minor at 128 BPM. Rolled electric piano chords and a grand piano open with a soft choir, and a high voice rises out of it. A build drops to a lone piano for one bar before a drop of supersaws, a rolling bass, and vocal chops cut into a rhythm. The second drop chops the lead into a gallop, then melts into an outro where the piano sings the hook once more and the high voice returns over the last chord.
-- **Starlight FM** is UK garage and future house in C minor at 134 BPM. It has a skippy 2-step beat, a bouncy bassline, pumping garage chords, and vocal chops with delay throws at the end of each phrase. Drop 2 puts the first drop inside it with a four-on-the-floor beat and a new topline.
+- **Starlight FM** is filtered French-house disco in C minor at 124 BPM, after starjunk 95. A late-night radio host introduces a disco loop of real strings, funk guitar, electric piano, and horn stabs that is muffled and pumping until the filter opens on the drop, where a singer takes the chorus over a four-on-the-floor kit and an octave disco bass. The break goes lush with "Take me away", and the second drop chops the loop up like a sample.
 
 ![Starting a new project](docs/images/start.png)
 

@@ -38,6 +38,26 @@ Vocals/Yeah.caf                  <- "Shouting Yeah.wav" by tonsil5
 Vocals/Hey.caf                   <- "HEY VERY LOW 4.WAV" by metrostock99
                                     https://freesound.org/people/metrostock99/sounds/345083/
 
+These lines come from Freesound's high-quality MP3 previews (128 kbps) of CC0 recordings, each
+license checked on the sound's own page on 2026-10-20. Cut, faded, normalized to -16 LUFS, and
+converted to 16-bit Apple Lossless CAF at 48 kHz; the sung ones were retuned by resampling.
+
+Vocals/Late Night Radio.caf      <- "WELCOME TO LATE NIGHT RADIO" by Anzbot, 0.30-2.30 s
+                                    https://freesound.org/s/564475/
+Vocals/Lovers Out There.caf      <- the same recording, 3.28-5.90 s
+Vocals/Should Have Known Better.caf
+                                 <- "Should Have Known Better_Chorus.wav" by vocalwarehouse, whole,
+                                    up three semitones (A minor to C minor), then gently
+                                    pitch-corrected to the C minor scale
+                                    https://freesound.org/s/698354/
+Vocals/Should Have Known Better Ad-Libs.caf
+                                 <- "Should Have Known Better_AdLibs.wav" by vocalwarehouse, whole,
+                                    up three semitones (A minor to C minor)
+                                    https://freesound.org/s/698355/
+Vocals/Take Me Away.caf          <- "Take Me Away_Vocal_1" by vocalwarehouse, 0.45-8.95 s
+                                    (to B-flat, +245 cents)
+                                    https://freesound.org/s/684829/
+
 Source paths are relative to the root of the VCSL repository (branch master).
 
 [Instruments/FM Piano]

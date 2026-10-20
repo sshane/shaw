@@ -196,7 +196,7 @@ final class DemoSongTests: XCTestCase {
     }
 
     func testStarlightFM() {
-        check(DemoProject.starlightFM(), [("Intro", 0, 32), ("Drop", 32, 96), ("Break", 96, 112), ("Drop 2", 112, 144), ("Outro", 144, 160)],
+        check(DemoProject.starlightFM(), [("Intro", 0, 32), ("Drop", 32, 96), ("Break", 96, 128), ("Drop 2", 128, 160), ("Outro", 160, 176)],
               louder: [("Drop", "Intro"), ("Drop 2", "Break")])
     }
 
