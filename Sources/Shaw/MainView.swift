@@ -31,7 +31,6 @@ struct MainView: View {
             }
         }
         .background(Theme.bg)
-        .overlay { if let progress = store.timelapseProgress { TimelapseOverlay(progress: progress) } }
         .sheet(isPresented: Binding(get: { store.showWelcome }, set: { if !$0 { store.dismissWelcome() } })) {
             WelcomeView().environment(store)
         }
@@ -264,31 +263,5 @@ struct MasterMeter: View {
         LevelMeterView(level: store.transport.masterLevel)
             .clipShape(RoundedRectangle(cornerRadius: 2))
             .help("Master level")
-    }
-}
-
-/// While a time-lapse plays: the window is just for watching. A click anywhere or Esc stops it.
-struct TimelapseOverlay: View {
-    @Environment(Store.self) private var store
-    let progress: Double
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.opacity(0.001)
-                .contentShape(Rectangle())
-                .onTapGesture { store.stopTimelapse() }
-            HStack(spacing: 10) {
-                Image(systemName: "timelapse").foregroundStyle(Theme.accent)
-                Text("Time-lapse").font(Theme.header)
-                ProgressView(value: progress).frame(width: 140).tint(Theme.accent)
-                Button("Stop") { store.stopTimelapse() }
-                    .keyboardShortcut(.cancelAction)
-                    .controlSize(.small)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.12)))
-            .padding(.top, 54)
-        }
     }
 }
