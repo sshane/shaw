@@ -156,8 +156,9 @@ extension Store {
         }
     }
 
-    /// A real instrument's phrase: chords for pianos and the organ, an arpeggio for mallets and plucks,
-    /// a melody for the sax, a riff for the bass, and strummed chords for the guitars.
+    /// A real instrument's phrase: chords for pianos, the organ, and the string section, an arpeggio for
+    /// mallets and plucks, a melody for the sax, a riff for the bass, strummed chords for the guitars,
+    /// and short rhythmic chords for the string and brass stabs.
     static func phrase(forRecorded name: String) -> ([PhraseNote], Double) {
         switch RecordedInstruments.named(name)?.style ?? .chords {
         case .chords: return phrase(forPreset: "Keys")
@@ -178,6 +179,7 @@ extension Store {
             }
             return (n, 110)
         case .arpeggio: return phrase(forPreset: "Electric Piano")
+        case .stabs: return phrase(forPreset: "Stab")
         case .melody:
             // The lead hook, down an octave where a tenor sax sits.
             let hook: [(Double, Double, Int)] = [(0, 0.5, 57), (0.5, 0.5, 60), (1, 0.75, 64), (1.75, 0.25, 62),
