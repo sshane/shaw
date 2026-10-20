@@ -220,6 +220,10 @@ struct TrackHeaderColumn: View {
                     }
                 }
             }
+            // Take only the height the panel offers and let the rest hang below to be clipped.
+            // Otherwise a comp with more tracks than fit makes the whole timeline taller than
+            // its panel, which centers it and pushes the tabs and ruler out of view.
+            .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
             .offset(y: -scrollY)
         }
         .clipped()

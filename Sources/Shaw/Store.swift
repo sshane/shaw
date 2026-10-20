@@ -203,7 +203,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         // A brand-new user starts with an empty project that guides them; the demo is one click away.
         let snapshotDemo = self.isolated && ProcessInfo.processInfo.environment["SHAW_EMPTY"] == nil
         let restored = (initial == nil && !self.isolated) ? Store.restoreAutosave() : nil
-        var p = initial ?? restored ?? (snapshotDemo ? DemoProject.make() : DemoProject.empty())
+        // SHAW_DEMO=Sunroom picks which demo a snapshot run loads.
+        let demos: [String: () -> Project] = ["glasswing": DemoProject.glasswing, "sunroom": DemoProject.sunroom, "starlight": DemoProject.starlightFM,
+                                              "afterburn": DemoProject.afterburn, "lanterns": DemoProject.lanterns, "postcards": DemoProject.postcards]
+        let demo = ProcessInfo.processInfo.environment["SHAW_DEMO"].flatMap { demos[$0.lowercased()] } ?? DemoProject.make
+        var p = initial ?? restored ?? (snapshotDemo ? demo() : DemoProject.empty())
         p.migrateDrumPatterns() // old step-sequencer beats become drum-kit piano-roll patterns
         project = p
         activeCompID = p.mainCompositionID
