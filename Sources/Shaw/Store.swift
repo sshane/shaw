@@ -82,6 +82,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     // Navigation
     var openComps: [AssetID] = []
     var activeCompID: AssetID
+    /// The clip each composition was last opened from, so playback can hand off between them.
+    struct Entry { let parent: AssetID; let clip: UUID }
+    var cameFrom: [AssetID: Entry] = [:]
     var selectedClips: Set<UUID> = []
     var inspector: InspectorTarget?
     var selectedAssets: Set<AssetID> = []
@@ -356,17 +359,34 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     // MARK: - Navigation
 
-    func openComposition(_ id: AssetID) {
-        guard project.composition(id) != nil else { return }
+    /// Opens a composition as a tab and plays what you're looking at. If the song is playing, it
+    /// keeps playing: opened from a clip, it picks up at the same moment inside it (or at its start,
+    /// if the playhead hasn't reached that clip), and going back to where you came from does the reverse.
+    func openComposition(_ id: AssetID, from clip: UUID? = nil) {
+        guard let target = project.composition(id) else { return }
         // Main is always the first tab.
         if !openComps.contains(project.mainCompositionID) { openComps.insert(project.mainCompositionID, at: 0) }
         if !openComps.contains(id) { openComps.append(id) }
         if activeCompID != id {
+            let now = engine.snapshot()
+            var resume = 0.0
+            if let clip, let parent = activeComp, let (ti, ci) = parent.locate(clip: clip) {
+                let c = parent.tracks[ti].clips[ci]
+                cameFrom[id] = Entry(parent: activeCompID, clip: clip)
+                let inside = now.position >= c.start && now.position < c.end ? now.position - c.start + c.offset : c.offset
+                resume = target.length > 0 ? inside.truncatingRemainder(dividingBy: target.length) : 0
+            } else if let e = cameFrom[activeCompID], e.parent == id, let (ti, ci) = target.locate(clip: e.clip) {
+                let c = target.tracks[ti].clips[ci]
+                resume = min(max(c.start, c.start + now.position - c.offset), c.end)
+            }
             engine.stop(returnToStart: false)
-            engine.seek(0)
             activeCompID = id
             selectedClips = []
             refreshEngine()
+            loopWholeComposition()
+            // Stopped, it starts at the top like before; playing, it hands off.
+            engine.seek(now.playing ? resume : 0)
+            if now.playing { engine.play() }
             fitRequest += 1
         }
         inspector = .composition(id)
@@ -387,7 +407,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     func open(asset id: AssetID, clip: UUID? = nil) {
         guard let a = project.asset(id) else { return }
         switch a.kind {
-        case .composition: openComposition(id)
+        case .composition: openComposition(id, from: clip)
         case .notes:
             pianoRollAsset = id
             lastInstrumentAsset = id
