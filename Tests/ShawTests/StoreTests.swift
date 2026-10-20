@@ -200,22 +200,6 @@ final class DemoSongTests: XCTestCase {
               louder: [("Drop", "Intro"), ("Drop 2", "Break")])
     }
 
-    func testAfterburn() {
-        check(DemoProject.afterburn(), [("Intro", 0, 32), ("Drop", 32, 96), ("Switch-Up", 96, 128), ("Last Drop", 128, 160)],
-              louder: [("Drop", "Intro")])
-    }
-
-    func testLanterns() {
-        check(DemoProject.lanterns(), [("Intro", 0, 32), ("Build", 32, 48), ("Drop", 48, 112), ("Bridge", 112, 128), ("Last Drop", 128, 160)],
-              louder: [("Drop", "Intro"), ("Last Drop", "Bridge")])
-    }
-
-    func testPostcards() {
-        check(DemoProject.postcards(), [("Intro", 0, 16), ("Verse", 16, 48), ("Pre-Chorus", 48, 64), ("Chorus", 64, 96),
-                                        ("Bridge", 96, 112), ("Last Chorus", 112, 144), ("Outro", 144, 152)],
-              louder: [("Chorus", "Verse"), ("Last Chorus", "Bridge")])
-    }
-
     func testSunroom() {
         check(DemoProject.sunroom(), [("Intro", 0, 32), ("Verse", 32, 64), ("Chorus", 64, 96), ("Breakdown", 96, 112),
                                       ("Last Chorus", 112, 144), ("Outro", 144, 160)],
@@ -230,7 +214,7 @@ final class DemoSongTests: XCTestCase {
     /// Set SHAW_EXPORT_DIR to write every demo to a WAV you can listen to.
     func testExportDemos() throws {
         guard let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] else { return }
-        for p in [DemoProject.glasswing(), DemoProject.sunroom(), DemoProject.starlightFM(), DemoProject.afterburn(), DemoProject.lanterns(), DemoProject.postcards()] {
+        for p in [DemoProject.sunroom(), DemoProject.glasswing(), DemoProject.starlightFM()] {
             try OfflineRenderer.export(project: p, composition: p.mainCompositionID,
                                        to: URL(fileURLWithPath: dir).appendingPathComponent("\(p.name).wav"))
         }

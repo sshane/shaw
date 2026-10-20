@@ -75,8 +75,7 @@ enum MixReport {
 final class MixReportTests: XCTestCase {
     /// Drops shouldn't be boomy (63–250 Hz way above the mids), hollow, mono, or crushed.
     func testDemoDropsAreBalanced() {
-        for (p, b0, b1) in [(DemoProject.starlightFM(), 32.0, 96.0), (DemoProject.afterburn(), 32.0, 96.0), (DemoProject.lanterns(), 48.0, 112.0),
-                           (DemoProject.postcards(), 64.0, 96.0), (DemoProject.glasswing(), 64.0, 128.0),
+        for (p, b0, b1) in [(DemoProject.starlightFM(), 32.0, 96.0), (DemoProject.glasswing(), 64.0, 128.0),
                            (DemoProject.sunroom(), 64.0, 96.0)] {
             let m = MixReport.analyze(p, from: b0, to: b1)
             print(m.text)

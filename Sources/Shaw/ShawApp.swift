@@ -53,12 +53,9 @@ struct ShawCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Project") { store.newProject() }.keyboardShortcut("n", modifiers: [.command, .option])
             Menu("Open Demo Song") {
-                Button("Glasswing (melodic electro)") { store.openDemo(DemoProject.glasswing) }
                 Button("Sunroom (psychedelic indie rock)") { store.openDemo(DemoProject.sunroom) }
+                Button("Glasswing (melodic electro)") { store.openDemo(DemoProject.glasswing) }
                 Button("Starlight FM (UK garage)") { store.openDemo(DemoProject.starlightFM) }
-                Button("Afterburn (bass house)") { store.openDemo(DemoProject.afterburn) }
-                Button("Lanterns (melodic dubstep)") { store.openDemo(DemoProject.lanterns) }
-                Button("Postcards (indie pop, real instruments)") { store.openDemo(DemoProject.postcards) }
             }
             Button("Open…") { store.openDialog() }.keyboardShortcut("o")
             Menu("Open Recent") {

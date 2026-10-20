@@ -204,8 +204,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         let snapshotDemo = self.isolated && ProcessInfo.processInfo.environment["SHAW_EMPTY"] == nil
         let restored = (initial == nil && !self.isolated) ? Store.restoreAutosave() : nil
         // SHAW_DEMO=Sunroom picks which demo a snapshot run loads.
-        let demos: [String: () -> Project] = ["glasswing": DemoProject.glasswing, "sunroom": DemoProject.sunroom, "starlight": DemoProject.starlightFM,
-                                              "afterburn": DemoProject.afterburn, "lanterns": DemoProject.lanterns, "postcards": DemoProject.postcards]
+        let demos: [String: () -> Project] = ["glasswing": DemoProject.glasswing, "sunroom": DemoProject.sunroom, "starlight": DemoProject.starlightFM]
         let demo = ProcessInfo.processInfo.environment["SHAW_DEMO"].flatMap { demos[$0.lowercased()] } ?? DemoProject.make
         var p = initial ?? restored ?? (snapshotDemo ? demo() : DemoProject.empty())
         p.migrateDrumPatterns() // old step-sequencer beats become drum-kit piano-roll patterns
@@ -884,7 +883,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         load(DemoProject.empty(), url: nil)
     }
 
-    /// Open a demo song (Starlight FM unless you pick another one).
+    /// Open a demo song (Sunroom unless you pick another one).
     func openDemo(_ song: () -> Project = DemoProject.make) {
         guard confirmDiscard() else { return }
         load(song(), url: nil)

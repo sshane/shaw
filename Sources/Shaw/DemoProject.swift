@@ -63,7 +63,7 @@ enum DemoProject {
     // MARK: Demo songs
 
     /// The default demo.
-    static func make() -> Project { starlightFM() }
+    static func make() -> Project { sunroom() }
 
     static func keyframed(_ kind: String, _ params: [String: Double] = [:], _ param: String, _ points: [(Double, Double)]) -> Effect {
         var e = effect(kind, params)
