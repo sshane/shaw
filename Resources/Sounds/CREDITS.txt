@@ -5,7 +5,8 @@ Every recording in this folder is in the public domain under Creative Commons CC
 Universal (https://creativecommons.org/publicdomain/zero/1.0/). The Bass Guitar and the five
 guitars come from Karoryfer Samples (Growlybass, Black And Green Guitars, Emilyguitar, and
 Shinyguitar; see the end of this file). The vocals come from Freesound (see [Vocals] below).
-Everything else comes from the Versilian Community Sample Library (VCSL) by Versilian Studios
+The String Section, String Stabs, and Brass Stabs come from VSCO 2 Community Edition (see
+"String Section, String Stabs, and Brass Stabs" below). Everything else comes from the Versilian Community Sample Library (VCSL) by Versilian Studios
 LLC and its contributors.
 No rights are reserved; attribution is not required but is given here with thanks.
 
@@ -257,6 +258,83 @@ Shaker.caf         <- Idiophones/Struck Idiophones/Shaker, Small/Mid_ShakerDoubl
 Tambourine.caf     <- Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v2_rr1_Mid.wav
 Triangle.caf       <- Idiophones/Struck Idiophones/Triangles/Triangle6_Hit_v2_rr1_Mid.wav
 Woodblock.caf      <- Idiophones/Struck Idiophones/Woodblock/wood_click_f_rr1.wav
+
+String Section, String Stabs, and Brass Stabs
+=============================================
+
+Source: VSCO 2 Community Edition (VSCO 2: CE), an orchestral sample set by Versilian Studios
+and Sam Gossner. The String Section layers the cello, viola, and violin sections playing
+sustained notes with vibrato, cellos for the low notes, violas for the middle, and violins on
+top. The String Stabs use the same three sections playing spiccato. The Brass Stabs use a tenor
+trombone for the low notes and a trumpet from C4 up, both playing staccato.
+
+  Repository:        https://github.com/sgossner/VSCO-2-CE
+  Commit used:       440300901dfe9275fd84e0b7763af1f8443ae62e (branch master)
+  Versilian Studios: https://versilian-studios.com/
+  License:           CC0 1.0 Universal (public domain dedication), per the repository's LICENSE.
+                     Its readme asks for credit to Versilian Studios and Sam Gossner, given here.
+
+Processing for Shaw: one take per note from the loudest dynamic layer, leading silence
+trimmed so each note starts at once, sustained notes cut to 6 seconds and stabs to at most
+1.5 seconds, tails faded, resampled from 44.1 kHz to 48 kHz, and converted to 16-bit Apple
+Lossless CAF. Each note has its own gain so a scale plays evenly: sustained notes match by
+integrated loudness, and stabs match by their loudest 100 ms. A limiter takes up to 4 dB off
+the sharpest trombone attacks to keep them from clipping. Pitch analysis puts every note
+within 15 cents of equal temperament, so none needed retuning. VSCO calls middle C "C3", one
+octave lower than MIDI's usual C4, so its C3 files are saved as 060.caf.
+
+Source paths are relative to the root of the VSCO-2-CE repository (branch master).
+
+[Instruments/String Section]
+036.caf            <- Strings/Cello Section/susvib/susvib_C1_v3_1.wav
+040.caf            <- Strings/Cello Section/susvib/susvib_E1_v3_1.wav
+043.caf            <- Strings/Cello Section/susvib/susvib_G1_v3_1.wav
+047.caf            <- Strings/Cello Section/susvib/susvib_B1_v3_1.wav
+050.caf            <- Strings/Viola Section/susvib/ViolaEns_susvib_D2_v2_1.wav
+052.caf            <- Strings/Viola Section/susvib/ViolaEns_susvib_E2_v2_1.wav
+055.caf            <- Strings/Viola Section/susvib/ViolaEns_susvib_G2_v2_1.wav
+059.caf            <- Strings/Viola Section/susvib/ViolaEns_susvib_B2_v2_1.wav
+062.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_D3_v2.wav
+066.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_F#3_v2.wav
+069.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_A3_v2.wav
+072.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_C4_v2.wav
+076.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_E4_v2.wav
+079.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_G4_v2.wav
+083.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_B4_v2.wav
+086.caf            <- Strings/Violin Section/susVib/VlnEns_susVib_D5_v2.wav
+
+[Instruments/String Stabs]
+036.caf            <- Strings/Cello Section/spic/spic_C1_v2_RR1.wav
+040.caf            <- Strings/Cello Section/spic/spic_E1_v2_RR1.wav
+043.caf            <- Strings/Cello Section/spic/spic_G1_v2_RR1.wav
+047.caf            <- Strings/Cello Section/spic/spic_B1_v2_RR1.wav
+050.caf            <- Strings/Cello Section/spic/spic_D2_v2_RR1.wav
+052.caf            <- Strings/Viola Section/spic/Violas_spic_E2_v2_rr1.wav
+055.caf            <- Strings/Viola Section/spic/Violas_spic_G2_v2_rr1.wav
+059.caf            <- Strings/Viola Section/spic/Violas_spic_B2_v2_rr1.wav
+062.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_D3_v2_rr1.wav
+066.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_F#3_v2_rr1.wav
+069.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_A3_v2_rr1.wav
+072.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_C4_v2_rr1.wav
+076.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_E4_v2_rr1.wav
+079.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_G4_v2_rr1.wav
+083.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_B4_v2_rr1.wav
+086.caf            <- Strings/Violin Section/Spic/VlnEns_Spic_D5_v2_rr1.wav
+
+[Instruments/Brass Stabs]
+041.caf            <- Brass/Tenor Trombone/stac/tenortbn_stac_F1_v4_rr1.wav
+046.caf            <- Brass/Tenor Trombone/stac/tenortbn_stac_A#1_v4_rr1.wav
+053.caf            <- Brass/Tenor Trombone/stac/tenortbn_stac_F2_v4_rr1.wav
+058.caf            <- Brass/Tenor Trombone/stac/tenortbn_stac_A#2_v4_rr1.wav
+060.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_C3_v3_rr1.wav
+063.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_D#3_v3_rr1.wav
+065.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_F3_v3_rr1.wav
+067.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_G3_v3_rr1.wav
+070.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_A#3_v3_rr1.wav
+074.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_D4_v3_rr1.wav
+077.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_F4_v3_rr1.wav
+081.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_A4_v3_rr1.wav
+084.caf            <- Brass/Trumpet/stac/Sum_SHTrumpet_stac_C5_v3_rr1.wav
 
 Bass Guitar
 ===========

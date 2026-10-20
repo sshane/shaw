@@ -6,18 +6,18 @@ public struct RecordedInstrument {
     /// Its folder in Resources/Sounds/Instruments.
     public let folder: String
     public let summary: String
-    /// How the Browser shows it off: chords, an arpeggio, or a melody.
+    /// How the Browser shows it off: chords, an arpeggio, a melody, or rhythmic stabs.
     public let style: Style
     /// Sampler settings that suit it (`SamplerParams`).
     let settings: [String: Double]
 
-    public enum Style { case chords, arpeggio, melody, bassline, strum }
+    public enum Style { case chords, arpeggio, melody, bassline, strum, stabs }
 
     public var path: String { SampleLibrary.bundledPrefix + "Instruments/" + folder }
 }
 
-/// Public domain (CC0) recordings, so Shaw can ship them: the Versilian Community Sample Library by
-/// Versilian Studios, Karoryfer Samples for the bass and the guitars, and singers on Freesound for the
+/// Public domain (CC0) recordings, so Shaw can ship them: the Versilian Community Sample Library and
+/// VSCO 2 Community Edition by Versilian Studios, Karoryfer Samples for the bass and the guitars, and singers on Freesound for the
 /// vocals. See Resources/Sounds/CREDITS.txt.
 public enum RecordedInstruments {
     public static let category = "Real Instruments"
@@ -45,6 +45,14 @@ public enum RecordedInstruments {
                            style: .arpeggio, settings: rings.merging(["volume": -6]) { $1 }),
         RecordedInstrument(name: "Harp", folder: "Harp", summary: "A plucked concert harp",
                            style: .arpeggio, settings: rings),
+        // Cellos low, violas in the middle, and violins on top, so a chord sounds like a whole section.
+        RecordedInstrument(name: "String Section", folder: "String Section", summary: "Cellos, violas, and violins with vibrato, for disco string pads and swells",
+                           style: .chords, settings: held.merging(["r": 0.6]) { $1 }),
+        // Short bowed and blown notes play out whole, however short the note, like the stab they are.
+        RecordedInstrument(name: "String Stabs", folder: "String Stabs", summary: "Short, bouncing spiccato strings, for disco stabs and fast runs",
+                           style: .stabs, settings: rings),
+        RecordedInstrument(name: "Brass Stabs", folder: "Brass Stabs", summary: "Trumpets and trombones playing short, punchy hits, for disco and funk horn stabs",
+                           style: .stabs, settings: rings),
         RecordedInstrument(name: "Tenor Sax", folder: "Tenor Sax", summary: "A breathy jazz tenor saxophone",
                            style: .melody, settings: held.merging(["r": 0.12]) { $1 }),
         RecordedInstrument(name: "Bass Guitar", folder: "Bass Guitar", summary: "A Squier Jazz Bass, played with fingers",
