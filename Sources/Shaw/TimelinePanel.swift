@@ -223,6 +223,9 @@ struct TrackHeaderColumn: View {
             .offset(y: -scrollY)
         }
         .clipped()
+        // Clipping only hides the headers scrolled above the top; without this they still catch
+        // clicks and hovers over the ruler corner and the composition tabs.
+        .contentShape(Rectangle())
     }
 }
 
