@@ -89,7 +89,7 @@ final class RollCursorTests: XCTestCase {
         s.rollCursor = 3
         s.rollCursorPitch = 60 // the bottom right, on the line where the C5 starts
         s.extendBox(rows: 7)
-        XCTAssertEqual(picked(s, id), [], "moved only up, the box covers the step after the line: the C5 there is above it")
+        XCTAssertEqual(picked(s, id), [], "moved only up, the box picks the notes on the cursor's line: the C5 there is above it")
         s.extendBox(beats: -1)
         XCTAssertEqual(picked(s, id), [67], "back to beat 2: just the G, nothing past where it started")
         s.extendBox(beats: -1)
@@ -105,9 +105,26 @@ final class RollCursorTests: XCTestCase {
         XCTAssertEqual(notes(s, id).map(\.pitch), [60, 65, 68, 72])
         XCTAssertNil(s.activeBox)
         s.extendBox(rows: 3)
-        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note, one step wide")
+        XCTAssertEqual(picked(s, id), [65], "a new box starts from the first moved note, which sits on its line")
         s.extendBox(beats: 2)
         XCTAssertEqual(picked(s, id), [65, 68])
+    }
+
+    /// After moving only up or down, the first ⇧→ already widens the box (it used to take two presses).
+    func testTheFirstShiftRightWidensTheBox() {
+        let (s, id) = store()
+        s.rollSnap = 1
+        set(s, id, [Note(pitch: 60, start: 0, length: 1), Note(pitch: 62, start: 1, length: 1)])
+        s.rollCursor = 0
+        s.rollCursorPitch = 60
+        s.extendBox(rows: 2)
+        XCTAssertEqual(picked(s, id), [60], "the C on the cursor's line")
+        let flat = s.activeBox.map(s.boxBounds)!
+        XCTAssertEqual(flat.end - flat.start, 0, accuracy: 1e-9, "no width yet")
+        s.extendBox(beats: 1)
+        XCTAssertEqual(s.activeBox.map(s.boxBounds)!.end, 1, accuracy: 1e-9)
+        s.extendBox(beats: 1)
+        XCTAssertEqual(picked(s, id), [60, 62], "each press reaches one step further")
     }
 
     func testEscPutsTheCursorOnTheFirstSelectedNote() {
