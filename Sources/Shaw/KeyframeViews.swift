@@ -65,10 +65,11 @@ struct KeyframeRowHeader: View {
             Spacer(minLength: 2)
             if let e, let def {
                 Text(def.format(e.value(of: def, at: store.keyframeTime(for: prop.host))))
-                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.accent)
+                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.accent).fixedSize()
             }
         }
         .padding(.leading, 22).padding(.trailing, 8)
+        .lineLimit(1)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(Color.black.opacity(0.22))
         .contentShape(Rectangle())

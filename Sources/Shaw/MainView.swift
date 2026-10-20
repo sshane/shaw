@@ -49,8 +49,13 @@ struct PanelSlotView: View {
         let s = store.workspace.slot(slot)
         VStack(spacing: 0) {
             HStack(spacing: 1) {
-                ForEach(s.tabs) { tab in
-                    PanelTab(kind: tab, active: s.active == tab, slot: slot)
+                // Many tabs in a narrow slot scroll sideways; the ☰ menu always stays in reach.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 1) {
+                        ForEach(s.tabs) { tab in
+                            PanelTab(kind: tab, active: s.active == tab, slot: slot)
+                        }
+                    }
                 }
                 Spacer(minLength: 0)
                 Menu {
@@ -73,7 +78,7 @@ struct PanelSlotView: View {
                 .fixedSize()
                 .padding(.trailing, 6)
             }
-            .frame(height: 24)
+            .bar(height: 24)
             .background(Theme.panelHeader)
             Group {
                 if let a = s.active {
@@ -84,8 +89,13 @@ struct PanelSlotView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // A panel gets exactly its slot, however big its content wants to be. The zero minimums
+            // keep an oversized panel from growing the frame (which would then be centered in the
+            // slot, pushing its top out of view); it's pinned top-left instead, so anything that
+            // doesn't fit is cut off at the bottom and right, where it can't catch clicks.
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
             .clipped()
+            .contentShape(Rectangle())
         }
         .background(Theme.panel)
     }

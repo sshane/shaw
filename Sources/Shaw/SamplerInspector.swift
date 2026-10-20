@@ -38,7 +38,7 @@ struct SamplerInspector: View {
                            color: Theme.label(asset.colorIndex))
         }
         PropertyRow(label: recorded ? "Instrument" : "Sample") {
-            Menu(inst.preset) {
+            Menu(inst.preset.abbreviated()) {
                 if recorded {
                     ForEach(RecordedInstruments.names, id: \.self) { n in
                         Button(n) {
@@ -77,7 +77,7 @@ struct SamplerInspector: View {
         if !compact {
             PropertyRow(label: "Length") {
                 DragNumber(value: pattern.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
-                           format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
+                           format: { $0 == 1 ? "1 bar" : String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
                            onChange: { v in store.live { $0.updateNotes(assetID) { $0.length = v * Double(store.project.beatsPerBar) } } },
                            onEnd: { store.endGesture() })
             }

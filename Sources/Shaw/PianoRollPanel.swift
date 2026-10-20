@@ -62,7 +62,10 @@ struct PianoRollPanel: View {
                             .frame(height: Self.rulerHeight)
                         GeometryReader { geo in
                             if p.instrument.isDrumKit && store.drumStepView {
-                                DrumStepView(assetID: id, pattern: p, scrollX: scrollX, rowHeight: rowH, size: geo.size)
+                                // Scrolls with the drum names on the left, like the note grid.
+                                DrumStepView(assetID: id, pattern: p, scrollX: scrollX, scrollY: shownY, rowHeight: rowH, size: geo.size)
+                                    .onAppear { gridSize = geo.size }
+                                    .onChange(of: geo.size) { _, s in gridSize = s }
                             } else {
                             NoteGrid(assetID: id, pattern: p, scrollX: scrollX, scrollY: shownY, keyHeight: rowH, layout: layout, size: geo.size)
                                 .onAppear { gridSize = geo.size; centerIfNeeded(p, geo.size) }
@@ -80,7 +83,14 @@ struct PianoRollPanel: View {
                 }
                 .background(FrameReporter { monitor.frame = $0 })
                 .background(WindowReader { monitor.window = $0 })
-                .overlay { if store.showRollKeys { RollKeysHelp() } }
+                // The key card stays inside the roll: in a short panel it scrolls instead of covering the toolbar.
+                .overlay {
+                    if store.showRollKeys {
+                        ScrollView([.vertical, .horizontal]) { RollKeysHelp().padding(12) }
+                            .defaultScrollAnchor(.center)
+                            .clipped()
+                    }
+                }
             }
             .onAppear { install(id) }
             .onDisappear { monitor.remove() }
@@ -206,12 +216,12 @@ struct PianoRollPanel: View {
             } label: {
                 HStack(spacing: 4) {
                     RoundedRectangle(cornerRadius: 2).fill(Theme.label(a.colorIndex)).frame(width: 8, height: 10)
-                    Text(a.name).font(Theme.header)
+                    Text(a.name.abbreviated()).font(Theme.header)
                 }
             }
             .menuStyle(.borderlessButton).fixedSize()
             // Kits with your own sounds say "(custom)" in Effect Controls; here the rows below already show it.
-            Menu(p.instrument.kit.map(DrumKits.kitName) ?? p.instrument.displayName) {
+            Menu((p.instrument.kit.map(DrumKits.kitName) ?? p.instrument.displayName).abbreviated()) {
                 if !p.instrument.isDrumKit {
                     Section("Sampler") {
                         Button(p.instrument.isSampler ? "Choose Another Sample…" : "Play a Sample File…") { store.chooseSampleFile(for: a.id) }
@@ -274,12 +284,14 @@ struct PianoRollPanel: View {
             }
             .buttonStyle(.borderless).help(p.instrument.isSampler ? "Sampler settings" : (p.instrument.isDrumKit ? "Kit settings" : "Edit synth"))
             Divider().frame(height: 16)
-            Text("Length").font(Theme.tiny).foregroundStyle(Theme.textFaint)
+            // Values never get cut off; when space runs out, the buttons at the end lose their words first.
+            Text("Length").font(Theme.tiny).foregroundStyle(Theme.textFaint).fixedSize()
             DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.03,
-                       format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
+                       format: { $0 == 1 ? "1 bar" : String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
                        onChange: { v in store.live { $0.updateNotes(a.id) { $0.length = v * Double(store.project.beatsPerBar) } } },
                        onEnd: { store.endGesture() })
-            Text("Grid").font(Theme.tiny).foregroundStyle(Theme.textFaint)
+                .fixedSize()
+            Text("Grid").font(Theme.tiny).foregroundStyle(Theme.textFaint).fixedSize()
             Picker("", selection: $store.rollSnap) {
                 ForEach(RollGrid.options, id: \.1) { o in Text(o.0).tag(o.1) }
             }
@@ -292,7 +304,7 @@ struct PianoRollPanel: View {
             EditorControls()
         }
         .padding(.horizontal, 8)
-        .frame(height: Self.toolbarHeight)
+        .bar(height: Self.toolbarHeight)
         .background(Theme.panelHeader.opacity(0.6))
     }
 
@@ -622,6 +634,9 @@ struct RollRuler: View {
                 }.onEnded { _ in startLen = nil; store.endGesture() })
                 .help("Pattern end. Drag it to change the length.")
         }
+        // Scrolled past the end, the handle sits outside the ruler; only the ruler's own area takes clicks.
+        .clipped()
+        .contentShape(Rectangle())
     }
 }
 
@@ -1077,6 +1092,7 @@ struct DrumStepView: View {
     let assetID: AssetID
     let pattern: NotePattern
     let scrollX: CGFloat
+    let scrollY: CGFloat
     let rowHeight: CGFloat
     let size: CGSize
     @State private var paintOn: Bool?
@@ -1099,7 +1115,8 @@ struct DrumStepView: View {
             let w = CGFloat(step) * zoom
             for row in 0..<layout.count {
                 let pitch = layout.pitch(atRow: row)
-                let y = CGFloat(row) * rowHeight
+                let y = CGFloat(row) * rowHeight - scrollY
+                guard y + rowHeight >= 0, y <= size.height else { continue }
                 for s in 0..<steps {
                     let x = CGFloat(s) * w - scrollX
                     guard x + w >= 0, x <= size.width else { continue }
@@ -1122,7 +1139,7 @@ struct DrumStepView: View {
 
     private func paint(_ p: CGPoint) {
         store.focus = .pianoRoll
-        let row = Int(p.y / rowHeight), s = Int((p.x + scrollX) / (CGFloat(step) * zoom))
+        let row = Int((p.y + scrollY) / rowHeight), s = Int((p.x + scrollX) / (CGFloat(step) * zoom))
         guard row >= 0, row < RowLayout.drums.count, s >= 0, s < steps else { return }
         let key = row * 10_000 + s
         guard !painted.contains(key) else { return }

@@ -2,6 +2,43 @@ import AppKit
 import ShawCore
 import SwiftUI
 
+// MARK: - Layout building blocks
+
+extension View {
+    /// A strip of controls: a tab bar, toolbar, header, or list row. It's exactly `height` tall and
+    /// exactly as wide as its parent offers. Everything in it stays on one line, and whatever doesn't
+    /// fit is cut off at its trailing edge, so a long name or a narrow panel can't make it taller,
+    /// widen the panel, or push its neighbors around. Parts cut off can't catch clicks.
+    func bar(height: CGFloat) -> some View {
+        lineLimit(1)
+            .frame(height: height)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            .contentShape(Rectangle())
+    }
+
+    /// A window onto content that scrolls by `offset` (custom scrolling: timeline lanes, track
+    /// headers, the piano roll). It takes exactly the space it's given, however big the content is,
+    /// pins the content to the top-left, clips it, and only takes clicks inside what's visible.
+    func viewport(x: CGFloat = 0, y: CGFloat = 0) -> some View {
+        frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+            .offset(x: -x, y: -y)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
+            .contentShape(Rectangle())
+    }
+}
+
+extension String {
+    /// A name short enough for a menu button or a fixed-size label: anything over `limit` characters
+    /// keeps its start and end, so "Splice_Vocal_Chop_Am_120bpm_02" stays recognizable.
+    func abbreviated(_ limit: Int = 28) -> String {
+        guard count > limit, limit > 3 else { return self }
+        let head = (limit - 1) * 2 / 3, tail = limit - 1 - head
+        return prefix(head) + "…" + suffix(tail)
+    }
+}
+
 /// After Effects-style "scrubby" number: drag left/right to change, click to type.
 struct DragNumber: View {
     let value: Double

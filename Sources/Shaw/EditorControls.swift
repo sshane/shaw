@@ -6,8 +6,17 @@ struct EditorControls: View {
     @Environment(Store.self) private var store
 
     var body: some View {
+        // With room to spare the loop and save buttons say what they do; in a narrow panel they
+        // keep just their icons (and their tooltips) rather than being cut off.
+        ViewThatFits(in: .horizontal) {
+            controls(labels: true)
+            controls(labels: false)
+        }
+    }
+
+    private func controls(labels: Bool) -> some View {
         @Bindable var store = store
-        HStack(spacing: 6) {
+        return HStack(spacing: 6) {
             IconButton(systemName: "pencil", active: store.drawMode,
                        help: store.drawMode ? "Draw mode: click to add (B to switch off)" : "Draw mode off: double-click to add or delete (B to switch)") {
                 store.drawMode.toggle()
@@ -38,5 +47,13 @@ struct EditorControls: View {
             .controlSize(.small)
             .help("Keep this version and keep working on a copy right after it (⇧⌘D)")
         }
+        .labelStyle(LabelsOrIcons(labels: labels))
+    }
+}
+
+private struct LabelsOrIcons: LabelStyle {
+    let labels: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        if labels { Label(configuration) } else { Label(configuration).labelStyle(.iconOnly) }
     }
 }

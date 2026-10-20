@@ -12,12 +12,12 @@ struct SessionPanel: View {
                 HStack(spacing: 8) {
                     Text("Session · \(store.activeAsset?.name ?? "")").font(Theme.header).foregroundStyle(Theme.textDim)
                     Text("Clips launch on the next bar and loop. Drag anything from the Project panel into a slot.")
-                        .font(Theme.tiny).foregroundStyle(Theme.textFaint)
+                        .font(Theme.tiny).foregroundStyle(Theme.textFaint).layoutPriority(-1)
                     Spacer()
                     Button("Stop All Clips") { store.engine.stopAllSession() }.controlSize(.small)
                     Button("Add Track") { store.addTrack() }.controlSize(.small)
                 }
-                .padding(.horizontal, 10).frame(height: 28)
+                .padding(.horizontal, 10).bar(height: 28)
                 ScrollView([.horizontal, .vertical]) {
                     HStack(alignment: .top, spacing: 1) {
                         ForEach(comp.tracks) { t in

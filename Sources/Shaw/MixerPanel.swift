@@ -90,7 +90,9 @@ struct MixerStrip: View {
                 }
                 .frame(width: 9)
             }
-            .frame(height: 120)
+            // The fader is the one part that can give: a short panel gets a shorter fader, so the
+            // whole strip always fits instead of losing its mute and solo off the bottom.
+            .frame(minHeight: 40, maxHeight: 120)
             Text(volume <= -60 ? "-inf" : String(format: "%.1f", volume)).font(.system(size: 9, design: .monospaced)).foregroundStyle(Theme.textDim)
             HStack(spacing: 3) {
                 if let mute { ToggleChip(label: "M", on: mute, color: Theme.mute, action: toggleMute) }

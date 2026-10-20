@@ -127,7 +127,7 @@ struct FolderRow: View {
             Spacer()
         }
         .padding(.leading, 8)
-        .frame(height: 22)
+        .bar(height: 22)
         .background(target ? Theme.accent.opacity(0.25) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -203,7 +203,7 @@ struct AssetRow: View {
                 .font(Theme.tiny).foregroundStyle(Theme.textDim)
                 .frame(width: 44, alignment: .trailing).padding(.trailing, 8)
         }
-        .frame(height: 22)
+        .bar(height: 22)
         .background(selected ? Theme.accent.opacity(0.35) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { store.open(asset: asset.id) }

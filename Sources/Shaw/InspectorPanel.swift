@@ -495,7 +495,7 @@ struct InstrumentInspector: View {
             if !compact {
                 PropertyRow(label: "Length") {
                     DragNumber(value: p.length / Double(store.project.beatsPerBar), range: 0.25...64, step: 0.25, sensitivity: 0.05,
-                               format: { String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
+                               format: { $0 == 1 ? "1 bar" : String(format: $0 == $0.rounded() ? "%.0f bars" : "%.2f bars", $0) },
                                onChange: { v in store.live { $0.updateNotes(assetID) { $0.length = v * Double(store.project.beatsPerBar) } } },
                                onEnd: { store.endGesture() })
                 }
@@ -535,7 +535,7 @@ struct InstrumentMenu: View {
     let assetID: AssetID
 
     var body: some View {
-        Menu(store.instrumentName(assetID)) {
+        Menu(store.instrumentName(assetID).abbreviated()) {
             if !store.customInstruments.isEmpty {
                 Section("My Instruments") {
                     ForEach(store.customInstruments) { c in Button(c.name) { pick(c.name) } }
@@ -571,23 +571,29 @@ struct InstrumentActions: View {
             Text(statusText(status, name))
                 .font(Theme.tiny).foregroundStyle(status == .edited || status == .unsaved ? Theme.accent : Theme.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
-                if showEdit {
-                    Button("Edit Instrument…") { store.openInstrumentEditor(assetID) }
-                        .help("Open the Instrument Editor: oscillators, filter, envelope, and LFO, with pictures")
-                }
-                if status == .edited, SynthPresets.isBuiltIn(name) == false {
-                    Button("Save") { store.saveInstrument(from: assetID) }
-                        .help("Update \(name) in My Instruments. Layers already using it keep their own copy.")
-                }
-                Button(status == .unsaved ? "Save to My Instruments…" : "Save as New…") { store.saveInstrumentAsNew(from: assetID) }
-                    .help("Save this sound as a new instrument you can add from the Browser in any project")
-                if status == .edited {
-                    Button("Revert") { store.revertInstrument(assetID) }
-                        .help("Go back to the saved \(name) sound")
-                }
+            // One row when it fits; stacked when the panel is too narrow for every button.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { buttons(status, name) }
+                VStack(alignment: .leading, spacing: 4) { buttons(status, name) }
             }
             .controlSize(.small)
+        }
+    }
+
+    @ViewBuilder private func buttons(_ status: InstrumentStatus?, _ name: String) -> some View {
+        if showEdit {
+            Button("Edit Instrument…") { store.openInstrumentEditor(assetID) }
+                .help("Open the Instrument Editor: oscillators, filter, envelope, and LFO, with pictures")
+        }
+        if status == .edited, SynthPresets.isBuiltIn(name) == false {
+            Button("Save") { store.saveInstrument(from: assetID) }
+                .help("Update \(name) in My Instruments. Layers already using it keep their own copy.")
+        }
+        Button(status == .unsaved ? "Save to My Instruments…" : "Save as New…") { store.saveInstrumentAsNew(from: assetID) }
+            .help("Save this sound as a new instrument you can add from the Browser in any project")
+        if status == .edited {
+            Button("Revert") { store.revertInstrument(assetID) }
+                .help("Go back to the saved \(name) sound")
         }
     }
 

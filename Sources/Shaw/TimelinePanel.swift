@@ -109,13 +109,15 @@ struct CompTabs: View {
     @Environment(Store.self) private var store
 
     var body: some View {
-        HStack(spacing: 1) {
-            ForEach(store.openComps, id: \.self) { id in
-                CompTab(id: id)
+        // However many compositions are open, the strip scrolls sideways instead of widening the timeline.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 1) {
+                ForEach(store.openComps, id: \.self) { id in
+                    CompTab(id: id)
+                }
             }
-            Spacer()
         }
-        .frame(height: 24)
+        .bar(height: 24)
         .background(Theme.bg)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
@@ -133,7 +135,7 @@ struct CompTab: View {
         let a = store.project.asset(id)
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 1.5).fill(Theme.label(a?.colorIndex ?? 0)).frame(width: 7, height: 9)
-            Text(a?.name ?? "?").font(.system(size: 11, weight: active ? .semibold : .regular))
+            Text((a?.name ?? "?").abbreviated(24)).font(.system(size: 11, weight: active ? .semibold : .regular))
             if isMain {
                 Text("MAIN").font(.system(size: 8, weight: .bold)).foregroundStyle(active ? Theme.textDim : Theme.textFaint)
             } else {
@@ -184,7 +186,7 @@ struct CornerView: View {
             Spacer()
             Text("Length").font(Theme.tiny).foregroundStyle(Theme.textFaint)
             DragNumber(value: comp.length / Double(store.project.beatsPerBar), range: 1...999, step: 1, sensitivity: 0.1,
-                       format: { "\(Int($0)) bars" },
+                       format: { $0 == 1 ? "1 bar" : "\(Int($0)) bars" },
                        onChange: { v in
                            let id = store.activeCompID
                            store.live { $0.updateComposition(id) { $0.length = v * Double(store.project.beatsPerBar) } }
@@ -193,7 +195,7 @@ struct CornerView: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(maxHeight: .infinity)
+        .bar(height: TimelinePanel.rulerHeight)
         .background(Theme.panelHeader)
         .onTapGesture { store.inspector = .composition(store.activeCompID) }
     }
@@ -207,29 +209,18 @@ struct TrackHeaderColumn: View {
     let scrollY: CGFloat
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.clear
-            let layout = store.trackLayout(for: comp)
-            VStack(spacing: 0) {
-                ForEach(Array(comp.tracks.enumerated()), id: \.element.id) { i, t in
-                    TrackHeader(track: t, index: i)
-                        .frame(height: store.trackHeight)
-                    ForEach(layout.props[safe: i] ?? []) { prop in
-                        KeyframeRowHeader(prop: prop)
-                            .frame(height: TrackLayout.propRowHeight)
-                    }
+        let layout = store.trackLayout(for: comp)
+        VStack(spacing: 0) {
+            ForEach(Array(comp.tracks.enumerated()), id: \.element.id) { i, t in
+                TrackHeader(track: t, index: i)
+                    .frame(height: store.trackHeight)
+                ForEach(layout.props[safe: i] ?? []) { prop in
+                    KeyframeRowHeader(prop: prop)
+                        .frame(height: TrackLayout.propRowHeight)
                 }
             }
-            // Take only the height the panel offers and let the rest hang below to be clipped.
-            // Otherwise a comp with more tracks than fit makes the whole timeline taller than
-            // its panel, which centers it and pushes the tabs and ruler out of view.
-            .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
-            .offset(y: -scrollY)
         }
-        .clipped()
-        // Clipping only hides the headers scrolled above the top; without this they still catch
-        // clicks and hovers over the ruler corner and the composition tabs.
-        .contentShape(Rectangle())
+        .viewport(y: scrollY)
     }
 }
 
