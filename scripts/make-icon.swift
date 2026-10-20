@@ -1,43 +1,54 @@
-// Renders Resources/AppIcon.icns. Run: swift scripts/make-icon.swift
+// Renders the app icon as a 1024 px PNG. Run: swift scripts/make-icon.swift icon.png
+// Then turn it into Resources/AppIcon.icns with sips and iconutil (see the comment at the bottom).
 import AppKit
 
 let size: CGFloat = 1024
 let img = NSImage(size: NSSize(width: size, height: size))
 img.lockFocus()
 let ctx = NSGraphicsContext.current!.cgContext
+
+// The macOS icon grid: an 824 px rounded square with a soft shadow under it.
 let inset: CGFloat = 100
 let body = CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
 let bg = NSBezierPath(roundedRect: body, xRadius: 185, yRadius: 185)
-NSGradient(colors: [NSColor(calibratedRed: 0.10, green: 0.11, blue: 0.16, alpha: 1),
-                    NSColor(calibratedRed: 0.20, green: 0.16, blue: 0.32, alpha: 1)])!.draw(in: bg, angle: -90)
-// Stacked "composition" layers.
-let colors: [NSColor] = [
-    NSColor(calibratedRed: 0.36, green: 0.55, blue: 0.95, alpha: 1),
-    NSColor(calibratedRed: 0.70, green: 0.48, blue: 0.92, alpha: 1),
-    NSColor(calibratedRed: 0.93, green: 0.43, blue: 0.40, alpha: 1),
-    NSColor(calibratedRed: 0.91, green: 0.74, blue: 0.30, alpha: 1),
-]
-for (i, c) in colors.enumerated() {
-    let y = body.minY + 150 + CGFloat(i) * 120
-    let x0 = body.minX + 110 + CGFloat(i % 2) * 70
-    let w = body.width - 220 - CGFloat((i * 37) % 120)
-    c.setFill()
-    NSBezierPath(roundedRect: CGRect(x: x0, y: y, width: w, height: 84), xRadius: 18, yRadius: 18).fill()
-}
-// Waveform across the top.
-ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.92).cgColor)
-ctx.setLineWidth(22)
+ctx.saveGState()
+ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: NSColor.black.withAlphaComponent(0.35).cgColor)
+NSColor.black.setFill()
+bg.fill()
+ctx.restoreGState()
+NSGradient(colors: [NSColor(calibratedRed: 0.085, green: 0.09, blue: 0.11, alpha: 1),
+                    NSColor(calibratedRed: 0.15, green: 0.155, blue: 0.19, alpha: 1)])!.draw(in: bg, angle: -90)
+
+// A geometric S: two stacked circles, the top one drawn counterclockwise from its upper right,
+// the bottom one clockwise, ending at its lower left.
+let r: CGFloat = 140, open: CGFloat = 0.45
+let s = CGMutablePath()
+s.addArc(center: CGPoint(x: body.midX, y: body.midY + r), radius: r, startAngle: open, endAngle: -.pi / 2, clockwise: false)
+s.addArc(center: CGPoint(x: body.midX, y: body.midY - r), radius: r, startAngle: .pi / 2, endAngle: .pi + open, clockwise: true)
+
+// Stroked with Shaw's blue, running from cyan at the top to violet at the bottom.
+ctx.saveGState()
+ctx.addPath(s)
+ctx.setLineWidth(104)
 ctx.setLineCap(.round)
-let midY = body.minY + 712
-for i in 0..<15 {
-    let x = body.minX + 130 + CGFloat(i) * 41
-    let h = 18 + 60 * abs(sin(Double(i) * 0.75)) * (1 - abs(Double(i) - 7) / 9)
-    ctx.move(to: CGPoint(x: x, y: midY - CGFloat(h)))
-    ctx.addLine(to: CGPoint(x: x, y: midY + CGFloat(h)))
-}
-ctx.strokePath()
+ctx.replacePathWithStrokedPath()
+ctx.clip()
+let colors = [NSColor(calibratedRed: 0.35, green: 0.85, blue: 1.0, alpha: 1),
+              NSColor(calibratedRed: 0.25, green: 0.56, blue: 1.0, alpha: 1),
+              NSColor(calibratedRed: 0.62, green: 0.45, blue: 1.0, alpha: 1)]
+let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors.map(\.cgColor) as CFArray, locations: nil)!
+ctx.drawLinearGradient(gradient, start: CGPoint(x: body.midX, y: body.midY + 330), end: CGPoint(x: body.midX, y: body.midY - 330),
+                       options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+ctx.restoreGState()
 img.unlockFocus()
 
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "icon.png"
 let rep = NSBitmapImageRep(data: img.tiffRepresentation!)!
 try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: out))
+
+// mkdir Icon.iconset
+// for s in 16 32 128 256 512; do
+//   sips -z $s $s icon.png --out Icon.iconset/icon_${s}x${s}.png
+//   sips -z $((s*2)) $((s*2)) icon.png --out Icon.iconset/icon_${s}x${s}@2x.png
+// done
+// iconutil -c icns Icon.iconset -o Resources/AppIcon.icns
