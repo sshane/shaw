@@ -127,6 +127,18 @@ extension Store {
         select(here, in: p)
     }
 
+    /// Return with notes selected: hear them again. It's an explicit ask, so it plays even with
+    /// note previews switched off, but like every preview, never while the song plays.
+    func previewSelection() {
+        guard let (_, p) = openPattern, !transport.playing else { return }
+        let chosen = p.notes.filter { selectedNotes.contains($0.id) }
+        // The earliest notes (a chord, or the first note of a run), so a long selection isn't a smear.
+        guard let first = chosen.map(\.start).min() else { return }
+        let pitches = Set(chosen.filter { abs($0.start - first) < Store.eps }.map(\.pitch))
+        for pitch in pitches { previewNoteOn(pitch, velocity: 0.75, instrument: p.instrument, asset: pianoRollAsset) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { for pitch in pitches { self.engine.previewNoteOff(pitch) } }
+    }
+
     private func select(_ notes: [Note], in p: NotePattern) {
         let c = cursorSpot(p)
         rollCursor = c.beat
