@@ -15,6 +15,7 @@ enum Theme {
     static let textFaint = Color(white: 0.38)
     static let accent = Color(red: 0.25, green: 0.56, blue: 1.0)
     static let playhead = Color(red: 1.0, green: 0.82, blue: 0.25)
+    static let record = Color(red: 0.95, green: 0.27, blue: 0.27)
     static let selection = Color.white
     static let border = Color.black.opacity(0.55)
     static let control = Color(white: 0.22)

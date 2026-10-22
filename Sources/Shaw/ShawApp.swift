@@ -117,6 +117,7 @@ struct ShawCommands: Commands {
         CommandMenu("Transport") {
             Button(store.transport.playing ? "Stop" : "Play") { store.togglePlay() }
             Button("Return to Start") { store.returnToStart() }.keyboardShortcut(.home, modifiers: [])
+            Button(store.recording == nil ? "Record (R)" : "Stop Recording (R)") { store.toggleRecord() }
             Divider()
             Button(store.loopEnabled ? "Turn Loop Off" : "Turn Loop On") { store.loopEnabled.toggle() }.keyboardShortcut("l")
             Button(store.metronome ? "Metronome Off" : "Metronome On") { store.metronome.toggle() }.keyboardShortcut("k")
@@ -194,6 +195,11 @@ final class KeyRouter {
         let chars = (e.charactersIgnoringModifiers ?? "").lowercased()
         if chars == "b" && store.focus == .pianoRoll {
             store.drawMode.toggle() // Ableton's draw-mode key
+            return true
+        }
+        // R: record (or stop and keep the take).
+        if chars == "r" && !e.modifierFlags.contains(.shift) && !e.isARepeat {
+            store.toggleRecord()
             return true
         }
         // The computer keyboard plays the current instrument (A–' = notes, Z/X octave, C/V velocity).

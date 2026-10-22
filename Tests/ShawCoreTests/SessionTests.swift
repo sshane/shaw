@@ -79,3 +79,25 @@ final class SessionTests: XCTestCase {
         XCTAssertNil(e.sessionStateForTesting(ids[0]))
     }
 }
+
+final class CountInTests: XCTestCase {
+    /// A count-in clicks for its beats with the playhead waiting, then playback starts right on time.
+    func testCountInHoldsThePlayheadThenPlays() {
+        let e = AudioEngine()
+        let p = Project()
+        e.update(project: p, root: p.mainCompositionID)
+        e.play(from: 4, countIn: 4) // a bar at 120 BPM: two seconds
+        _ = e.renderForTesting(frames: 48000) // one second in
+        var s = e.snapshot()
+        XCTAssertTrue(s.countingIn)
+        XCTAssertFalse(s.playing)
+        XCTAssertEqual(s.position, 4, accuracy: 1e-9, "the playhead waits")
+        _ = e.renderForTesting(frames: 48000 + 4800) // a tenth of a second past the count-in
+        s = e.snapshot()
+        XCTAssertFalse(s.countingIn)
+        XCTAssertTrue(s.playing)
+        XCTAssertEqual(s.position, 4.2, accuracy: 0.01, "playback started the moment the count-in ended")
+        e.stop()
+        XCTAssertFalse(e.snapshot().countingIn)
+    }
+}

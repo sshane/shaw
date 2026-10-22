@@ -4,6 +4,8 @@ import os
 
 public struct TransportSnapshot {
     public var playing: Bool
+    /// Clicking a count-in before playback starts (the playhead waits at its start).
+    public var countingIn = false
     public var position: Double
     /// Session clock (see `SessionClock`); session launch beats are on this clock.
     public var sessionBeat: Double
@@ -48,6 +50,14 @@ public final class AudioEngine {
     private var idleFrames = Int.max
     private var sessionList: [SessionTrackState] = []
     private let sessionClock = SessionClock()
+    /// Beats of count-in still to click before playback starts, and the count-in's own beat clock.
+    private var countInLeft = 0.0
+    private var countInClock = 0.0
+    /// A beat to catch the exact host time of as it plays (to line a recording up), and that time.
+    private var markBeat: Double?
+    private var markNanos: UInt64?
+    /// Host time (ns) of the first frame of the block being rendered (0 when unknown).
+    private var renderNanos: UInt64 = 0
     private var clickFrames = 0
     private var clickFreq = 1000.0
     private var clickPhase = 0.0
@@ -122,8 +132,10 @@ public final class AudioEngine {
             limiter = masterLimiter
         }
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
-        let node = AVAudioSourceNode(format: fmt) { [unowned self] _, _, frameCount, abl -> OSStatus in
-            self.render(Int(frameCount), abl)
+        let node = AVAudioSourceNode(format: fmt) { [unowned self] _, timestamp, frameCount, abl -> OSStatus in
+            let ts = timestamp.pointee
+            let nanos = ts.mFlags.contains(.hostTimeValid) ? AudioConvertHostTimeToNanos(ts.mHostTime) : 0
+            self.render(Int(frameCount), abl, nanos: nanos)
             return noErr
         }
         sourceNode = node
@@ -194,10 +206,32 @@ public final class AudioEngine {
         }
     }
 
+    /// Play from `beat` after clicking `beats` of count-in (the playhead waits for it).
+    public func play(from beat: Double, countIn beats: Double) {
+        guard beats > 0 else { return play(from: beat) }
+        locked {
+            position = beat
+            playStart = beat
+            playing = false
+            countInLeft = beats
+            countInClock = 0
+            idleFrames = 0
+            sessionClock.beat = beat
+        }
+    }
+
+    /// Catch the host time `beat` plays at (it's ready from `markedNanos` once playback passes it).
+    public func mark(beat: Double) { locked { markBeat = beat; markNanos = nil } }
+
+    /// When the marked beat was rendered (host nanoseconds), once it has played.
+    public var markedNanos: UInt64? { locked { markNanos } }
+
     /// Stops and returns the playhead to where playback started.
     public func stop(returnToStart: Bool = true) {
         locked {
             if playing && returnToStart { position = playStart }
+            countInLeft = 0
+            countInClock = 0
             playing = false
             idleFrames = 0
             for s in sessionList { s.playing = nil; s.queued = nil }
@@ -228,7 +262,7 @@ public final class AudioEngine {
             for (id, s) in sessions where s.playing != nil || s.queued != nil {
                 info[id] = SessionInfo(playing: s.playing, queued: s.queued, launchBeat: s.launchBeat)
             }
-            return TransportSnapshot(playing: playing, position: position, sessionBeat: sessionClock.beat, sessions: info)
+            return TransportSnapshot(playing: playing, countingIn: countInLeft > 0, position: position, sessionBeat: sessionClock.beat, sessions: info)
         }
     }
 
@@ -507,7 +541,7 @@ public final class AudioEngine {
         }
     }
 
-    private func render(_ total: Int, _ abl: UnsafeMutablePointer<AudioBufferList>) {
+    private func render(_ total: Int, _ abl: UnsafeMutablePointer<AudioBufferList>, nanos: UInt64) {
         let buffers = UnsafeMutableAudioBufferListPointer(abl)
         guard buffers.count >= 2,
               let outL = buffers[0].mData?.assumingMemoryBound(to: Float.self),
@@ -516,6 +550,7 @@ public final class AudioEngine {
         var done = 0
         while done < total {
             let n = min(512, total - done)
+            renderNanos = nanos == 0 ? 0 : nanos + UInt64(Double(done) / sampleRate * 1e9)
             renderBlock(n)
             (outL + done).update(from: master.l, count: n)
             (outR + done).update(from: master.r, count: n)
@@ -532,14 +567,27 @@ public final class AudioEngine {
         master.clear(n)
         let ctx = RenderContext(sampleRate: sampleRate, bpm: bpm)
         let bps = ctx.beatsPerSample
+        // A count-in clicks first, with the playhead waiting; playback starts the frame it ends.
+        var f0 = 0
+        if countInLeft > 0 {
+            let seg = min(n, framesUntil(countInLeft, bps))
+            metronome(from: countInClock, frames: seg, offset: 0, bps: bps)
+            countInClock += Double(seg) * bps
+            countInLeft -= Double(seg) * bps
+            if countInLeft <= 1e-9 { countInLeft = 0; countInClock = 0; playing = true; playStart = position }
+            f0 = seg
+        }
         if let g = graph, let root = g.root {
             if playing {
-                var f = 0
+                var f = f0
                 while f < n {
                     var seg = n - f
                     if loopOn {
                         if position >= loopEnd { position = loopStart }
                         seg = min(seg, framesUntil(loopEnd - position, bps))
+                    }
+                    if let m = markBeat, markNanos == nil, renderNanos != 0, m >= position - 1e-9, m < position + Double(seg) * bps {
+                        markNanos = renderNanos + UInt64((Double(f) + (m - position) / bps) / sampleRate * 1e9)
                     }
                     root.render(beat: position, frames: seg, l: master.l + f, r: master.r + f, ctx: ctx, songBeat: position)
                     if metronomeOn { metronome(from: position, frames: seg, offset: f, bps: bps) }
@@ -561,7 +609,7 @@ public final class AudioEngine {
             }
         }
         renderPreview(n)
-        if clickFrames > 0 && !metronomeOn { clickFrames = 0 }
+        if clickFrames > 0 && !metronomeOn && countInLeft == 0 { clickFrames = 0 }
         master.scale(n, masterGain)
         limiter.process(master, frames: n, params: limiterParams, ctx: ctx, beat: position)
         masterMeter.update(master, n)

@@ -189,6 +189,10 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     @ObservationIgnored private var lastAutosave = Date.distantPast
     var canUndo = false
     var canRedo = false
+    /// A take being recorded (Store+Recording.swift), the recorder behind it, and the loop setting to restore.
+    var recording: RecordingState?
+    @ObservationIgnored var recorder: AudioRecorder?
+    @ObservationIgnored var loopBeforeRecording = false
 
     /// Set in tests: no alerts, no autosave.
     @ObservationIgnored var headless = false
@@ -247,6 +251,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     private func poll() {
+        pollRecording()
         let s = engine.snapshot()
         if transport.playing != s.playing { transport.playing = s.playing }
         if transport.position != s.position { transport.position = s.position }
@@ -409,11 +414,15 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     // MARK: - Transport
 
     func togglePlay() {
+        if recording != nil { stopRecording(); poll(); return } // Space ends a take, keeping it
         if transport.playing { engine.stop() } else { engine.play() }
         poll()
     }
 
-    func stop() { engine.stop(); poll() }
+    func stop() {
+        if recording != nil { stopRecording() }
+        engine.stop(); poll()
+    }
 
     func seek(_ beat: Double) { engine.seek(beat); poll() }
 

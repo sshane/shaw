@@ -161,6 +161,8 @@ struct TransportBar: View {
             // Nothing to play yet: keep the transport visible but clearly inactive.
             .disabled(!store.hasContent)
             .opacity(store.hasContent ? 1 : 0.35)
+            // Recording works from the very start, even in an empty project.
+            RecordButton()
             PositionDisplay()
             HStack(spacing: 4) {
                 DragNumber(value: store.project.bpm, range: 40...300, step: 0.1, sensitivity: 0.2,
@@ -263,5 +265,36 @@ struct MasterMeter: View {
         LevelMeterView(level: store.transport.masterLevel)
             .clipShape(RoundedRectangle(cornerRadius: 2))
             .help("Master level")
+    }
+}
+
+/// ● Record (R). Red while a take records, with the input level beside it so you can see the mic is working.
+struct RecordButton: View {
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        let rec = store.recording
+        HStack(spacing: 3) {
+            Button { store.toggleRecord() } label: {
+                Image(systemName: rec == nil ? "record.circle" : "record.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(rec == nil ? Theme.textDim : Theme.record)
+                    .frame(width: 24, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(rec == nil ? "Record (R): count in a bar, then record from the playhead" : "Stop recording and keep the take (R or Space)")
+            if let rec {
+                GeometryReader { g in
+                    ZStack(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: 1).fill(Color.black.opacity(0.4))
+                        RoundedRectangle(cornerRadius: 1).fill(rec.level > 0.9 ? Theme.record : Color.green)
+                            .frame(height: g.size.height * CGFloat(min(1, sqrt(rec.level))))
+                    }
+                }
+                .frame(width: 4, height: 18)
+                .help("Input level")
+            }
+        }
     }
 }

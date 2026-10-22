@@ -38,6 +38,14 @@ struct LanesView: View {
                     .frame(width: max(4, CGFloat(pc.clip.length) * zoom), height: th - 3)
                     .offset(x: x, y: y + 1)
             }
+            // A take being recorded: it grows from where it started, drawing the waveform as it comes in.
+            if let rec = store.recording, rec.comp == store.activeCompID, let ti = comp.tracks.firstIndex(where: { $0.id == rec.track }) {
+                let end = rec.countingIn ? rec.startBeat : max(rec.startBeat, store.transport.position)
+                LiveTake(rec: rec, beats: end - rec.startBeat, zoom: zoom, bpm: store.project.bpm)
+                    .frame(width: max(24, CGFloat(end - rec.startBeat) * zoom), height: th - 3)
+                    .offset(x: CGFloat(rec.startBeat) * zoom - scrollX, y: layout.top(ti) - scrollY + 1)
+                    .allowsHitTesting(false)
+            }
             // Keyframe rows (◆) under layers that are twirled open.
             ForEach(Array(layout.props.enumerated()), id: \.offset) { ti, props in
                 ForEach(Array(props.enumerated()), id: \.element.id) { j, prop in
@@ -65,7 +73,7 @@ struct LanesView: View {
                     .offset(x: m.minX, y: m.minY)
                     .allowsHitTesting(false)
             }
-            if comp.tracks.allSatisfy({ $0.clips.isEmpty }) {
+            if comp.tracks.allSatisfy({ $0.clips.isEmpty }) && store.recording == nil {
                 EmptyTimelineCard(firstEver: !store.hasContent)
                     .frame(width: size.width, height: size.height)
             }
@@ -536,4 +544,41 @@ struct EmptyTimelineCard: View {
 @Observable final class LinkHover {
     static let shared = LinkHover()
     var asset: AssetID?
+}
+
+/// The take being recorded, drawn like a clip: red, with its waveform so far.
+struct LiveTake: View {
+    let rec: RecordingState
+    let beats: Double
+    let zoom: CGFloat
+    let bpm: Double
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Canvas { ctx, size in
+                ctx.fill(Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 3), with: .color(Theme.record.opacity(0.28)))
+                ctx.stroke(Path(roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3),
+                           with: .color(Theme.record.opacity(0.8)), lineWidth: 1)
+                // Peak i was captured i hundredths of a second into the file; the take starts after the count-in.
+                let mid = size.height * 0.58, half = size.height * 0.36
+                let secondsPerPeak = AudioRecorder.peakInterval
+                var path = Path()
+                for (i, p) in rec.peaks.enumerated() {
+                    let t = Double(i) * secondsPerPeak - rec.preroll
+                    guard t >= 0 else { continue }
+                    let x = CGFloat(t * bpm / 60) * zoom
+                    if x > size.width { break }
+                    let h = max(0.5, CGFloat(min(1, p)) * half)
+                    path.addRect(CGRect(x: x, y: mid - h, width: max(1, zoom * CGFloat(secondsPerPeak * bpm / 60)), height: h * 2))
+                }
+                ctx.fill(path, with: .color(Color.white.opacity(0.85)))
+            }
+            HStack(spacing: 4) {
+                Circle().fill(Theme.record).frame(width: 6, height: 6)
+                Text(rec.countingIn ? "Count-in" : "Recording").font(Theme.tiny).foregroundStyle(Color.white)
+            }
+            .padding(.horizontal, 5).padding(.top, 3)
+            .lineLimit(1)
+        }
+    }
 }

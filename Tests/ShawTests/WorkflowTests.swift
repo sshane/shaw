@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import ShawCore
 @testable import Shaw
@@ -426,5 +427,54 @@ final class CustomInstrumentTests: XCTestCase {
         s.edit { $0.updateNotes(id) { $0.instrument.preset = "Pad*"; $0.instrument.params["r"] = 1 } }
         XCTAssertEqual(s.instrumentName(id), "Pad")
         XCTAssertEqual(s.instrumentStatus(id), .edited)
+    }
+}
+
+final class RecordingTests: XCTestCase {
+    /// A finished take lands on its layer at the start beat, with the count-in kept before it in the
+    /// file (the clip's offset), as one undo step.
+    func testATakeLandsWhereItWasSung() throws {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.edit { $0.bpm = 120 }
+        let track = s.addTrack(name: "Recording")
+        // Three seconds of a 220 Hz tone, written like the recorder writes.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ShawTakeTest-\(UUID().uuidString).caf")
+        let sr = 48000.0, n = Int(3 * sr)
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sr, channels: 1, interleaved: false)!
+        let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(n))!
+        buf.frameLength = AVAudioFrameCount(n)
+        for i in 0..<n { buf.floatChannelData![0][i] = 0.5 * sinf(Float(i) * 2 * .pi * 220 / Float(sr)) }
+        do {
+            let f = try AVAudioFile(forWriting: url, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            try f.write(from: buf)
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let rec = RecordingState(track: track, comp: s.activeCompID, startBeat: 8, url: url, preroll: 2, countingIn: false)
+        let take = AudioRecorder.Take(url: url, frames: n, sampleRate: sr, firstSampleNanos: nil)
+        s.placeTake(take, offset: 2, rec: rec) // a two-second (one-bar) count-in at 120 BPM
+        let t = try XCTUnwrap(s.activeComp?.tracks.first { $0.id == track })
+        let clip = try XCTUnwrap(t.clips.first)
+        XCTAssertEqual(clip.start, 8, accuracy: 1e-9)
+        XCTAssertEqual(clip.offset, 4, accuracy: 1e-9, "the count-in stays in the file, before the clip's start")
+        XCTAssertEqual(clip.length, 2, accuracy: 1e-9, "one second kept = two beats at 120 BPM")
+        XCTAssertEqual(s.project.asset(clip.assetID)?.kind, .audio)
+        XCTAssertEqual(s.selectedClips, [clip.id])
+        s.undo()
+        XCTAssertTrue(s.activeComp?.tracks.first { $0.id == track }?.clips.isEmpty ?? false, "one undo takes the take back off")
+    }
+
+    /// The recorder keeps a running waveform: one peak every hundredth of a second.
+    func testTheRecorderDrawsAsItGoes() {
+        let r = AudioRecorder()
+        let sr = 48000.0
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sr, channels: 2, interleaved: false)!
+        let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 4800)!
+        buf.frameLength = 4800
+        for i in 0..<4800 { buf.floatChannelData![0][i] = 0.6; buf.floatChannelData![1][i] = 0.2 }
+        r.receiveForTesting(buf, hostNanos: 1_000_000)
+        let snap = r.snapshot()
+        XCTAssertEqual(snap.peaks.count, 10)
+        XCTAssertEqual(snap.peaks.first ?? 0, 0.4, accuracy: 1e-6, "mono: the average of the channels")
+        XCTAssertEqual(snap.seconds, 0.1, accuracy: 1e-9)
     }
 }
