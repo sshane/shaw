@@ -1000,12 +1000,46 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         }
     }
 
+    static let exportFormatKey = "ExportFormat"
+
+    /// Export the open composition: M4A (small, to share) or WAV (full quality), remembering the choice.
     func exportAudio() {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.wav]
+        let formats: [(title: String, ext: String, type: UTType)] = [
+            ("M4A: small, for sharing (about 2 MB a minute)", "m4a", .mpeg4Audio),
+            ("WAV: full quality (about 17 MB a minute)", "wav", .wav),
+        ]
+        var choice = formats.firstIndex { $0.ext == UserDefaults.standard.string(forKey: Self.exportFormatKey) } ?? 0
+        if isolated { choice = 0 }
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.addItems(withTitles: formats.map(\.title))
+        popup.selectItem(at: choice)
+        let label = NSTextField(labelWithString: "Format:")
+        label.sizeToFit()
+        popup.sizeToFit()
+        let h = max(label.frame.height, popup.frame.height)
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: label.frame.width + popup.frame.width + 32, height: h + 16))
+        label.setFrameOrigin(NSPoint(x: 12, y: 8 + (h - label.frame.height) / 2))
+        popup.setFrameOrigin(NSPoint(x: label.frame.maxX + 8, y: 8 + (h - popup.frame.height) / 2))
+        row.addSubview(label)
+        row.addSubview(popup)
+        panel.accessoryView = row
         let compName = activeAsset?.name ?? "Mix"
-        panel.nameFieldStringValue = "\(displayName) - \(compName).wav"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let base = "\(displayName) - \(compName)"
+        panel.allowedContentTypes = [formats[choice].type]
+        panel.nameFieldStringValue = "\(base).\(formats[choice].ext)"
+        // Switching the format switches the file's extension.
+        let handler = ExportFormatHandler { i in
+            panel.allowedContentTypes = [formats[i].type]
+            let name = (panel.nameFieldStringValue as NSString).deletingPathExtension
+            panel.nameFieldStringValue = "\(name.isEmpty ? base : name).\(formats[i].ext)"
+        }
+        popup.target = handler
+        popup.action = #selector(ExportFormatHandler.changed(_:))
+        let ok = panel.runModal() == .OK
+        withExtendedLifetime(handler) {}
+        guard ok, let url = panel.url else { return }
+        if !isolated { UserDefaults.standard.set(url.pathExtension.lowercased(), forKey: Self.exportFormatKey) }
         let p = project, cid = activeCompID
         DispatchQueue.global(qos: .userInitiated).async {
             do {
@@ -1069,4 +1103,11 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         guard dirty, fileURL != nil || !undoStack.isEmpty else { return true }
         return confirm("Discard unsaved changes?", "Your current project has changes that haven't been saved to a file.")
     }
+}
+
+/// Tells the export panel which format the popup now shows.
+final class ExportFormatHandler: NSObject {
+    let onChange: (Int) -> Void
+    init(_ onChange: @escaping (Int) -> Void) { self.onChange = onChange }
+    @objc func changed(_ sender: NSPopUpButton) { onChange(sender.indexOfSelectedItem) }
 }

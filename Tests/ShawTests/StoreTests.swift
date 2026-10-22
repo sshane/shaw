@@ -170,6 +170,29 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(seconds, 288 * 60 / p.bpm + 2, accuracy: 0.05)
         XCTAssertEqual(file.fileFormat.channelCount, 2)
     }
+
+    /// M4A is compressed AAC: a small file with the same length and sound.
+    func testExportToM4AIsSmall() throws {
+        let p = DemoProject.firstLight()
+        let dir = ProcessInfo.processInfo.environment["SHAW_EXPORT_DIR"] ?? NSTemporaryDirectory()
+        let url = URL(fileURLWithPath: dir).appendingPathComponent("First Light \(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try OfflineRenderer.export(project: p, composition: p.mainCompositionID, to: url)
+        let file = try AVAudioFile(forReading: url)
+        XCTAssertEqual(file.fileFormat.streamDescription.pointee.mFormatID, kAudioFormatMPEG4AAC)
+        let seconds = Double(file.length) / file.fileFormat.sampleRate
+        XCTAssertEqual(seconds, 288 * 60 / p.bpm + 2, accuracy: 0.1)
+        let size = try XCTUnwrap(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
+        let mbPerMinute = Double(size) / 1_000_000 / (seconds / 60)
+        XCTAssertLessThan(mbPerMinute, 2.2, "about 2 MB a minute")
+        // Not silent.
+        let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))!
+        try file.read(into: buf)
+        var peak: Float = 0
+        for i in 0..<Int(buf.frameLength) { peak = max(peak, abs(buf.floatChannelData![0][i])) }
+        XCTAssertGreaterThan(peak, 0.3)
+        XCTAssertLessThan(peak, 1.0, "room left so the compressed file doesn't clip")
+    }
 }
 
 final class DemoSongTests: XCTestCase {

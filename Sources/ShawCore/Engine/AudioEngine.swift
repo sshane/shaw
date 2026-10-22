@@ -656,7 +656,8 @@ public final class AudioEngine {
 // MARK: - Offline export
 
 public enum OfflineRenderer {
-    /// Renders a composition to a 24-bit WAV file. Runs synchronously; call from a background queue.
+    /// Renders a composition to a file: compressed AAC for a URL ending in .m4a (small, for sharing),
+    /// otherwise a 24-bit WAV. Runs synchronously; call from a background queue.
     public static func export(project: Project, composition id: AssetID, to url: URL, sampleRate: Double = 48000,
                               tailSeconds: Double = 2, progress: ((Double) -> Void)? = nil) throws {
         // Make sure every audio file (clips, samplers, and drum sounds) is decoded before rendering.
@@ -667,7 +668,12 @@ public enum OfflineRenderer {
         let ctx = RenderContext(sampleRate: sampleRate, bpm: project.bpm)
         let lengthFrames = Int(graph.rootLength * ctx.samplesPerBeat)
         let tailFrames = Int(tailSeconds * sampleRate)
-        let settings: [String: Any] = [
+        let compressed = url.pathExtension.lowercased() == "m4a"
+        let settings: [String: Any] = compressed ? [
+            // 256 kbps AAC: about 2 MB a minute, and hard to tell from the WAV.
+            AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 256_000,
+        ] : [
             AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 2,
             AVLinearPCMBitDepthKey: 24, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
         ]
@@ -677,7 +683,8 @@ public enum OfflineRenderer {
               let pcm = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(block)) else { return }
         let buf = StereoBuffer()
         let limiter = LimiterFX(sampleRate: sampleRate)
-        let lp = LimiterFX.params.resolve(["ceiling": -0.3])
+        // Compression can push peaks a little higher when the file is played: leave it more room.
+        let lp = LimiterFX.params.resolve(["ceiling": compressed ? -1 : -0.3])
         let gain = Float(dbToGain(project.masterVolume))
         var done = 0
         let bps = ctx.beatsPerSample
