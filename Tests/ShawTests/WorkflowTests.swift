@@ -463,6 +463,56 @@ final class RecordingTests: XCTestCase {
         XCTAssertTrue(s.activeComp?.tracks.first { $0.id == track }?.clips.isEmpty ?? false, "one undo takes the take back off")
     }
 
+    /// Tune on a take is what plays and what exports: a sharp A3 comes out as A3.
+    func testATunedTakeIsHeardInTune() throws {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.edit { $0.bpm = 120 }
+        let track = s.addTrack(name: "Recording")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ShawTuneTest-\(UUID().uuidString).caf")
+        let sr = 48000.0, n = Int(2 * sr)
+        let f0 = 440 * pow(2, (57.4 - 69) / 12)
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sr, channels: 1, interleaved: false)!
+        let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(n))!
+        buf.frameLength = AVAudioFrameCount(n)
+        for i in 0..<n {
+            let t = Double(i) / sr
+            buf.floatChannelData![0][i] = Float((1...6).reduce(0.0) { $0 + sin(2 * .pi * f0 * Double($1) * t) / Double($1) } * 0.2)
+        }
+        do {
+            let f = try AVAudioFile(forWriting: url, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            try f.write(from: buf)
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+        let rec = RecordingState(track: track, comp: s.activeCompID, startBeat: 0, url: url, preroll: 0, countingIn: false)
+        s.placeTake(AudioRecorder.Take(url: url, frames: n, sampleRate: sr, firstSampleNanos: nil), offset: 0, rec: rec)
+        let clip = try XCTUnwrap(s.activeComp?.tracks.first { $0.id == track }?.clips.first)
+        func pitch() -> Float {
+            let (l, _) = OfflineRenderer.renderToMemory(project: s.project, composition: s.activeCompID, beats: 4)
+            let t = PitchTracker.track(l, sampleRate: 48000)
+            let v = t.pitch[Int(0.5 / t.frameSeconds)..<Int(1.5 / t.frameSeconds)].sorted()
+            return v[v.count / 2]
+        }
+        XCTAssertEqual(pitch(), 57.4, accuracy: 0.05)
+        s.edit { p in
+            p.updateAsset(clip.assetID) { a in
+                guard case .audio(var r) = a.content else { return }
+                var t = VocalTune.tight
+                t.scale = .chromatic
+                r.tune = t
+                a.content = .audio(r)
+            }
+        }
+        XCTAssertEqual(pitch(), 57, accuracy: 0.05, "in tune")
+        // Saved with the project, and older projects (no Tune) still open.
+        let data = try JSONEncoder().encode(s.project)
+        XCTAssertEqual(try JSONDecoder().decode(Project.self, from: data), s.project)
+        let old = try JSONDecoder().decode(AudioFileRef.self, from: Data(#"{"path":"a.caf","duration":1,"sampleRate":48000,"channels":1}"#.utf8))
+        XCTAssertNil(old.tune)
+        let partial = try JSONDecoder().decode(VocalTune.self, from: Data(#"{"amount":0.5}"#.utf8))
+        XCTAssertEqual(partial.amount, 0.5)
+        XCTAssertEqual(partial.speed, VocalTune.natural.speed, "missing settings take their defaults")
+    }
+
     /// The recorder keeps a running waveform: one peak every hundredth of a second.
     func testTheRecorderDrawsAsItGoes() {
         let r = AudioRecorder()

@@ -92,8 +92,14 @@ public final class SampleLibrary {
     /// Frames per peak bucket in waveform overviews.
     public static let peakBucket = 256
 
-    /// Called on the main queue after a file finishes loading.
+    /// Called on the main queue after a file finishes loading (or a tuned version of it is ready).
     public var onLoad: ((String) -> Void)?
+    /// Recordings with Tune on, as heard.
+    public let tunes = TuneCache()
+
+    init() {
+        tunes.onReady = { [weak self] path in self?.onLoad?(path) }
+    }
 
     public func data(for path: String) -> SampleData? {
         lock.lock(); defer { lock.unlock() }

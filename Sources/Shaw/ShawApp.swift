@@ -353,6 +353,27 @@ enum DebugSnapshot {
         // SHAW_COMP=Drop opens the composition with that name in its own tab.
         if let name = env["SHAW_COMP"],
            let comp = store.project.assets.first(where: { $0.kind == .composition && $0.name == name }) { store.openComposition(comp.id) }
+        // SHAW_TUNE turns Tune on for the song's first recording and shows its clip in Effect Controls.
+        // SHAW_TUNE=/a.wav adds that file on a new layer first.
+        if let tuneFile = env["SHAW_TUNE"] {
+            if tuneFile.hasPrefix("/"), let id = store.importAudio([URL(fileURLWithPath: tuneFile)]).first {
+                _ = store.addClip(asset: id, at: 0, track: store.addTrack(name: "Vocal"))
+            }
+            let found = store.project.assets.lazy.compactMap { a -> (AssetID, Clip)? in
+                guard case .composition(let c) = a.content else { return nil }
+                return c.tracks.flatMap(\.clips).first { store.project.asset($0.assetID)?.kind == .audio }.map { (a.id, $0) }
+            }.first
+            if let (cid, clip) = found {
+                store.edit { p in
+                    p.updateAsset(clip.assetID) { a in
+                        guard case .audio(var r) = a.content else { return }
+                        r.tune = VocalTune()
+                        a.content = .audio(r)
+                    }
+                }
+                store.inspector = .clip(cid, clip.id)
+            }
+        }
         if env["SHAW_PLAY"] != nil { store.togglePlay() }
         // SHAW_KEYS=down,down,return presses keys in the Browser, through the normal key handling.
         // SHAW_KEYS=roll:up,return,shift-d,right,shift-up,? presses them in the piano roll instead.

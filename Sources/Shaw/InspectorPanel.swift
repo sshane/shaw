@@ -410,6 +410,7 @@ struct SourceSoundSection: View {
     var body: some View {
         switch store.project.asset(assetID)?.kind {
         case .notes?: InstrumentInspector(assetID: assetID, compact: true)
+        case .audio?: TuneSection(assetID: assetID)
         default: EmptyView()
         }
     }
@@ -619,5 +620,6 @@ struct AudioInspector: View {
         PropertyRow(label: "Duration") { Text(String(format: "%.2f s", file.duration)).font(Theme.small) }
         PropertyRow(label: "Format") { Text("\(Int(file.sampleRate)) Hz · \(file.channels) ch").font(Theme.small) }
         Text(file.path).font(Theme.tiny).foregroundStyle(Theme.textFaint).padding(10).textSelection(.enabled)
+        TuneSection(assetID: asset.id)
     }
 }

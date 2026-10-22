@@ -171,6 +171,10 @@ public final class AudioEngine {
             if sessions[t.id] == nil { sessions[t.id] = SessionTrackState(clock: sessionClock) }
         }
         let old = locked { graph?.states ?? [:] }
+        // Tuned versions of recordings that no longer have Tune on can go.
+        SampleLibrary.shared.tunes.keep(owners: Set(project.assets.compactMap { a in
+            if case .audio(let r) = a.content, r.tune?.enabled == true { return "\(a.id)" } else { return nil }
+        }))
         var builder = GraphBuilder(project: project, sampleRate: sampleRate, previous: old, samples: SampleLibrary.shared,
                                    meters: { [meters] in meters[$0] }, session: { [sessions] in sessions[$0] },
                                    compMeter: compMeter)
@@ -746,7 +750,10 @@ extension SampleLibrary {
     public func preload(_ project: Project) {
         for a in project.assets {
             switch a.content {
-            case .audio(let ref): _ = loadSync(ref.path)
+            case .audio(let ref):
+                if let d = loadSync(ref.path), let tune = ref.tune, tune.enabled {
+                    _ = tunes.tunedSync("\(a.id)", path: ref.path, source: d, tune: tune, songKey: project.songKey)
+                }
             case .notes(let p):
                 if p.instrument.isSampler, let file = p.instrument.sample { _ = samplerSourceSync(file) }
                 if p.instrument.isDrumKit { for file in p.instrument.samplePaths { _ = loadSync(file) } }

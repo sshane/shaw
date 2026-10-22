@@ -367,6 +367,8 @@ public struct AudioFileRef: Codable, Equatable {
     public var duration: Double // seconds
     public var sampleRate: Double
     public var channels: Int
+    /// Pitch correction, when it's on (nil: never turned on).
+    public var tune: VocalTune?
 
     public init(path: String, duration: Double, sampleRate: Double, channels: Int) {
         self.path = path

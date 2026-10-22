@@ -25,6 +25,8 @@ struct GraphBuilder {
     let compMeter: LevelMeter?
 
     private(set) var states: [String: AnyObject] = [:]
+    /// The song's key, worked out the first time a tuned recording needs it.
+    private var songKey: VocalTune.Key??
     static let maxDepth = 16
 
     init(project: Project, sampleRate: Double, previous: [String: AnyObject], samples: SampleLibrary,
@@ -116,7 +118,12 @@ struct GraphBuilder {
         case .composition:
             source = buildComp(assetID, path: sp, depth: depth + 1, top: false) ?? SilentSource()
         case .audio(let ref):
-            source = AudioSourceNode(data: samples.data(for: ref.path), state: state(sp) { AudioState() })
+            var data = samples.data(for: ref.path)
+            if let tune = ref.tune, tune.enabled, let d = data {
+                if songKey == nil { songKey = .some(project.songKey) }
+                data = samples.tunes.tuned("\(assetID)", path: ref.path, source: d, tune: tune, songKey: songKey ?? nil) ?? d
+            }
+            source = AudioSourceNode(data: data, state: state(sp) { AudioState() })
         case .notes(let p):
             let inst = p.instrument
             if let kit = inst.kit {
