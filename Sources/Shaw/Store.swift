@@ -1006,8 +1006,8 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     func exportAudio() {
         let panel = NSSavePanel()
         let formats: [(title: String, ext: String, type: UTType)] = [
-            ("M4A: small, for sharing (about 2 MB a minute)", "m4a", .mpeg4Audio),
-            ("WAV: full quality (about 17 MB a minute)", "wav", .wav),
+            ("M4A (AAC, 256 kbps, 48 kHz)", "m4a", .mpeg4Audio),
+            ("WAV (24-bit, 48 kHz, lossless)", "wav", .wav),
         ]
         var choice = formats.firstIndex { $0.ext == UserDefaults.standard.string(forKey: Self.exportFormatKey) } ?? 0
         if isolated { choice = 0 }

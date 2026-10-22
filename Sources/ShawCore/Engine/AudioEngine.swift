@@ -670,7 +670,7 @@ public enum OfflineRenderer {
         let tailFrames = Int(tailSeconds * sampleRate)
         let compressed = url.pathExtension.lowercased() == "m4a"
         let settings: [String: Any] = compressed ? [
-            // 256 kbps AAC: about 2 MB a minute, and hard to tell from the WAV.
+            // 256 kbps AAC: hard to tell from the WAV, at about a ninth of the size.
             AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 2,
             AVEncoderBitRateKey: 256_000,
         ] : [
