@@ -663,6 +663,8 @@ struct NoteGrid: View {
         var lastPitch: Int
         var duplicatePending = false
         var hitNote: UUID?
+        /// ⌘ on a note: a click toggles it in or out of the selection; a drag moves notes freely.
+        var toggleOnClick = false
     }
     @State private var drag: DragInfo?
     @State private var marquee: CGRect?
@@ -832,9 +834,18 @@ struct NoteGrid: View {
                            width: abs(g.translation.width), height: abs(g.translation.height))
             marquee = r
             let picked = Set(pattern.notes.filter { rect(of: $0).intersects(r) }.map(\.id))
-            store.selectedNotes = mods.contains(.shift) ? d.ids.union(picked) : picked
+            // ⌘ flips the notes the box touches (so after ⌘A it deselects); ⇧ adds them.
+            store.selectedNotes = mods.contains(.command) ? d.ids.symmetricDifference(picked)
+                : mods.contains(.shift) ? d.ids.union(picked) : picked
         case .move:
             guard let a = d.anchor, moved > 2 else { return }
+            if d.toggleOnClick {
+                // A ⌘-drag after all: move freely, the way a plain drag picks what moves.
+                if !store.selectedNotes.contains(a.id) { store.selectedNotes = [a.id] }
+                d.ids = store.selectedNotes
+                d.toggleOnClick = false
+                drag = d
+            }
             if d.duplicatePending {
                 // Option-drag: leave copies behind, move the originals.
                 let copies = d.origin.filter { d.ids.contains($0.id) }.map { n -> Note in var c = n; c.id = UUID(); return c }
@@ -884,11 +895,13 @@ struct NoteGrid: View {
                 drag = DragInfo(mode: .none, origin: [], ids: [], anchor: nil, lastPitch: -1, hitNote: n.id)
                 return
             }
-            if !store.selectedNotes.contains(n.id) { store.selectedNotes = [n.id] }
+            let toggle = mods.contains(.command) && !resize
+            if !toggle && !store.selectedNotes.contains(n.id) { store.selectedNotes = [n.id] }
             store.lastNoteLength = n.length
             drag = DragInfo(mode: resize ? .resize : .move, origin: pattern.notes, ids: store.selectedNotes, anchor: n,
-                            lastPitch: n.pitch, duplicatePending: mods.contains(.option) && !resize, hitNote: n.id)
-            preview(n.pitch)
+                            lastPitch: n.pitch, duplicatePending: mods.contains(.option) && !resize, hitNote: n.id,
+                            toggleOnClick: toggle)
+            if !toggle { preview(n.pitch) }
             return
         }
         if store.drawMode {
@@ -903,8 +916,8 @@ struct NoteGrid: View {
             preview(note.pitch)
             return
         }
-        drag = DragInfo(mode: .pendingEmpty, origin: pattern.notes, ids: mods.contains(.shift) ? store.selectedNotes : [],
-                        anchor: nil, lastPitch: -1)
+        drag = DragInfo(mode: .pendingEmpty, origin: pattern.notes,
+                        ids: mods.contains(.shift) || mods.contains(.command) ? store.selectedNotes : [], anchor: nil, lastPitch: -1)
     }
 
     private func makeNote(at p: CGPoint) -> Note {
@@ -923,6 +936,10 @@ struct NoteGrid: View {
         previewPitch = nil
         store.endGesture()
         guard wasClick else { return }
+        if let d, d.toggleOnClick, let id = d.hitNote {
+            if store.selectedNotes.contains(id) { store.selectedNotes.remove(id) } else { store.selectedNotes.insert(id) }
+            return
+        }
         let p = g.location
         let now = Date()
         let isDouble = now.timeIntervalSince(lastClick.time) < 0.35 && hypot(p.x - lastClick.point.x, p.y - lastClick.point.y) < 6
@@ -941,8 +958,9 @@ struct NoteGrid: View {
             }
             return
         }
-        if d?.mode == .pendingEmpty {
-            // A plain click on empty space clears the selection and puts the cursor there.
+        if d?.mode == .pendingEmpty && !NSEvent.modifierFlags.contains(.command) && !NSEvent.modifierFlags.contains(.shift) {
+            // A plain click on empty space clears the selection and puts the cursor there. (A ⌘- or
+            // ⇧-click that misses keeps the selection.)
             store.selectedNotes = []
             store.rollCursor = snap(beat(atX: p.x), floorMode: true)
             store.rollCursorPitch = pitch(atY: p.y)

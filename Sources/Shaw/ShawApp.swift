@@ -208,6 +208,10 @@ final class KeyRouter {
         case 49: // space
             store.togglePlay()
             return true
+        case 36, 76: // return, enter: rename the selected item in the Project panel, like Finder
+            guard store.focus == .project, store.selectedAssets.count == 1, let id = store.selectedAssets.first else { return false }
+            store.renamingAsset = id
+            return true
         case 51, 117: // delete, forward delete
             switch store.focus {
             case .project: store.deleteAssets(store.selectedAssets)
