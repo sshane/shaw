@@ -191,6 +191,12 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     var canRedo = false
     /// A take being recorded (Store+Recording.swift), the recorder behind it, and the loop setting to restore.
     var recording: RecordingState?
+    /// Keyboard playing being recorded into a pattern (Store+NoteRecording.swift).
+    var noteTake: NoteTake?
+    /// Where recorded notes land: as played, or snapped to a grid when the take ends.
+    var recordSnap: RecordSnap = .sixteenth {
+        didSet { if !isolated { UserDefaults.standard.set(recordSnap.rawValue, forKey: Store.recordSnapKey) } }
+    }
     @ObservationIgnored var recorder: AudioRecorder?
     @ObservationIgnored var loopBeforeRecording = false
 
@@ -230,6 +236,9 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         UserInstruments.items = library
         customInstruments = library
         if !self.isolated { sampleFolders = UserDefaults.standard.stringArray(forKey: Store.sampleFoldersKey) ?? [] }
+        if !self.isolated, let raw = UserDefaults.standard.string(forKey: Store.recordSnapKey), let snap = RecordSnap(rawValue: raw) {
+            recordSnap = snap
+        }
         // SHAW_SILENT keeps a snapshot run from making sound (it still renders previews, just to nowhere).
         if !headless && !(self.isolated && ProcessInfo.processInfo.environment["SHAW_SILENT"] != nil) { engine.start() }
         SampleLibrary.shared.onLoad = { [weak self] path in
@@ -250,7 +259,7 @@ enum SnapSetting: String, CaseIterable, Identifiable {
         if let first = p.assets.first(where: { $0.kind == .notes }) { pianoRollAsset = first.id }
     }
 
-    private func poll() {
+    func poll() {
         pollRecording()
         let s = engine.snapshot()
         if transport.playing != s.playing { transport.playing = s.playing }
@@ -301,6 +310,22 @@ enum SnapSetting: String, CaseIterable, Identifiable {
     }
 
     func endGesture() { gestureActive = false }
+
+    /// An edit during a recorded take: no undo step of its own (`endTake` makes the whole take one).
+    func takeEdit(_ body: (inout Project) -> Void) {
+        var next = project // see edit(_:)
+        body(&next)
+        guard next != project else { return }
+        project = next
+        changed()
+    }
+
+    /// The end of a take: undoing it goes back to `before`.
+    func endTake(from before: Project) {
+        gestureActive = false
+        guard project != before else { return }
+        pushUndo(before)
+    }
 
     private func pushUndo(_ p: Project) {
         undoStack.append(p)
@@ -415,12 +440,14 @@ enum SnapSetting: String, CaseIterable, Identifiable {
 
     func togglePlay() {
         if recording != nil { stopRecording(); poll(); return } // Space ends a take, keeping it
+        if noteTake != nil { stopNoteRecording(); return }
         if transport.playing { engine.stop() } else { engine.play() }
         poll()
     }
 
     func stop() {
         if recording != nil { stopRecording() }
+        if noteTake != nil { stopNoteRecording() }
         engine.stop(); poll()
     }
 

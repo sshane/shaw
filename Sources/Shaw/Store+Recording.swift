@@ -19,8 +19,11 @@ struct RecordingState: Equatable {
 
 extension Store {
     /// R, or the ● button: start recording at the playhead, or stop and keep the take.
+    /// Records your keyboard playing into the instrument it plays, or the microphone when there's no
+    /// instrument to play (or you picked a layer of audio recordings).
     func toggleRecord() {
-        if recording != nil { stopRecording() } else { startRecording() }
+        if recording != nil { stopRecording() } else if noteTake != nil { stopNoteRecording() }
+        else if recordsNotes { startNoteRecording() } else { startRecording() }
     }
 
     /// Where takes are saved: a folder per project in ~/Music/Shaw/Recordings, so your audio is

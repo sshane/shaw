@@ -181,7 +181,7 @@ final class KeyRouter {
                 let plain = e.modifierFlags.intersection([.command, .option, .control]).isEmpty
                 // Without ⇧ applied, so a note added with ⇧; stops when ; comes back up as ;, not :.
                 let key = e.characters(byApplyingModifiers: []) ?? e.charactersIgnoringModifiers ?? ""
-                return plain && store.keyboardKey(key, down: false, isRepeat: false) ? nil : e
+                return plain && store.keyboardKey(key, down: false, isRepeat: false, time: e.timestamp) ? nil : e
             }
             return self.handle(e, store) ? nil : e
         }
@@ -203,7 +203,7 @@ final class KeyRouter {
             return true
         }
         // The computer keyboard plays the current instrument (A–' = notes, Z/X octave, C/V velocity).
-        if !e.modifierFlags.contains(.shift), store.keyboardKey(chars, down: true, isRepeat: e.isARepeat) { return true }
+        if !e.modifierFlags.contains(.shift), store.keyboardKey(chars, down: true, isRepeat: e.isARepeat, time: e.timestamp) { return true }
         switch e.keyCode {
         case 49: // space
             store.togglePlay()

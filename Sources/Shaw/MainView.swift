@@ -268,22 +268,41 @@ struct MasterMeter: View {
     }
 }
 
-/// ● Record (R). Red while a take records, with the input level beside it so you can see the mic is working.
+/// ● Record (R). Red while a take records. With an instrument under the keyboard it records your
+/// playing into it; otherwise the microphone, with the input level beside it so you can see it works.
+/// The arrow beside it sets how recorded notes snap to the beat.
 struct RecordButton: View {
     @Environment(Store.self) private var store
 
     var body: some View {
+        @Bindable var store = store
         let rec = store.recording
-        HStack(spacing: 3) {
+        let on = rec != nil || store.noteTake != nil
+        let notes = store.recordsNotes
+        HStack(spacing: 0) {
             Button { store.toggleRecord() } label: {
-                Image(systemName: rec == nil ? "record.circle" : "record.circle.fill")
+                Image(systemName: on ? "record.circle.fill" : "record.circle")
                     .font(.system(size: 13))
-                    .foregroundStyle(rec == nil ? Theme.textDim : Theme.record)
+                    .foregroundStyle(on ? Theme.record : Theme.textDim)
                     .frame(width: 24, height: 22)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(rec == nil ? "Record (R): count in a bar, then record from the playhead" : "Stop recording and keep the take (R or Space)")
+            .help(on ? "Stop recording and keep the take (R or Space)"
+                  : notes ? "Record (R): your keyboard playing, into \(store.keyboardLabel). Counts in a bar; with the loop on, each pass adds more."
+                  : "Record (R): count in a bar, then record from the microphone at the playhead")
+            Menu {
+                Picker("Snap Recorded Notes", selection: $store.recordSnap) {
+                    ForEach(RecordSnap.allCases) { s in Text(s.title).tag(s) }
+                }
+                .pickerStyle(.inline)
+                Text("Moves where notes start; they keep the length you held them. Press Q in the piano roll to snap them again later.")
+            } label: {
+                Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 14)
+            .foregroundStyle(Theme.textFaint)
+            .help("How recorded notes snap to the beat (now \(store.recordSnap.title))")
             if let rec {
                 GeometryReader { g in
                     ZStack(alignment: .bottom) {
@@ -293,6 +312,7 @@ struct RecordButton: View {
                     }
                 }
                 .frame(width: 4, height: 18)
+                .padding(.leading, 3)
                 .help("Input level")
             }
         }

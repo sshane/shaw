@@ -58,6 +58,13 @@ public final class AudioEngine {
     private var markNanos: UInt64?
     /// Host time (ns) of the first frame of the block being rendered (0 when unknown).
     private var renderNanos: UInt64 = 0
+    /// The beat each recent block started on and when it plays (host ns), newest last, so a key
+    /// pressed a moment ago can be placed on the beat that was playing then. During a count-in the
+    /// beats run up to the start (the start minus the count-in left). Fixed size: nothing allocates.
+    private static let clockSize = 64
+    private let clockBeats = UnsafeMutablePointer<Double>.allocate(capacity: AudioEngine.clockSize)
+    private let clockNanos = UnsafeMutablePointer<UInt64>.allocate(capacity: AudioEngine.clockSize)
+    private var clockNext = 0, clockCount = 0
     private var clickFrames = 0
     private var clickFreq = 1000.0
     private var clickPhase = 0.0
@@ -110,6 +117,8 @@ public final class AudioEngine {
     deinit {
         engine.stop()
         lockPtr.deallocate()
+        clockBeats.deallocate()
+        clockNanos.deallocate()
     }
 
     @inline(__always) private func locked<T>(_ body: () -> T) -> T {
@@ -200,6 +209,7 @@ public final class AudioEngine {
 
     public func play(from beat: Double? = nil) {
         locked {
+            clockCount = 0
             if let b = beat { position = b }
             if !loopOn, let len = graph?.rootLength, position >= len - 1e-6 { position = 0 }
             if loopOn, position >= loopEnd || position < loopStart - 1e-9 { position = loopStart }
@@ -214,6 +224,7 @@ public final class AudioEngine {
     public func play(from beat: Double, countIn beats: Double) {
         guard beats > 0 else { return play(from: beat) }
         locked {
+            clockCount = 0
             position = beat
             playStart = beat
             playing = false
@@ -230,6 +241,27 @@ public final class AudioEngine {
     /// When the marked beat was rendered (host nanoseconds), once it has played.
     public var markedNanos: UInt64? { locked { markNanos } }
 
+    /// The song beat that played (left the engine) at host time `nanos`, from the recent blocks' clock.
+    /// During a count-in it's before the start. Nil when stopped. Add the output latency to `nanos`'s
+    /// past to get what was heard.
+    public func beat(atHostNanos nanos: UInt64) -> Double? {
+        locked {
+            guard (playing || countInLeft > 0), clockCount > 0 else { return nil }
+            // The newest block that started at or before `nanos` (else the oldest one kept).
+            var i = (clockNext - 1 + Self.clockSize) % Self.clockSize
+            for k in 0..<min(clockCount, Self.clockSize) {
+                let j = (clockNext - 1 - k + 2 * Self.clockSize) % Self.clockSize
+                i = j
+                if clockNanos[j] <= nanos { break }
+            }
+            var b = clockBeats[i] + (Double(nanos) - Double(clockNanos[i])) / 1e9 * bpm / 60
+            if loopOn, loopEnd > loopStart, b >= loopEnd, clockBeats[i] >= loopStart - 1e-9 {
+                b = loopStart + (b - loopStart).truncatingRemainder(dividingBy: loopEnd - loopStart)
+            }
+            return b
+        }
+    }
+
     /// Stops and returns the playhead to where playback started.
     public func stop(returnToStart: Bool = true) {
         locked {
@@ -245,6 +277,7 @@ public final class AudioEngine {
 
     public func seek(_ beat: Double) {
         locked {
+            clockCount = 0
             position = max(0, beat)
             playStart = position
         }
@@ -565,10 +598,16 @@ public final class AudioEngine {
 
     var lockPtrForTesting: UnsafeMutablePointer<os_unfair_lock> { lockPtr }
     var masterForTesting: StereoBuffer { master }
-    func renderBlockForTesting(_ n: Int) { renderBlock(n) }
+    func renderBlockForTesting(_ n: Int, nanos: UInt64 = 0) { renderNanos = nanos; renderBlock(n) }
 
     private func renderBlock(_ n: Int) {
         master.clear(n)
+        if renderNanos != 0 && (playing || countInLeft > 0) {
+            clockBeats[clockNext] = playing ? position : position - countInLeft
+            clockNanos[clockNext] = renderNanos
+            clockNext = (clockNext + 1) % Self.clockSize
+            clockCount = min(clockCount + 1, Self.clockSize)
+        }
         let ctx = RenderContext(sampleRate: sampleRate, bpm: bpm)
         let bps = ctx.beatsPerSample
         // A count-in clicks first, with the playhead waiting; playback starts the frame it ends.
@@ -796,15 +835,16 @@ extension OfflineRenderer {
 }
 
 extension AudioEngine {
-    /// Runs the real-time render path without an audio device (tests only).
-    func renderForTesting(frames: Int) -> [Float] {
+    /// Runs the real-time render path without an audio device (tests only). `hostNanos`: when the
+    /// first frame plays, as a device would report it (0: unknown).
+    func renderForTesting(frames: Int, hostNanos: UInt64 = 0) -> [Float] {
         var out: [Float] = []
         out.reserveCapacity(frames)
         var done = 0
         os_unfair_lock_lock(lockPtrForTesting)
         while done < frames {
             let n = min(512, frames - done)
-            renderBlockForTesting(n)
+            renderBlockForTesting(n, nanos: hostNanos == 0 ? 0 : hostNanos + UInt64(Double(done) / sampleRate * 1e9))
             out += Array(UnsafeBufferPointer(start: masterForTesting.l, count: n))
             done += n
         }

@@ -403,7 +403,8 @@ extension Store {
     }
 
     /// Returns true if the key was handled (played, octave, velocity).
-    func keyboardKey(_ chars: String, down: Bool, isRepeat: Bool) -> Bool {
+    /// `time`: the key event's timestamp, so a recorded note lands where you heard it.
+    func keyboardKey(_ chars: String, down: Bool, isRepeat: Bool, time: TimeInterval? = nil) -> Bool {
         guard keyboardEnabled else { return false }
         let k = chars.lowercased()
         if down {
@@ -421,6 +422,7 @@ extension Store {
         if !down {
             guard let held = heldKeys.removeValue(forKey: k) else { return Store.pianoKeys[k] != nil }
             if !held.isDrum { engine.previewNoteOff(held.pitch) }
+            if noteTake != nil { noteUp(k, atBeat: takeBeat(time)) }
             if !heldKeys.values.contains(where: { $0.pitch == held.pitch }) { playingPitches.remove(held.pitch) }
             return true
         }
@@ -432,14 +434,20 @@ extension Store {
             guard i < DrumKits.voices.count else { return true }
             heldKeys[k] = (DrumKits.basePitch + i, true)
             playingPitches.insert(DrumKits.basePitch + i)
+            if noteTake != nil { noteDown(k, pitch: DrumKits.basePitch + i, velocity: keyboardVelocity, drum: true, atBeat: takeBeat(time)) }
             previewNoteOn(DrumKits.basePitch + i, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
             return true
         case .notes(let p):
             guard let off = Store.pianoKeys[k] else { return false }
             let pitch = min(127, max(0, (keyboardOctave + 1) * 12 + off))
-            if let old = heldKeys[k], !old.isDrum { engine.previewNoteOff(old.pitch); playingPitches.remove(old.pitch) }
+            let old = heldKeys[k]
+            if let old, !old.isDrum { engine.previewNoteOff(old.pitch); playingPitches.remove(old.pitch) }
             heldKeys[k] = (pitch, false)
             playingPitches.insert(pitch)
+            if noteTake != nil {
+                if old != nil { noteUp(k, atBeat: takeBeat(time)) }
+                noteDown(k, pitch: pitch, velocity: keyboardVelocity, drum: false, atBeat: takeBeat(time))
+            }
             previewNoteOn(pitch, velocity: keyboardVelocity, instrument: p.instrument, asset: asset.id)
             return true
         default:
@@ -450,6 +458,7 @@ extension Store {
     /// Let go of everything held (e.g. when changing octave mid-chord).
     func releaseKeyboard() {
         for (_, h) in heldKeys where !h.isDrum { engine.previewNoteOff(h.pitch) }
+        if noteTake != nil { for k in heldKeys.keys { noteUp(k, atBeat: takeBeat(nil)) } }
         heldKeys.removeAll()
         playingPitches.removeAll()
     }

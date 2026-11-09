@@ -370,6 +370,11 @@ struct PianoRollPanel: View {
         // ? shows every key the piano roll knows.
         if e.keyCode == 44 && shift && !cmd { store.showRollKeys.toggle(); return true }
         if e.keyCode == 53 && store.showRollKeys { store.showRollKeys = false; return true }
+        // Q snaps the selected notes (or all of them) to the grid, like a recorded take tidied up.
+        if e.keyCode == 12 && !cmd && !opt && !shift {
+            store.quantize(id, notes: sel, grid: grid > 0 ? grid : 0.25)
+            return true
+        }
         // ⇧ and a note key adds that note at the cursor's beat. The keys on their own only play.
         if shift && !cmd && !opt, let k = e.characters(byApplyingModifiers: [])?.lowercased(), Store.pianoKeys[k] != nil {
             if !e.isARepeat { store.addKeyAtCursor(k) }
@@ -1045,6 +1050,7 @@ struct RollKeysHelp: View {
         ("⌘←  ⌘→", "Jump to the start / end"),
         ("Z X", "Octave down / up"),
         ("C V", "Softer / harder"),
+        ("R", "Record your playing (again: stop)"),
         ("Space", "Play"),
     ]
     private static let editing: [(String, String)] = [
@@ -1054,6 +1060,8 @@ struct RollKeysHelp: View {
         ("⌘ + arrows", "Move them a bar or an octave"),
         ("⌥←  ⌥→", "Shorter / longer"),
         ("Delete", "Delete them"),
+        ("Q", "Snap them (or every note) to the grid"),
+        ("⌘-click, ⌘-drag", "Add notes to the selection or take them out"),
         ("⌘C  ⌘V  ⌘D", "Copy, paste at the cursor, duplicate"),
         ("Esc", "Deselect and go back to the cursor"),
     ]

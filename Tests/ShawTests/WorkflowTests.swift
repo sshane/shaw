@@ -528,3 +528,100 @@ final class RecordingTests: XCTestCase {
         XCTAssertEqual(snap.seconds, 0.1, accuracy: 1e-9)
     }
 }
+
+final class NoteRecordingTests: XCTestCase {
+    /// A store with a 4-beat Keys pattern in a clip at beat 0 (looping to `clipLength`), selected so
+    /// the keyboard plays it.
+    func setUp(clipLength: Double = 4) -> (Store, AssetID, UUID) {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        s.edit { $0.bpm = 120 }
+        let a = Asset(name: "Keys", colorIndex: 1, content: .notes(NotePattern(length: 4, notes: [], instrument: .preset("Keys"))))
+        let c = Clip(assetID: a.id, start: 0, length: clipLength, loops: clipLength > 4)
+        s.edit { p in
+            p.assets.append(a)
+            p.updateComposition(p.mainCompositionID) { comp in
+                var t = Track(name: "Keys", colorIndex: 1)
+                t.clips = [c]
+                comp.tracks.append(t)
+            }
+        }
+        s.selectedClips = [c.id]
+        return (s, a.id, c.id)
+    }
+    func notes(_ s: Store, _ a: AssetID) -> [Note] {
+        guard case .notes(let p)? = s.project.asset(a)?.content else { return [] }
+        return p.notes.sorted { $0.start < $1.start }
+    }
+
+    func testPlayedNotesLandSnappedAndTheTakeIsOneUndo() {
+        let (s, a, _) = setUp()
+        XCTAssertTrue(s.recordsNotes)
+        s.recordSnap = .sixteenth
+        s.startNoteRecording()
+        XCTAssertNotNil(s.noteTake)
+        s.noteDown("a", pitch: 60, velocity: 0.8, drum: false, atBeat: 1.07)
+        s.noteUp("a", atBeat: 1.5)
+        s.noteDown("s", pitch: 62, velocity: 0.7, drum: false, atBeat: 2.4)
+        s.noteUp("s", atBeat: 2.65)
+        // A note started a hair before the start is a pickup onto it; one much earlier was the count-in.
+        s.noteDown("d", pitch: 64, velocity: 0.8, drum: false, atBeat: -0.1)
+        s.noteUp("d", atBeat: 0.2)
+        s.noteDown("f", pitch: 65, velocity: 0.8, drum: false, atBeat: -1)
+        s.noteUp("f", atBeat: -0.6)
+        s.stopNoteRecording()
+        let n = notes(s, a)
+        XCTAssertEqual(n.map(\.pitch), [64, 60, 62])
+        XCTAssertEqual(n.map(\.start), [0, 1.0, 2.5], "snapped to sixteenths as they came in")
+        XCTAssertEqual(n[1].length, 0.43, accuracy: 1e-9, "the length as held")
+        XCTAssertNil(s.noteTake)
+        s.undo()
+        XCTAssertTrue(notes(s, a).isEmpty, "one undo takes the whole take back")
+    }
+
+    func testOffKeepsTheTimingAndPlayingPastTheEndGrowsThePattern() {
+        let (s, a, c) = setUp()
+        s.recordSnap = .off
+        s.startNoteRecording()
+        s.noteDown("a", pitch: 60, velocity: 0.8, drum: false, atBeat: 5.03)
+        s.noteUp("a", atBeat: 5.5)
+        s.stopNoteRecording()
+        XCTAssertEqual(notes(s, a).first?.start ?? 0, 5.03, accuracy: 1e-9)
+        guard case .notes(let p)? = s.project.asset(a)?.content else { return XCTFail() }
+        XCTAssertEqual(p.length, 8, "a bar longer")
+        XCTAssertEqual(s.clip(c)?.length ?? 0, 8, accuracy: 1e-9, "and so is its clip")
+    }
+
+    func testALoopingClipOverdubsIntoThePattern() {
+        let (s, a, _) = setUp(clipLength: 16)
+        s.recordSnap = .eighth
+        s.startNoteRecording()
+        s.noteDown("a", pitch: 60, velocity: 0.8, drum: false, atBeat: 1)
+        s.noteUp("a", atBeat: 1.4)
+        s.noteDown("s", pitch: 62, velocity: 0.8, drum: false, atBeat: 9.52) // the third pass
+        s.noteUp("s", atBeat: 10)
+        s.stopNoteRecording()
+        XCTAssertEqual(notes(s, a).map(\.start), [1, 1.5], "both passes in the same 4-beat pattern")
+        guard case .notes(let p)? = s.project.asset(a)?.content else { return XCTFail() }
+        XCTAssertEqual(p.length, 4)
+    }
+
+    func testDrumsLandRightAwayAndQSnapsNotesLater() {
+        let s = Store(project: DemoProject.empty(), headless: true)
+        let a = Asset(name: "Beat", colorIndex: 2, content: .notes(NotePattern(length: 4, notes: [
+            Note(pitch: 60, start: 1.1, length: 0.5), Note(pitch: 62, start: 2.93, length: 0.25),
+        ], instrument: .kit("house"))))
+        s.edit { $0.assets.append(a) }
+        s.quantize(a.id, notes: [], grid: 0.25)
+        XCTAssertEqual(notes(s, a.id).map(\.start), [1, 3])
+        XCTAssertEqual(notes(s, a.id).map(\.length), [0.5, 0.25], "lengths kept")
+        s.undo()
+        XCTAssertEqual(notes(s, a.id).map(\.start), [1.1, 2.93])
+    }
+
+    func testRecordUsesTheMicrophoneForAnAudioLayer() {
+        let (s, _, _) = setUp()
+        XCTAssertTrue(s.recordsNotes)
+        s.keyboardEnabled = false
+        XCTAssertFalse(s.recordsNotes, "no keyboard: the microphone")
+    }
+}

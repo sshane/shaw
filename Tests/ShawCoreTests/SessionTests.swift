@@ -101,3 +101,26 @@ final class CountInTests: XCTestCase {
         XCTAssertFalse(e.snapshot().countingIn)
     }
 }
+
+final class PlayClockTests: XCTestCase {
+    /// The engine knows which beat played at any recent moment, so a key pressed then lands there:
+    /// through a count-in (before the start), in playback, and across a loop's wrap.
+    func testTheBeatThatPlayedAtAMoment() {
+        let e = AudioEngine()
+        let p = Project()
+        e.update(project: p, root: p.mainCompositionID)
+        let t0: UInt64 = 5_000_000_000
+        func at(_ seconds: Double) -> UInt64 { t0 + UInt64(seconds * 1e9) }
+        XCTAssertNil(e.beat(atHostNanos: t0), "stopped: nothing played")
+        e.play(from: 8, countIn: 4) // a bar of count-in at 120 BPM: two seconds
+        _ = e.renderForTesting(frames: 48000 * 3, hostNanos: t0) // through the count-in and one second of playback
+        XCTAssertEqual(e.beat(atHostNanos: at(1.9))!, 7.8, accuracy: 0.01, "a hair before the start, in the count-in")
+        XCTAssertEqual(e.beat(atHostNanos: at(2.5))!, 9, accuracy: 0.01)
+        // Looping bars 3-4 (beats 8-16): four seconds a pass, so 4.5 s after the start is beat 9 again.
+        e.setLoop(enabled: true, start: 8, end: 16)
+        _ = e.renderForTesting(frames: 48000 * 4, hostNanos: at(3))
+        XCTAssertEqual(e.beat(atHostNanos: at(6.5))!, 9, accuracy: 0.01, "after the wrap")
+        e.stop()
+        XCTAssertNil(e.beat(atHostNanos: at(7)))
+    }
+}
